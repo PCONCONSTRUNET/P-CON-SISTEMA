@@ -51,7 +51,7 @@ const ClientLogin = () => {
         <div className="glass-card p-8 sm:p-10">
           {/* Logo */}
           <motion.div 
-            className="flex justify-center mb-8"
+            className="flex justify-center -mt-6 -mb-16 sm:-mb-20"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
