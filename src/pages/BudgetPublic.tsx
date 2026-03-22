@@ -489,17 +489,17 @@ const BudgetPublic = () => {
                       <span className="font-medium text-foreground">{proposal.last_viewed_at ? formatDate(proposal.last_viewed_at) : 'Agora'}</span>
                     </div>
 
-                    <div className="grid gap-3 pt-2">
-                      <Button onClick={() => handleResponse('approve')} disabled={!canRespond || submitting} className="w-full">
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                    <div className="grid gap-2.5 sm:gap-3 pt-1 sm:pt-2">
+                      <Button onClick={() => handleResponse('approve')} disabled={!canRespond || submitting} className="w-full h-10 sm:h-11 text-sm sm:text-base">
+                        <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                         Aprovar proposta
                       </Button>
-                      <Button variant="outline" onClick={() => handleResponse('reject')} disabled={!canRespond || submitting} className="w-full">
-                        <XCircle className="h-4 w-4 mr-2" />
+                      <Button variant="outline" onClick={() => handleResponse('reject')} disabled={!canRespond || submitting} className="w-full h-10 sm:h-11 text-sm sm:text-base">
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                         Recusar proposta
                       </Button>
-                      <Button variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf} className="w-full">
-                        {downloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                      <Button variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf} className="w-full h-10 sm:h-11 text-sm sm:text-base">
+                        {downloadingPdf ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 animate-spin" /> : <Download className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />}
                         Baixar proposta em PDF
                       </Button>
                       <div className="rounded-2xl border border-border/60 bg-secondary/10 p-4 sm:p-5 space-y-4">
