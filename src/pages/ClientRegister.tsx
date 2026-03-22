@@ -179,25 +179,25 @@ const ClientRegister = () => {
           {/* Form */}
           <motion.form 
             onSubmit={handleSubmit} 
-            className="space-y-4"
+            className="space-y-3"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.4 }}
           >
             {/* Nome */}
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-foreground/80 text-sm font-medium">
+            <div className="space-y-1">
+              <Label htmlFor="name" className="text-foreground/80 text-xs font-medium">
                 Nome Completo
               </Label>
               <div className="relative group">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
                 <Input
                   id="name"
                   type="text"
                   placeholder="Seu nome completo"
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className={`pl-12 h-11 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.name ? 'border-red-500' : ''}`}
+                  className={`pl-10 h-9 text-sm bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.name ? 'border-red-500' : ''}`}
                   disabled={isLoading}
                 />
               </div>
@@ -205,39 +205,39 @@ const ClientRegister = () => {
             </div>
 
             {/* Email */}
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-foreground/80 text-sm font-medium">
+            <div className="space-y-1">
+              <Label htmlFor="email" className="text-foreground/80 text-xs font-medium">
                 Email
               </Label>
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="seu@email.com"
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
-                  className={`pl-12 h-11 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.email ? 'border-red-500' : ''}`}
+                  className={`pl-10 h-9 text-sm bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.email ? 'border-red-500' : ''}`}
                   disabled={isLoading}
                 />
               </div>
-              {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
+              {errors.email && <p className="text-red-500 text-[10px]">{errors.email}</p>}
             </div>
 
             {/* Telefone */}
-            <div className="space-y-1.5">
-              <Label htmlFor="phone" className="text-foreground/80 text-sm font-medium">
+            <div className="space-y-1">
+              <Label htmlFor="phone" className="text-foreground/80 text-xs font-medium">
                 Telefone (WhatsApp)
               </Label>
               <div className="relative group">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
                 <Input
                   id="phone"
                   type="text"
                   placeholder="(00) 00000-0000"
                   value={formData.phone}
                   onChange={(e) => handleChange('phone', e.target.value)}
-                  className={`pl-12 h-11 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.phone ? 'border-red-500' : ''}`}
+                  className={`pl-10 h-9 text-sm bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.phone ? 'border-red-500' : ''}`}
                   disabled={isLoading}
                   maxLength={15}
                 />
