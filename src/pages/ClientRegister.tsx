@@ -142,13 +142,13 @@ const ClientRegister = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="w-full max-w-lg relative z-10"
+        className="w-full max-w-sm relative z-10"
       >
         {/* Glass Card */}
-        <div className="glass-card p-8 sm:p-10">
+        <div className="glass-card p-6">
           {/* Logo */}
           <motion.div 
-            className="flex justify-center -mt-6 -mb-16 sm:-mb-20"
+            className="flex justify-center -mt-4 -mb-12"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
@@ -156,21 +156,22 @@ const ClientRegister = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[20rem] sm:max-w-[24rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
+              className="w-full max-w-[14rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
+              style={{ clipPath: 'inset(25% 0 38% 0)' }}
             />
           </motion.div>
 
           {/* Title */}
           <motion.div 
-            className="text-center mb-6"
+            className="text-center mb-4"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.4 }}
           >
-            <h1 className="text-2xl font-heading font-bold text-foreground mb-2">
+            <h1 className="text-lg font-heading font-bold text-foreground mb-1">
               Cadastro de Cliente
             </h1>
-            <p className="text-gray-neutral text-sm">
+            <p className="text-gray-neutral text-xs">
               Crie sua conta para acessar o portal
             </p>
           </motion.div>
