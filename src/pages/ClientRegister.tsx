@@ -246,85 +246,85 @@ const ClientRegister = () => {
             </div>
 
             {/* CPF/CNPJ */}
-            <div className="space-y-1.5">
-              <Label htmlFor="document" className="text-foreground/80 text-sm font-medium">
+            <div className="space-y-1">
+              <Label htmlFor="document" className="text-foreground/80 text-xs font-medium">
                 CPF ou CNPJ
               </Label>
               <div className="relative group">
-                <FileText className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
                 <Input
                   id="document"
                   type="text"
                   placeholder="000.000.000-00"
                   value={formData.document}
                   onChange={(e) => handleChange('document', e.target.value)}
-                  className={`pl-12 h-11 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.document ? 'border-red-500' : ''}`}
+                  className={`pl-10 h-9 text-sm bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.document ? 'border-red-500' : ''}`}
                   disabled={isLoading}
                   maxLength={18}
                 />
               </div>
-              {errors.document && <p className="text-red-500 text-xs">{errors.document}</p>}
+              {errors.document && <p className="text-red-500 text-[10px]">{errors.document}</p>}
             </div>
 
             {/* Senha */}
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-foreground/80 text-sm font-medium">
+            <div className="space-y-1">
+              <Label htmlFor="password" className="text-foreground/80 text-xs font-medium">
                 Senha
               </Label>
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
                 <Input
                   id="password"
                   type="password"
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => handleChange('password', e.target.value)}
-                  className={`pl-12 h-11 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.password ? 'border-red-500' : ''}`}
+                  className={`pl-10 h-9 text-sm bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.password ? 'border-red-500' : ''}`}
                   disabled={isLoading}
                 />
               </div>
-              {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
+              {errors.password && <p className="text-red-500 text-[10px]">{errors.password}</p>}
             </div>
 
             {/* Confirmar Senha */}
-            <div className="space-y-1.5">
-              <Label htmlFor="confirmPassword" className="text-foreground/80 text-sm font-medium">
+            <div className="space-y-1">
+              <Label htmlFor="confirmPassword" className="text-foreground/80 text-xs font-medium">
                 Confirmar Senha
               </Label>
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
                 <Input
                   id="confirmPassword"
                   type="password"
                   placeholder="••••••••"
                   value={formData.confirmPassword}
                   onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                  className={`pl-12 h-11 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.confirmPassword ? 'border-red-500' : ''}`}
+                  className={`pl-10 h-9 text-sm bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl ${errors.confirmPassword ? 'border-red-500' : ''}`}
                   disabled={isLoading}
                 />
               </div>
-              {errors.confirmPassword && <p className="text-red-500 text-xs">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="text-red-500 text-[10px]">{errors.confirmPassword}</p>}
             </div>
 
             <motion.div
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              className="pt-2"
+              className="pt-1"
             >
               <Button 
                 type="submit" 
-                className="w-full h-12 btn-blue text-base"
+                className="w-full h-10 btn-blue text-sm font-semibold"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Cadastrando...
                   </span>
                 ) : (
                   <span className="flex items-center justify-center gap-2">
                     Criar Conta
-                    <ArrowRight className="h-5 w-5" />
+                    <ArrowRight className="h-4 w-4" />
                   </span>
                 )}
               </Button>
@@ -333,7 +333,7 @@ const ClientRegister = () => {
 
           {/* Link para login */}
           <motion.div 
-            className="mt-6 text-center"
+            className="mt-4 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.35, duration: 0.4 }}
