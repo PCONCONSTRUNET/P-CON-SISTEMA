@@ -1,0 +1,31 @@
+project_id = "lcnaptefceboratxhzox"
+
+[functions.client-auth]
+verify_jwt = false
+
+[functions.affiliate-auth]
+verify_jwt = false
+
+[functions.affiliate-approval-email]
+verify_jwt = false
+
+[functions.mercadopago]
+verify_jwt = false
+
+[functions.mercadopago-webhook]
+verify_jwt = false
+
+[functions.whatsapp-send]
+verify_jwt = false
+
+[functions.btzap-webhook]
+verify_jwt = false
+
+[functions.btzap-setup]
+verify_jwt = false
+
+[functions.whatsapp-auto-reminders]
+verify_jwt = false
+
+[functions.email-billing-reminder]
+verify_jwt = false

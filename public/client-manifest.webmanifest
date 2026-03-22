@@ -1,0 +1,29 @@
+{
+  "name": "P-CON Área do Cliente",
+  "short_name": "Cliente P-CON",
+  "description": "Portal do cliente para acompanhar assinaturas e pagamentos.",
+  "theme_color": "#0a1628",
+  "background_color": "#0a1628",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/cliente",
+  "scope": "/cliente",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
