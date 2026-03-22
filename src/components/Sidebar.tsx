@@ -99,7 +99,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-4 lg:p-6 border-b border-border/50 flex items-center justify-between">
-            <img src={logo} alt="P-CON" className="h-12 lg:h-14 w-auto" />
+            <img src={logo} alt="P-CON" className="h-12 lg:h-14 w-auto brightness-0 invert opacity-90" />
             <button 
               onClick={onClose}
               className="lg:hidden p-2 rounded-lg hover:bg-secondary/50 transition-colors"
@@ -203,7 +203,7 @@ export const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => {
         >
           <Menu className="w-6 h-6" />
         </button>
-        <img src={logo} alt="P-CON" className="h-8 w-auto ml-3" />
+        <img src={logo} alt="P-CON" className="h-8 w-auto ml-3 brightness-0 invert opacity-90" />
       </div>
       
       {unreadCount > 0 && (
