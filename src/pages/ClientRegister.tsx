@@ -145,10 +145,10 @@ const ClientRegister = () => {
         className="w-full max-w-lg relative z-10"
       >
         {/* Glass Card */}
-        <div className="glass-card p-5 sm:p-8">
+        <div className="glass-card px-5 pb-5 pt-0 sm:px-8 sm:pb-8 sm:pt-2">
           {/* Logo */}
           <motion.div 
-            className="flex justify-center -mt-6 -mb-16 sm:-mt-8 sm:-mb-20"
+            className="flex justify-center -mt-2 sm:-mt-4 -mb-16 sm:-mb-20"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
@@ -157,7 +157,7 @@ const ClientRegister = () => {
               src={logo} 
               alt="P-CON Logo" 
               className="w-full max-w-[14rem] sm:max-w-[18rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
-              style={{ clipPath: 'inset(25% 0 38% 0)' }}
+              style={{ clipPath: 'inset(30% 0 38% 0)' }}
             />
           </motion.div>
 
