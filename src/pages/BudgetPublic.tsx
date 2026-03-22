@@ -403,24 +403,24 @@ const BudgetPublic = () => {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Validade</p>
-                    <p className="text-lg font-semibold">{formatDate(proposal.valid_until)}</p>
+                    <p className="text-base sm:text-lg font-semibold">{formatDate(proposal.valid_until)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Prazo</p>
-                    <p className="text-lg font-semibold">{proposal.delivery_deadline || 'A combinar'}</p>
+                    <p className="text-base sm:text-lg font-semibold">{proposal.delivery_deadline || 'A combinar'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Prazo para início</p>
-                    <p className="text-lg font-semibold">{proposal.start_deadline || 'Imediato após aprovação'}</p>
+                    <p className="text-base sm:text-lg font-semibold">{proposal.start_deadline || 'Imediato após aprovação'}</p>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="glass-card">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <h2 className="text-xl font-heading font-semibold">Escopo do projeto</h2>
+                <CardContent className="p-4 sm:p-6 space-y-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                    <h2 className="text-lg sm:text-xl font-heading font-semibold">Escopo do projeto</h2>
                   </div>
                   <div className="grid gap-3">
                     {proposal.scope_items?.map((item, index) => (
@@ -434,17 +434,17 @@ const BudgetPublic = () => {
 
               {(proposal.notes || proposal.terms_and_conditions) && (
                 <Card className="glass-card">
-                  <CardContent className="p-6 space-y-5">
+                  <CardContent className="p-4 sm:p-6 space-y-5">
                     {proposal.notes && (
                       <div>
-                        <h3 className="font-semibold mb-2">Observações</h3>
+                        <h3 className="font-semibold mb-1 sm:mb-2 text-sm sm:text-base">Observações</h3>
                         <p className="text-muted-foreground whitespace-pre-line">{proposal.notes}</p>
                       </div>
                     )}
                     {proposal.terms_and_conditions && (
                       <div>
-                        <h3 className="font-semibold mb-2">Termos e condições</h3>
-                        <p className="text-muted-foreground whitespace-pre-line">{proposal.terms_and_conditions}</p>
+                        <h3 className="font-semibold mb-1 sm:mb-2 text-sm sm:text-base">Termos e condições</h3>
+                        <p className="text-sm sm:text-base text-muted-foreground whitespace-pre-line">{proposal.terms_and_conditions}</p>
                       </div>
                     )}
                   </CardContent>
@@ -452,39 +452,39 @@ const BudgetPublic = () => {
               )}
             </div>
 
-            <div className="xl:sticky xl:top-8 space-y-6">
+            <div className="xl:sticky xl:top-8 space-y-4 sm:space-y-6">
               <Card className="glass-card overflow-hidden">
                 <CardContent className="p-0">
-                  <div className="bg-primary/15 border-b border-border/40 p-6">
-                    <p className="text-sm uppercase tracking-[0.2em] text-primary">Investimento</p>
-                    <div className="mt-3 text-4xl font-heading font-bold">{formatCurrency(proposal.total_amount)}</div>
+                  <div className="bg-primary/15 border-b border-border/40 p-5 sm:p-6">
+                    <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-primary">Investimento</p>
+                    <div className="mt-2 sm:mt-3 text-3xl sm:text-4xl font-heading font-bold">{formatCurrency(proposal.total_amount)}</div>
                     {proposal.discount_amount > 0 && (
                       <p className="text-sm text-muted-foreground mt-2">Desconto aplicado: {formatCurrency(proposal.discount_amount)}</p>
                     )}
                   </div>
-                  <div className="p-6 space-y-4">
+                  <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
                     {proposal.entry_amount && (
-                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
+                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base">
                         <span>Valor de entrada</span>
                         <span className="font-semibold">{formatCurrency(proposal.entry_amount)}</span>
                       </div>
                     )}
                     {proposal.monthly_amount && (
-                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
+                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base">
                         <span>Mensalidade</span>
                         <span className="font-semibold">{formatCurrency(proposal.monthly_amount)}</span>
                       </div>
                     )}
                     {proposal.monthly_amount && (
-                      <p className="text-xs text-muted-foreground rounded-xl border border-border/60 bg-secondary/10 px-4 py-3">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground rounded-xl border border-border/60 bg-secondary/10 px-3 py-2.5 sm:px-4 sm:py-3">
                         A mensalidade é apenas informativa nesta etapa e a cobrança será gerada no mês seguinte.
                       </p>
                     )}
-                    <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-muted-foreground">
                       <span className="flex items-center gap-2"><Eye className="h-4 w-4" /> Visualizações</span>
                       <span className="font-medium text-foreground">{proposal.view_count}</span>
                     </div>
-                    <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-muted-foreground">
                       <span className="flex items-center gap-2"><Clock3 className="h-4 w-4" /> Última visita</span>
                       <span className="font-medium text-foreground">{proposal.last_viewed_at ? formatDate(proposal.last_viewed_at) : 'Agora'}</span>
                     </div>
