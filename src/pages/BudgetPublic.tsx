@@ -370,35 +370,35 @@ const BudgetPublic = () => {
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-10 sm:py-16">
+        <main className="container mx-auto px-4 py-6 sm:py-10">
           <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr] items-start">
             <div className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
-                <div className="space-y-4 max-w-3xl">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/20 px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-glow)] backdrop-blur-md">
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+                <div className="space-y-3 sm:space-y-4 max-w-3xl">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/20 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-primary-foreground shadow-[var(--shadow-glow)] backdrop-blur-md">
                     <ShieldCheck className="h-4 w-4" />
                     Proposta comercial digital
                   </span>
-                  <h1 className="text-4xl sm:text-5xl font-heading font-bold leading-tight">{proposal.project_title}</h1>
-                  <p className="text-lg text-muted-foreground leading-relaxed">{proposal.project_description || 'Proposta comercial estruturada para apresentação profissional do projeto.'}</p>
+                  <h1 className="text-3xl sm:text-5xl font-heading font-bold leading-tight">{proposal.project_title}</h1>
+                  <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">{proposal.project_description || 'Proposta comercial estruturada para apresentação profissional do projeto.'}</p>
                 </div>
 
                 <div className="flex justify-center lg:justify-end">
-                  <div className="flex min-h-44 w-full max-w-[280px] items-center justify-center rounded-[2rem] border border-primary/20 bg-background/10 p-6 backdrop-blur-sm shadow-[var(--shadow-glow)]">
+                  <div className="flex min-h-[8rem] sm:min-h-44 w-full max-w-[280px] items-center justify-center rounded-[2rem] border border-primary/20 bg-background/10 p-6 backdrop-blur-sm shadow-[var(--shadow-glow)]">
                     <img
                       src="/images/logo-pcon-white.png"
                       alt="P-CON CONSTRUNET"
-                      className="max-h-20 w-full object-contain sm:max-h-24"
+                      className="max-h-16 sm:max-h-24 w-full object-contain"
                     />
                   </div>
                 </div>
               </div>
 
               <Card className="glass-card">
-                <CardContent className="p-6 grid gap-6 md:grid-cols-2">
+                <CardContent className="p-4 sm:p-6 grid gap-4 sm:gap-6 md:grid-cols-2">
                   <div>
                     <p className="text-sm text-muted-foreground">Cliente</p>
-                    <p className="text-lg font-semibold">{proposal.client_name}</p>
+                    <p className="text-base sm:text-lg font-semibold">{proposal.client_name}</p>
                     {proposal.client_company && <p className="text-sm text-muted-foreground mt-1">{proposal.client_company}</p>}
                   </div>
                   <div>
