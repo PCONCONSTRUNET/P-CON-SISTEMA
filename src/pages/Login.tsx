@@ -58,7 +58,7 @@ const Login = () => {
         
         {/* Logo */}
         <motion.div 
-          className="flex justify-center -mt-6 -mb-16 sm:-mb-20"
+          className="flex justify-center"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1, duration: 0.4 }}>
@@ -66,7 +66,8 @@ const Login = () => {
           <img 
             src={logo} 
             alt="P-CON" 
-            className="w-full max-w-[22rem] sm:max-w-[26rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
+            className="w-full max-w-[15rem] sm:max-w-[18rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-8 -mb-12"
+            style={{ clipPath: 'inset(25% 0 35% 0)' }}
           />
         </motion.div>
 
