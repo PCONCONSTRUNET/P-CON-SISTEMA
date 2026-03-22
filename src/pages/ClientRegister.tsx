@@ -142,13 +142,13 @@ const ClientRegister = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="w-full max-w-sm relative z-10"
+        className="w-full max-w-lg relative z-10"
       >
         {/* Glass Card */}
-        <div className="glass-card p-6">
+        <div className="glass-card p-5 sm:p-8">
           {/* Logo */}
           <motion.div 
-            className="flex justify-center -mt-4 -mb-12"
+            className="flex justify-center -mt-6 -mb-16 sm:-mt-8 sm:-mb-20"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
@@ -156,22 +156,22 @@ const ClientRegister = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[14rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
+              className="w-full max-w-[14rem] sm:max-w-[18rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
               style={{ clipPath: 'inset(25% 0 38% 0)' }}
             />
           </motion.div>
 
           {/* Title */}
           <motion.div 
-            className="text-center mb-4"
+            className="text-center mb-3 sm:mb-6"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.4 }}
           >
-            <h1 className="text-lg font-heading font-bold text-foreground mb-1">
+            <h1 className="text-lg sm:text-xl font-heading font-bold text-foreground mb-1">
               Cadastro de Cliente
             </h1>
-            <p className="text-gray-neutral text-xs">
+            <p className="text-gray-neutral text-xs sm:text-sm">
               Crie sua conta para acessar o portal
             </p>
           </motion.div>
@@ -179,7 +179,7 @@ const ClientRegister = () => {
           {/* Form */}
           <motion.form 
             onSubmit={handleSubmit} 
-            className="space-y-3"
+            className="space-y-2.5 sm:space-y-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.4 }}
@@ -333,7 +333,7 @@ const ClientRegister = () => {
 
           {/* Link para login */}
           <motion.div 
-            className="mt-4 text-center"
+            className="mt-3 sm:mt-5 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.35, duration: 0.4 }}
@@ -349,7 +349,7 @@ const ClientRegister = () => {
 
           {/* Footer */}
           <motion.div 
-            className="mt-4 text-center"
+            className="mt-2 sm:mt-4 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.4 }}
