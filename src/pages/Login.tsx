@@ -64,7 +64,7 @@ const Login = () => {
           transition={{ delay: 0.1, duration: 0.4 }}>
           
           <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <img src={logo} alt="P-CON" className="h-20 sm:h-28 w-auto" />
+            <img src={logo} alt="P-CON" className="h-20 sm:h-28 w-auto brightness-0 invert opacity-90" />
           </div>
           <h1 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
             P-CON Assinaturas
