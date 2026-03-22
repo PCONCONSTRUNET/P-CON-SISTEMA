@@ -59,7 +59,7 @@ const ClientLogin = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[16rem] sm:max-w-[20rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-8 -mb-14" 
+              className="w-full max-w-[18rem] sm:max-w-[22rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-8 -mb-20" 
               style={{ clipPath: 'inset(25% 0 38% 0)' }}
             />
           </motion.div>
@@ -71,7 +71,7 @@ const ClientLogin = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.4 }}
           >
-            <h1 className="text-2xl font-heading font-bold text-foreground mb-2">
+            <h1 className="text-xl font-heading font-bold text-foreground mb-2">
               Área do Cliente
             </h1>
             <p className="text-gray-neutral text-sm">
