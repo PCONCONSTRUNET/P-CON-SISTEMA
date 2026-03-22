@@ -94,22 +94,33 @@ const ClientRegister = () => {
     setIsLoading(true);
 
     try {
-      const response = await supabase.functions.invoke('client-auth?action=self-register', {
-        body: {
-          name: formData.name.trim(),
-          email: formData.email.trim().toLowerCase(),
-          phone: formData.phone.replace(/\D/g, ''),
-          document: formData.document.replace(/\D/g, ''),
-          password: formData.password
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth?action=self-register`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY_NEW,
+          },
+          body: JSON.stringify({
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+            phone: formData.phone.replace(/\D/g, ''),
+            document: formData.document.replace(/\D/g, ''),
+            password: formData.password
+          })
         }
-      });
+      );
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Erro ao criar cadastro');
+      const response = await res.json();
+
+      if (!res.ok) {
+        toast.error(response.error || 'Erro ao criar cadastro');
+        return;
       }
 
-      if (response.data?.error) {
-        toast.error(response.data.error);
+      if (response.error) {
+        toast.error(response.error);
         return;
       }
 
