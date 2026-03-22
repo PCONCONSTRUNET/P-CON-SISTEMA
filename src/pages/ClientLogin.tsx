@@ -59,8 +59,8 @@ const ClientLogin = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[16rem] sm:max-w-[20rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-8 -mb-12" 
-              style={{ clipPath: 'inset(25% 0 35% 0)' }}
+              className="w-full max-w-[16rem] sm:max-w-[20rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-8 -mb-16" 
+              style={{ clipPath: 'inset(25% 0 42% 0)' }}
             />
           </motion.div>
 
