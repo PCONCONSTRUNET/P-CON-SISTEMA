@@ -502,69 +502,69 @@ const BudgetPublic = () => {
                         {downloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
                         Baixar proposta em PDF
                       </Button>
-                      <div className="rounded-2xl border border-border/60 bg-secondary/10 p-4 space-y-4">
-                        <div className="flex items-start gap-3">
-                          <WalletCards className="mt-0.5 h-5 w-5 text-primary" />
+                      <div className="rounded-2xl border border-border/60 bg-secondary/10 p-4 sm:p-5 space-y-4">
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <WalletCards className="mt-0.5 h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                           <div>
-                            <p className="font-semibold text-foreground">Escolha como deseja pagar</p>
-                            <p className="text-sm text-muted-foreground">Selecione o valor e depois escolha entre PIX ou cartão.</p>
+                            <p className="text-sm sm:text-base font-semibold text-foreground">Escolha como deseja pagar</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground">Selecione o valor e depois escolha entre PIX ou cartão.</p>
                           </div>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
-                            <p className="text-sm font-medium text-foreground">Tipo de pagamento</p>
-                            <RadioGroup value={selectedChargeType} onValueChange={(value) => setSelectedChargeType(value as 'entry' | 'total')} className="gap-3">
+                        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+                          <div className="space-y-2.5 sm:space-y-3 rounded-xl border border-border/60 bg-background/30 p-3 sm:p-4">
+                            <p className="text-xs sm:text-sm font-medium text-foreground">Tipo de pagamento</p>
+                            <RadioGroup value={selectedChargeType} onValueChange={(value) => setSelectedChargeType(value as 'entry' | 'total')} className="gap-2 sm:gap-3">
                               {proposal.entry_amount ? (
-                                <Label htmlFor="charge-entry" className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
-                                  <RadioGroupItem id="charge-entry" value="entry" />
+                                <Label htmlFor="charge-entry" className="flex cursor-pointer items-center gap-2 sm:gap-3 rounded-xl border border-border/60 bg-secondary/20 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer">
+                                  <RadioGroupItem id="charge-entry" value="entry" className="scale-90 sm:scale-100" />
                                   <div className="flex-1">
-                                    <p className="font-medium text-foreground">Entrada</p>
-                                    <p className="text-xs text-muted-foreground">{formatCurrency(Number(proposal.entry_amount || 0))}</p>
+                                    <p className="text-sm sm:text-base font-medium text-foreground">Entrada</p>
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground">{formatCurrency(Number(proposal.entry_amount || 0))}</p>
                                   </div>
                                 </Label>
                               ) : null}
-                              <Label htmlFor="charge-total" className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
-                                <RadioGroupItem id="charge-total" value="total" />
+                              <Label htmlFor="charge-total" className="flex cursor-pointer items-center gap-2 sm:gap-3 rounded-xl border border-border/60 bg-secondary/20 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer">
+                                <RadioGroupItem id="charge-total" value="total" className="scale-90 sm:scale-100" />
                                 <div className="flex-1">
-                                  <p className="font-medium text-foreground">Valor total</p>
-                                  <p className="text-xs text-muted-foreground">{formatCurrency(Number(proposal.total_amount || 0))}</p>
+                                  <p className="text-sm sm:text-base font-medium text-foreground">Valor total</p>
+                                  <p className="text-[10px] sm:text-xs text-muted-foreground">{formatCurrency(Number(proposal.total_amount || 0))}</p>
                                 </div>
                               </Label>
                             </RadioGroup>
                           </div>
 
-                          <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
-                            <p className="text-sm font-medium text-foreground">Método</p>
-                            <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as 'pix' | 'card')} className="gap-3">
-                              <Label htmlFor="method-pix" className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
-                                <RadioGroupItem id="method-pix" value="pix" />
+                          <div className="space-y-2.5 sm:space-y-3 rounded-xl border border-border/60 bg-background/30 p-3 sm:p-4">
+                            <p className="text-xs sm:text-sm font-medium text-foreground">Método</p>
+                            <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as 'pix' | 'card')} className="gap-2 sm:gap-3">
+                              <Label htmlFor="method-pix" className="flex cursor-pointer items-center gap-2 sm:gap-3 rounded-xl border border-border/60 bg-secondary/20 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer">
+                                <RadioGroupItem id="method-pix" value="pix" className="scale-90 sm:scale-100" />
                                 <div className="flex-1">
-                                  <p className="flex items-center gap-2 font-medium text-foreground">
-                                    <img src={pixIcon} alt="PIX" className="h-4 w-4 object-contain" />
+                                  <p className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base font-medium text-foreground">
+                                    <img src={pixIcon} alt="PIX" className="h-3 w-3 sm:h-4 sm:w-4 object-contain" />
                                     PIX
                                   </p>
-                                  <p className="text-xs text-muted-foreground">Gera QR Code instantâneo</p>
+                                  <p className="text-[10px] sm:text-xs text-muted-foreground">Gera QR Code instantâneo</p>
                                 </div>
                               </Label>
-                              <Label htmlFor="method-card" className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3">
-                                <RadioGroupItem id="method-card" value="card" />
+                              <Label htmlFor="method-card" className="flex cursor-pointer items-center gap-2 sm:gap-3 rounded-xl border border-border/60 bg-secondary/20 px-3 py-2 sm:px-4 sm:py-3 cursor-pointer">
+                                <RadioGroupItem id="method-card" value="card" className="scale-90 sm:scale-100" />
                                 <div className="flex-1">
-                                  <p className="font-medium text-foreground">Cartão de crédito</p>
-                                  <p className="text-xs text-muted-foreground">Pagamento no formulário abaixo com até 4x</p>
+                                  <p className="text-sm sm:text-base font-medium text-foreground">Cartão de crédito</p>
+                                  <p className="text-[10px] sm:text-xs text-muted-foreground">Pagamento no formulário com até 4x</p>
                                 </div>
                               </Label>
                             </RadioGroup>
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-border/60 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
+                        <div className="rounded-xl border border-border/60 bg-background/30 px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-muted-foreground">
                           Valor selecionado: <span className="font-semibold text-foreground">{formatCurrency(selectedAmount)}</span>
                         </div>
 
                         {paymentMethod === 'pix' ? (
-                          <Button variant="secondary" onClick={handleSelectedPayment} disabled={!canPaySelected || creatingPayment !== null} className="w-full">
-                            {creatingPayment === selectedChargeType ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <img src={pixIcon} alt="PIX" className="h-4 w-4 mr-2 object-contain" />}
+                          <Button variant="secondary" onClick={handleSelectedPayment} disabled={!canPaySelected || creatingPayment !== null} className="w-full text-xs sm:text-sm h-9 sm:h-10">
+                            {creatingPayment === selectedChargeType ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-2 animate-spin" /> : <img src={pixIcon} alt="PIX" className="h-3 w-3 sm:h-4 sm:w-4 mr-2 object-contain" />}
                             Gerar PIX do pagamento selecionado
                           </Button>
                         ) : (
