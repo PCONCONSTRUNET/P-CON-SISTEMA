@@ -145,7 +145,7 @@ const ClientRegister = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[20rem] sm:max-w-[24rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)]" 
+              className="w-full max-w-[20rem] sm:max-w-[24rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" 
             />
           </motion.div>
 

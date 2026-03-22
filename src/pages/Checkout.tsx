@@ -304,7 +304,7 @@ const Checkout = () => {
         className="relative z-20 glass-card border-b border-border/20 sticky top-0"
       >
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <img src={logo} alt="Logo P-CON" className="w-auto h-16 sm:h-20 max-w-[14rem] sm:max-w-[18rem] drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)]" />
+          <img src={logo} alt="Logo P-CON" className="w-auto h-16 sm:h-20 max-w-[14rem] sm:max-w-[18rem] drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" />
           <div className="flex items-center gap-4">
             <motion.div 
               whileHover={{ scale: 1.05 }} 
