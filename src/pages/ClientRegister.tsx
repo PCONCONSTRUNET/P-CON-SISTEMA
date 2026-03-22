@@ -145,10 +145,10 @@ const ClientRegister = () => {
         className="w-full max-w-lg relative z-10"
       >
         {/* Glass Card */}
-        <div className="glass-card px-5 pb-5 pt-0 sm:px-8 sm:pb-8 sm:pt-2">
+        <div className="glass-card px-5 pb-5 pt-0 sm:px-8 sm:pb-8 sm:pt-0">
           {/* Logo */}
           <motion.div 
-            className="flex justify-center -mt-2 sm:-mt-4 -mb-16 sm:-mb-20"
+            className="flex justify-center -mt-4 sm:-mt-12 -mb-16 sm:-mb-24"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
