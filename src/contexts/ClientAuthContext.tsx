@@ -20,6 +20,18 @@ interface ClientAuthContextType {
 const ClientAuthContext = createContext<ClientAuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'client_session_token';
+const DB_KEY = 'client_session_db'; // 'old' | 'new'
+
+// Retorna a URL correta da Edge Function baseada no banco
+function getAuthUrl(db: 'old' | 'new', action: string): string {
+  // A Edge Function está hospedada no banco antigo, mas recebe o parâmetro `db`
+  const base = import.meta.env.VITE_SUPABASE_URL;
+  return `${base}/functions/v1/client-auth?action=${action}`;
+}
+
+function getApiKey(): string {
+  return import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+}
 
 export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [client, setClient] = useState<Client | null>(null);
@@ -27,6 +39,7 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const verifySession = async () => {
     const token = localStorage.getItem(TOKEN_KEY);
+    const db = (localStorage.getItem(DB_KEY) as 'old' | 'new') || 'old';
     if (!token) {
       setIsLoading(false);
       return;
@@ -34,14 +47,14 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth?action=verify`,
+        getAuthUrl(db, 'verify'),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'apikey': getApiKey(),
           },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, db }),
         }
       );
 
@@ -50,10 +63,12 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
         setClient(data.client);
       } else {
         localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(DB_KEY);
       }
     } catch (error) {
       console.error('Session verification error:', error);
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(DB_KEY);
     } finally {
       setIsLoading(false);
     }
@@ -66,12 +81,12 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth?action=login`,
+        getAuthUrl('old', 'login'),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'apikey': getApiKey(),
           },
           body: JSON.stringify({ email, password }),
         }
@@ -83,7 +98,10 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
         return { success: false, error: data.error || 'Erro ao fazer login' };
       }
 
+      // A Edge Function retorna qual banco o token pertence
+      const db: 'old' | 'new' = data.db || 'old';
       localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(DB_KEY, db);
       setClient(data.client);
       return { success: true };
     } catch (error) {
@@ -94,23 +112,25 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const logout = async () => {
     const token = localStorage.getItem(TOKEN_KEY);
-    
+    const db = (localStorage.getItem(DB_KEY) as 'old' | 'new') || 'old';
+
     try {
       await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth?action=logout`,
+        getAuthUrl(db, 'logout'),
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'apikey': getApiKey(),
           },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, db }),
         }
       );
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(DB_KEY);
       setClient(null);
     }
   };
