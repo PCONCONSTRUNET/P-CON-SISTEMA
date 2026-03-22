@@ -24,7 +24,7 @@ const DB_KEY = 'client_session_db'; // 'old' | 'new'
 
 // URLs das Edge Functions de cada banco
 const OLD_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth`;
-const NEW_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth`;
+const NEW_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth-new`;
 
 const OLD_API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const NEW_API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY_NEW;
