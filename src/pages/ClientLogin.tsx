@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Lock, Mail, ArrowRight, UserPlus } from 'lucide-react';
-import logo from '@/assets/logo-pcon-pwa-large.png';
+import logo from '@/assets/logo-pcon-grande.png';
 import BlueBackground from '@/components/BlueBackground';
 
 const ClientLogin = () => {
@@ -59,7 +59,7 @@ const ClientLogin = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[14rem] sm:max-w-[22rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-6 sm:-mt-8 -mb-16 sm:-mb-20" 
+              className="w-full max-w-[12rem] sm:max-w-[16rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-10 sm:-mt-12 -mb-20 sm:-mb-24" 
               style={{ clipPath: 'inset(25% 0 38% 0)' }}
             />
           </motion.div>
