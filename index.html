@@ -22,7 +22,11 @@
         if (isClient) {
           var manifestLink = document.getElementById('pwa-manifest') || document.querySelector('link[rel="manifest"]');
           if (manifestLink) {
-            manifestLink.href = '/client-manifest.webmanifest';
+            manifestLink.href = '/client-manifest.webmanifest?v=' + new Date().getTime();
+          }
+          var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (appleTitle) {
+            appleTitle.content = "Cliente P-CON";
           }
         }
       })();
