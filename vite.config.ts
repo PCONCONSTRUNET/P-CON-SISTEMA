@@ -19,34 +19,7 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
-      manifest: {
-        name: "P-CON Assinaturas",
-        short_name: "P-CON",
-        description: "Sistema de Gestão de Clientes e Cobranças",
-        theme_color: "#0a1628",
-        background_color: "#0a1628",
-        display: "standalone",
-        orientation: "portrait",
-        start_url: "/",
-        icons: [
-          {
-            src: "pwa-192x192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-          },
-          {
-            src: "pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any maskable",
-          },
-        ],
-      },
+      manifest: false,
     }),
   ].filter(Boolean),
   resolve: {
