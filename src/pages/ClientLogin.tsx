@@ -38,7 +38,7 @@ const ClientLogin = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative">
+    <div className="min-h-[100dvh] overflow-hidden flex items-center justify-center p-4 relative">
       <BlueBackground />
       
       <motion.div
@@ -98,9 +98,10 @@ const ClientLogin = () => {
                   type="email"
                   placeholder="seu@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value.trim())}
                   className="pl-12 h-12 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all duration-200 rounded-xl"
                   disabled={isLoading}
+                  autoComplete="off"
                 />
               </div>
             </div>

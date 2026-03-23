@@ -47,7 +47,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative">
+    <div className="min-h-[100dvh] overflow-hidden flex items-center justify-center p-4 relative">
       <BlueBackground />
       
       <motion.div
@@ -106,9 +106,9 @@ const Login = () => {
                   type="text"
                   placeholder="Digite seu usuário"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => setUsername(e.target.value.trim())}
                   className="pl-12 bg-secondary/50 border-border/50 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 h-12 rounded-xl transition-all duration-200"
-                  autoComplete="username" />
+                  autoComplete="off" />
                 
               </div>
             </div>
