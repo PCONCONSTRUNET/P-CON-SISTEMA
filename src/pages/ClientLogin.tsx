@@ -48,7 +48,7 @@ const ClientLogin = () => {
         className="w-full max-w-lg relative z-10"
       >
         {/* Glass Card */}
-        <div className="glass-card p-6 sm:p-10">
+        <div className="glass-card p-4 sm:p-10">
           {/* Logo */}
           <motion.div 
             className="flex justify-center"
@@ -59,22 +59,22 @@ const ClientLogin = () => {
             <img 
               src={logo} 
               alt="P-CON Logo" 
-              className="w-full max-w-[18rem] sm:max-w-[22rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-6 sm:-mt-8 -mb-16 sm:-mb-20" 
+              className="w-full max-w-[14rem] sm:max-w-[22rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-6 sm:-mt-8 -mb-16 sm:-mb-20" 
               style={{ clipPath: 'inset(25% 0 38% 0)' }}
             />
           </motion.div>
 
           {/* Title */}
           <motion.div 
-            className="text-center mb-6 sm:mb-8"
+            className="text-center mb-4 sm:mb-8"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.4 }}
           >
-            <h1 className="text-xl font-heading font-bold text-foreground mb-2">
+            <h1 className="text-lg sm:text-xl font-heading font-bold text-foreground mb-1 sm:mb-2">
               Área do Cliente
             </h1>
-            <p className="text-gray-neutral text-sm">
+            <p className="text-gray-neutral text-xs sm:text-sm">
               Acesse sua assinatura e realize pagamentos
             </p>
           </motion.div>
@@ -82,7 +82,7 @@ const ClientLogin = () => {
           {/* Form */}
           <motion.form 
             onSubmit={handleSubmit} 
-            className="space-y-4 sm:space-y-5"
+            className="space-y-3 sm:space-y-5"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.4 }}
@@ -151,7 +151,7 @@ const ClientLogin = () => {
 
           {/* Link para cadastro */}
           <motion.div 
-            className="mt-5 sm:mt-6 text-center"
+            className="mt-4 sm:mt-6 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.35, duration: 0.4 }}
@@ -170,7 +170,7 @@ const ClientLogin = () => {
 
           {/* Footer */}
           <motion.div 
-            className="mt-3 sm:mt-4 text-center"
+            className="mt-2 sm:mt-4 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.4 }}
