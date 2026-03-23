@@ -13,7 +13,20 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="P-CON" />
     <link rel="icon" type="image/png" href="/pwa-192x192.png">
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" id="pwa-manifest" href="/manifest.webmanifest" />
+    <script>
+      (function() {
+        var isClient = ["/cliente", "/area-cliente", "/checkout"].some(function(route) {
+          return window.location.pathname.startsWith(route);
+        });
+        if (isClient) {
+          var manifestLink = document.getElementById('pwa-manifest') || document.querySelector('link[rel="manifest"]');
+          if (manifestLink) {
+            manifestLink.href = '/client-manifest.webmanifest';
+          }
+        }
+      })();
+    </script>
     
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
