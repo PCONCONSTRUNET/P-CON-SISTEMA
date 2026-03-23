@@ -39,7 +39,13 @@ async function callAuth(baseUrl: string, apiKey: string, action: string, body: o
 }
 
 export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [client, setClient] = useState<Client | null>(null);
+  const [client, setClient] = useState<Client | null>(() => {
+    const saved = localStorage.getItem('client_data');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return null; }
+    }
+    return null;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   const verifySession = async () => {
@@ -57,14 +63,17 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
       if (res.ok) {
         const data = await res.json();
         setClient(data.client);
+        localStorage.setItem('client_data', JSON.stringify(data.client));
       } else {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(DB_KEY);
+        if (res.status === 401 || res.status === 403 || res.status === 404) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(DB_KEY);
+          localStorage.removeItem('client_data');
+          setClient(null);
+        }
       }
     } catch (err) {
-      console.error('Session verification error:', err);
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(DB_KEY);
+      console.error('Session verification network error, keeping token:', err);
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +103,7 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
       const data = await res.json();
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(DB_KEY, db);
+      localStorage.setItem('client_data', JSON.stringify(data.client));
       setClient(data.client);
       return { success: true };
     } catch (err) {
@@ -118,6 +128,7 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
     } finally {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(DB_KEY);
+      localStorage.removeItem('client_data');
       setClient(null);
     }
   };

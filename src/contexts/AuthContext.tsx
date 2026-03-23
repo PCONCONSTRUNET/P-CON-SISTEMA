@@ -15,23 +15,22 @@ const VALID_CREDENTIALS = {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<{ username: string } | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('pcon_auth') === 'true';
+  });
+  const [user, setUser] = useState<{ username: string } | null>(() => {
+    return localStorage.getItem('pcon_auth') === 'true' ? { username: 'admin' } : null;
+  });
 
   useEffect(() => {
-    // Check if user was previously logged in
-    const storedAuth = sessionStorage.getItem('pcon_auth');
-    if (storedAuth === 'true') {
-      setIsAuthenticated(true);
-      setUser({ username: 'admin' });
-    }
+    // State is now initialized synchronously from localStorage
   }, []);
 
   const login = (username: string, password: string): boolean => {
     if (username === VALID_CREDENTIALS.username && password === VALID_CREDENTIALS.password) {
       setIsAuthenticated(true);
       setUser({ username });
-      sessionStorage.setItem('pcon_auth', 'true');
+      localStorage.setItem('pcon_auth', 'true');
       return true;
     }
     return false;
@@ -40,7 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setIsAuthenticated(false);
     setUser(null);
-    sessionStorage.removeItem('pcon_auth');
+    localStorage.removeItem('pcon_auth');
   };
 
   return (
