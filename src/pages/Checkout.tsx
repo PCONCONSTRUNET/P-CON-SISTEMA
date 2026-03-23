@@ -358,6 +358,66 @@ const Checkout = () => {
             </p>
           </motion.div>
 
+          {/* Seu Plano Section */}
+          {(subscriptions.length > 0 || contracts.length > 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12, duration: 0.5 }}
+            >
+              <h2 className="text-xl font-heading font-bold text-foreground mb-4">
+                Seu plano
+              </h2>
+              
+              <div className="glass-card p-5 sm:p-6 rounded-2xl border border-border/50">
+                {(() => {
+                  const activeSub = subscriptions.find(s => s.status === 'active') || subscriptions[0];
+                  const activeContract = contracts[0];
+                  // Using 'as any' since 'address' is not yet in the generated Database typescript for clients table
+                  const address = (client as any)?.address || 'Endereço não cadastrado';
+                  
+                  return (
+                    <>
+                      {activeSub ? (
+                        <>
+                          <div className="inline-block px-3 py-1 mb-3 rounded-full bg-success/20 text-success text-xs font-bold leading-none">
+                            {activeSub.status === 'active' ? 'Normal' : 'Inativo'}
+                          </div>
+                          
+                          <h3 className="text-lg sm:text-lg font-bold text-foreground uppercase mb-5">
+                            {activeSub.plan_name}
+                          </h3>
+                        </>
+                      ) : (
+                         <div className="mb-5">
+                           <p className="text-sm text-muted-foreground">Nenhum plano ativo encontrado.</p>
+                         </div>
+                      )}
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground mb-1">Endereço</h4>
+                          <p className="text-xs sm:text-sm text-gray-neutral uppercase leading-relaxed">
+                            {address}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground mb-1">Contrato</h4>
+                          <p className="text-xs sm:text-sm text-gray-neutral">
+                            {activeContract 
+                              ? (activeContract.title.match(/\d+/) ? activeContract.title.match(/\d+/)?.[0] : activeContract.title) 
+                              : 'Sem contrato associado'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          )}
 
           {/* Pending Single Charges */}
           {pendingCharges.length > 0 && (
