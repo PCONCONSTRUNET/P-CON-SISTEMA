@@ -175,6 +175,13 @@ const Subscriptions = () => {
     const snapNextPayment = editingSubscription.next_payment;
     const snapClients     = editingSubscription.clients;
 
+    console.log('[Subscriptions] handleUpdateSubscription chamado', {
+      snapNextPayment,
+      snapStatus,
+      snapClients,
+      snapClientId,
+    });
+
     const result = await updateSubscription(snapId, {
       plan_name:    snapPlanName,
       value:        snapValue,
@@ -193,6 +200,9 @@ const Subscriptions = () => {
       const clientPhone  = freshClients?.phone || snapClients?.phone || null;
       const clientEmail  = freshClients?.email || snapClients?.email || null;
 
+      console.log('[Subscriptions] result.clients (do banco):', freshClients);
+      console.log('[Subscriptions] clientPhone =', clientPhone, '| clientEmail =', clientEmail);
+
       if (snapStatus === 'active') {
         // Fire-and-forget: verifica D-5 ou D-0 e dispara WhatsApp + Email na hora
         sendReminderIfNeeded({
@@ -205,9 +215,12 @@ const Subscriptions = () => {
           amount:         Number(snapValue),
           nextPayment:    snapNextPayment,
         });
+      } else {
+        console.log('[Subscriptions] Status não é active, reminder não disparado:', snapStatus);
       }
     }
   };
+
 
   const handleDeleteSubscription = async (subscriptionId: string) => {
     await deleteSubscription(subscriptionId);
