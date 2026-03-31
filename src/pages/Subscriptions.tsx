@@ -166,32 +166,46 @@ const Subscriptions = () => {
   const handleUpdateSubscription = async () => {
     if (!editingSubscription) return;
 
-    const result = await updateSubscription(editingSubscription.id, {
-      plan_name: editingSubscription.plan_name,
-      value: editingSubscription.value,
-      status: editingSubscription.status,
-      next_payment: editingSubscription.next_payment,
+    // Captura tudo antes de alterar o estado
+    const snapId          = editingSubscription.id;
+    const snapClientId    = editingSubscription.client_id;
+    const snapPlanName    = editingSubscription.plan_name;
+    const snapValue       = editingSubscription.value;
+    const snapStatus      = editingSubscription.status;
+    const snapNextPayment = editingSubscription.next_payment;
+    const snapClients     = editingSubscription.clients;
+
+    const result = await updateSubscription(snapId, {
+      plan_name:    snapPlanName,
+      value:        snapValue,
+      status:       snapStatus,
+      next_payment: snapNextPayment,
     });
 
     if (result) {
       setIsEditDialogOpen(false);
+      setEditingSubscription(null);
 
-      // Após salvar, verifica se nova data é D-5 ou D-0 e dispara WhatsApp + Email na hora
-      const client = editingSubscription.clients;
-      if (client && editingSubscription.status === 'active') {
+      // result.clients vem do banco com email+phone (fix no GlobalDataContext)
+      // Fallback para snapClients caso o join não retorne
+      const freshClients = (result as any).clients;
+      const clientName   = freshClients?.name  || snapClients?.name  || 'Cliente';
+      const clientPhone  = freshClients?.phone || snapClients?.phone || null;
+      const clientEmail  = freshClients?.email || snapClients?.email || null;
+
+      if (snapStatus === 'active') {
+        // Fire-and-forget: verifica D-5 ou D-0 e dispara WhatsApp + Email na hora
         sendReminderIfNeeded({
-          subscriptionId: editingSubscription.id,
-          clientId: editingSubscription.client_id,
-          clientName: client.name || 'Cliente',
-          clientPhone: client.phone || null,
-          clientEmail: client.email || null,
-          planName: editingSubscription.plan_name,
-          amount: Number(editingSubscription.value),
-          nextPayment: editingSubscription.next_payment,
+          subscriptionId: snapId,
+          clientId:       snapClientId,
+          clientName,
+          clientPhone,
+          clientEmail,
+          planName:       snapPlanName,
+          amount:         Number(snapValue),
+          nextPayment:    snapNextPayment,
         });
       }
-
-      setEditingSubscription(null);
     }
   };
 

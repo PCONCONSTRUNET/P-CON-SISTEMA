@@ -4,75 +4,86 @@
  * Hook para disparar WhatsApp + Email de lembrete para uma assinatura
  * quando o admin edita manualmente a data de vencimento.
  *
- * Lógica de detecção:
- *  - D-5 (exatamente 5 dias) → template "subscription_reminder" (WhatsApp) + email
- *  - D-0 (vence hoje)        → template "due_today" (WhatsApp) [sem email pois template é D-5]
+ * Lógica de detecção (tudo em BRT via Intl.DateTimeFormat):
+ *  - D-5 (faltam exatamente 5 dias) → WhatsApp template "subscription_reminder" + Email
+ *  - D-0 (vence hoje)               → WhatsApp template "due_today" (sem email, pois template é D-5)
+ *  - Qualquer outro prazo           → sem envio automático
  */
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { differenceInCalendarDays } from 'date-fns';
 
 interface SubscriptionReminderParams {
   subscriptionId: string;
   clientId: string;
   clientName: string;
-  clientPhone: string | null;
-  clientEmail: string | null;
+  clientPhone: string | null | undefined;
+  clientEmail: string | null | undefined;
   planName: string;
   amount: number;
   /** ISO string da data de vencimento (next_payment) */
   nextPayment: string;
 }
 
-/** Retorna quantos dias faltam para a data (no fuso BRT) */
+/**
+ * Converte uma Date para "YYYY-MM-DD" no fuso America/Sao_Paulo (BRT).
+ * Mesmo método usado pelas Edge Functions.
+ */
+const toYMDInBRT = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+
+/**
+ * Retorna quantos dias calendário faltam para nextPayment, calculando em BRT.
+ * nextPayment pode ser "2026-04-05T12:00:00.000Z" ou qualquer ISO string.
+ */
 const getDaysUntilInBRT = (nextPayment: string): number => {
-  // Pegar data atual em BRT (UTC-3)
-  const nowUTC = new Date();
-  const brtOffset = -3 * 60; // minutos
-  const nowBRT = new Date(nowUTC.getTime() + (brtOffset - nowUTC.getTimezoneOffset()) * 60000);
-  const todayBRT = new Date(nowBRT.getFullYear(), nowBRT.getMonth(), nowBRT.getDate());
+  const now = new Date();
+  const todayBrt = toYMDInBRT(now);                       // ex: "2026-03-31"
+  const dueBrt   = toYMDInBRT(new Date(nextPayment));     // ex: "2026-04-05"
 
-  const paymentDate = new Date(nextPayment);
-  const dueBRT = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), paymentDate.getDate());
+  const todayMs = new Date(todayBrt + 'T00:00:00').getTime();
+  const dueMs   = new Date(dueBrt   + 'T00:00:00').getTime();
 
-  return differenceInCalendarDays(dueBRT, todayBRT);
+  return Math.round((dueMs - todayMs) / 86400000);
 };
 
 export const useSubscriptionReminder = () => {
   const [isSending, setIsSending] = useState(false);
 
   /**
-   * Determina se deve enviar lembrete com base na data de vencimento
-   * e, se sim, envia WhatsApp + Email.
-   *
-   * @returns objeto com { shouldSend, daysLeft, whatsappSent, emailSent }
+   * Verifica se a data de vencimento é D-5 ou D-0 e, se for, envia os lembretes.
    */
   const sendReminderIfNeeded = async (
     params: SubscriptionReminderParams
   ): Promise<{ shouldSend: boolean; daysLeft: number; whatsappSent: boolean; emailSent: boolean }> => {
     const daysLeft = getDaysUntilInBRT(params.nextPayment);
+
+    console.log(
+      `[useSubscriptionReminder] next_payment=${params.nextPayment} | daysLeft=${daysLeft} (BRT) | today=${toYMDInBRT(new Date())}`
+    );
+
     const isD5 = daysLeft === 5;
     const isD0 = daysLeft === 0;
 
     if (!isD5 && !isD0) {
+      console.log(`[useSubscriptionReminder] Não é D-5 nem D-0 (daysLeft=${daysLeft}), nada a enviar.`);
       return { shouldSend: false, daysLeft, whatsappSent: false, emailSent: false };
     }
 
     setIsSending(true);
 
     let whatsappSent = false;
-    let emailSent = false;
-    const templateKey = isD0 ? 'due_today' : 'subscription_reminder';
-    const messageType = isD0 ? 'manual_d0_edit' : 'manual_d5_edit';
+    let emailSent    = false;
+    const templateKey  = isD0 ? 'due_today' : 'subscription_reminder';
+    const messageType  = isD0 ? 'manual_d0_edit' : 'manual_d5_edit';
 
-    // ── WhatsApp ──────────────────────────────────────────────
+    // ── WhatsApp ─────────────────────────────────────────────────────────────
     if (params.clientPhone) {
       try {
-        const formattedAmount = params.amount.toFixed(2).replace('.', ',');
+        const formattedAmount = Number(params.amount).toFixed(2).replace('.', ',');
 
-        // Buscar template do banco
+        // Busca template do banco
         const { data: templateData } = await supabase
           .from('whatsapp_templates')
           .select('*')
@@ -81,7 +92,7 @@ export const useSubscriptionReminder = () => {
           .maybeSingle();
 
         let message: string;
-        let sendImage = false;
+        let sendImage  = false;
         let imageUrl: string | undefined;
         let sendButton = false;
         let buttonText: string | undefined;
@@ -92,72 +103,65 @@ export const useSubscriptionReminder = () => {
             .replace(/\{\{client_name\}\}/g, params.clientName)
             .replace(/\{\{amount\}\}/g, `R$ ${formattedAmount}`)
             .replace(/\{\{plan_name\}\}/g, params.planName);
-          imageUrl = templateData.image_url || undefined;
-          sendImage = !!templateData.image_url;
-          sendButton = templateData.button_enabled as boolean;
-          buttonText = templateData.button_text || undefined;
-          buttonUrl = templateData.button_url || undefined;
+          imageUrl   = templateData.image_url   || undefined;
+          sendImage  = !!(templateData.image_url);
+          sendButton = !!(templateData.button_enabled);
+          buttonText = templateData.button_text  || undefined;
+          buttonUrl  = templateData.button_url   || undefined;
         } else {
-          // Fallback caso template não exista
-          if (isD0) {
-            message = `Olá ${params.clientName}! 💈\n\n⚠️ *Atenção: sua assinatura vence HOJE!*\n\nFatura do plano *${params.planName}* no valor de *R$ ${formattedAmount}*.\n\nAcesse a área do cliente para mais informações:\nhttps://www.assinaturaspcon.sbs/cliente`;
-          } else {
-            message = `Olá ${params.clientName}! 💈\n\nPassando para lembrar que a fatura da sua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence em *5 dias*.\n\nAcesse a área do cliente:\nhttps://www.assinaturaspcon.sbs/cliente`;
-          }
+          // Fallback caso template não esteja cadastrado/ativo
+          message = isD0
+            ? `Olá ${params.clientName}! ⚠️\n\nSua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence *HOJE*.\n\nAcesse a área do cliente: https://www.assinaturaspcon.sbs/cliente`
+            : `Olá ${params.clientName}! 💈\n\nSua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence em *5 dias*.\n\nAcesse a área do cliente: https://www.assinaturaspcon.sbs/cliente`;
         }
 
-        let phone = params.clientPhone.replace(/\D/g, '');
+        let phone = String(params.clientPhone).replace(/\D/g, '');
         if (!phone.startsWith('55')) phone = '55' + phone;
 
-        const { data: waResult } = await supabase.functions.invoke('whatsapp-send', {
-          body: {
-            phone,
-            message,
-            clientId: params.clientId,
-            type: messageType,
-            sendImage,
-            imageUrl,
-            sendButton,
-            buttonText,
-            buttonUrl,
-          },
+        const { data: waResult, error: waError } = await supabase.functions.invoke('whatsapp-send', {
+          body: { phone, message, clientId: params.clientId, type: messageType, sendImage, imageUrl, sendButton, buttonText, buttonUrl },
         });
 
+        if (waError) console.error('[useSubscriptionReminder] WhatsApp invoke error:', waError);
         whatsappSent = waResult?.success === true;
+        console.log(`[useSubscriptionReminder] WhatsApp sent=${whatsappSent}`, waResult);
       } catch (err) {
-        console.error('[useSubscriptionReminder] WhatsApp error:', err);
+        console.error('[useSubscriptionReminder] WhatsApp exception:', err);
       }
+    } else {
+      console.log('[useSubscriptionReminder] Sem telefone — WhatsApp pulado.');
     }
 
-    // ── Email (apenas D-5, pois o template é específico para isso) ──
+    // ── Email (apenas D-5, template foi feito para isso) ─────────────────────
     if (isD5 && params.clientEmail) {
       try {
-        const { data: emailResult } = await supabase.functions.invoke('email-billing-reminder', {
+        const { data: emailResult, error: emailError } = await supabase.functions.invoke('email-billing-reminder', {
           body: { clientId: params.clientId },
         });
+
+        if (emailError) console.error('[useSubscriptionReminder] Email invoke error:', emailError);
         emailSent = emailResult?.success === true;
+        console.log(`[useSubscriptionReminder] Email sent=${emailSent}`, emailResult);
       } catch (err) {
-        console.error('[useSubscriptionReminder] Email error:', err);
+        console.error('[useSubscriptionReminder] Email exception:', err);
       }
+    } else if (isD5 && !params.clientEmail) {
+      console.log('[useSubscriptionReminder] Sem email — Email pulado.');
     }
 
     setIsSending(false);
 
-    // Feedback para o admin
+    // ── Toast de feedback para o admin ────────────────────────────────────────
     if (isD5) {
-      const msgs: string[] = [];
-      if (whatsappSent) msgs.push('WhatsApp ✅');
-      else if (params.clientPhone) msgs.push('WhatsApp ❌');
-      if (emailSent) msgs.push('Email ✅');
-      else if (params.clientEmail) msgs.push('Email ❌');
-      if (msgs.length) {
-        toast.info(`Lembrete D-5 enviado: ${msgs.join(' | ')}`, { duration: 5000 });
+      const parts: string[] = [];
+      if (params.clientPhone) parts.push(whatsappSent ? 'WhatsApp ✅' : 'WhatsApp ❌');
+      if (params.clientEmail) parts.push(emailSent    ? 'Email ✅'    : 'Email ❌');
+      if (parts.length > 0) {
+        toast.info(`Lembrete D-5 disparado: ${parts.join(' | ')}`, { duration: 6000 });
       }
     } else if (isD0) {
-      if (whatsappSent) {
-        toast.info('Lembrete D-0 enviado via WhatsApp ✅', { duration: 4000 });
-      } else if (params.clientPhone) {
-        toast.warning('Não foi possível enviar WhatsApp D-0', { duration: 4000 });
+      if (params.clientPhone) {
+        toast.info(whatsappSent ? 'Lembrete D-0 enviado via WhatsApp ✅' : 'WhatsApp D-0 falhou ❌', { duration: 5000 });
       }
     }
 

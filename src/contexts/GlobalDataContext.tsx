@@ -192,7 +192,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, clients(name)')
+        .select('*, clients(name, email, phone)')
         .order('issued_at', { ascending: false });
 
       if (error) throw error;
@@ -274,7 +274,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('subscriptions')
         .insert([subscription])
-        .select('*, clients(name)')
+        .select('*, clients(name, email, phone)')
         .single();
 
       if (error) throw error;
@@ -293,7 +293,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .from('subscriptions')
         .update(updates)
         .eq('id', id)
-        .select('*, clients(name)')
+        .select('*, clients(name, email, phone)')
         .single();
 
       if (error) throw error;
@@ -460,7 +460,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('invoices')
         .insert([invoice])
-        .select('*, clients(name)')
+        .select('*, clients(name, email, phone)')
         .single();
 
       if (error) throw error;
