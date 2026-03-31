@@ -342,6 +342,8 @@ const handler = async (req: Request): Promise<Response> => {
     const toYMDInSaoPaulo = (d: Date) =>
       new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 
+    const todayBrt = toYMDInSaoPaulo(now);
+
     // D-5 = subscription due date in 5 days: we send 5 days before
     const inFiveDays = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() + 5 * 86400000);
     const inFiveDaysStr = toYMDInSaoPaulo(inFiveDays);

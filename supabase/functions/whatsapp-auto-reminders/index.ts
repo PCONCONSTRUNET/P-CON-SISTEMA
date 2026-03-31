@@ -41,27 +41,23 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch the template from DB
-    const { data: templateData } = await supabase
+    // Fetch templates from DB
+    const { data: templatesData } = await supabase
       .from("whatsapp_templates")
       .select("*")
-      .eq("template_key", "due_today")
-      .eq("is_active", true)
-      .single();
+      .in("template_key", ["due_today", "subscription_reminder"])
+      .eq("is_active", true);
 
-    if (!templateData) {
-      console.log("Template 'due_today' not found or inactive");
+    const dueTodayTemplate = templatesData?.find((t: any) => t.template_key === "due_today");
+    const d5Template = templatesData?.find((t: any) => t.template_key === "subscription_reminder");
+
+    if (!dueTodayTemplate && !d5Template) {
+      console.log("No active templates found");
       return new Response(
-        JSON.stringify({ success: true, message: "Template inactive", results: { due_today_sent: 0, errors: [] } }),
+        JSON.stringify({ success: true, message: "Templates inactive", results: { due_today_sent: 0, due_in_5_sent: 0, errors: [] } }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
-
-    const messageTemplate = templateData.message_template;
-    const imageUrl = templateData.image_url || DEFAULT_IMAGE_URL;
-    const buttonEnabled = templateData.button_enabled;
-    const buttonText = templateData.button_text || "Acessar Área do Cliente";
-    const buttonUrl = templateData.button_url || DEFAULT_CLIENT_AREA_URL;
 
     // Compute date boundaries in America/Sao_Paulo (BRT, UTC-03)
     const toYMDInSaoPaulo = (d: Date) =>
@@ -75,35 +71,71 @@ const handler = async (req: Request): Promise<Response> => {
       new Date(`${todayBrt}T00:00:00-03:00`).getTime() + 86400000
     ).toISOString();
 
+    // Boundaries for D-5
+    const inFiveDays = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() + 5 * 86400000);
+    const inFiveDaysBrt = toYMDInSaoPaulo(inFiveDays);
+    const startOfInFiveDaysUtc = new Date(`${inFiveDaysBrt}T00:00:00-03:00`).toISOString();
+    const startOfInSixDaysUtc = new Date(
+      new Date(`${inFiveDaysBrt}T00:00:00-03:00`).getTime() + 86400000
+    ).toISOString();
+
     console.log(`Checking payments due TODAY (D-0) in BRT: ${todayBrt}`);
+    console.log(`Checking payments due in 5 DAYS (D-5) in BRT: ${inFiveDaysBrt}`);
 
-    const { data: dueTodayPayments, error: dueError } = await supabase
-      .from("payments")
-      .select(`
-        id, amount, due_date, status, description, subscription_id,
-        client:clients(id, name, phone, email),
-        subscription:subscriptions(plan_name)
-      `)
-      .eq("status", "pending")
-      .gte("due_date", startOfTodayUtc)
-      .lt("due_date", startOfTomorrowUtc);
+    let dueTodayPayments: any[] = [];
+    if (dueTodayTemplate) {
+      const { data, error } = await supabase
+        .from("payments")
+        .select(`
+          id, amount, due_date, status, description, subscription_id,
+          client:clients(id, name, phone, email),
+          subscription:subscriptions(plan_name)
+        `)
+        .eq("status", "pending")
+        .gte("due_date", startOfTodayUtc)
+        .lt("due_date", startOfTomorrowUtc);
 
-    if (dueError) {
-      console.error("Error fetching due payments:", dueError);
+      if (error) console.error("Error fetching due today payments:", error);
+      else dueTodayPayments = data || [];
     }
 
-    console.log(`Found ${dueTodayPayments?.length || 0} pending payments due today`);
+    console.log(`Found ${dueTodayPayments.length} pending payments due today`);
+
+    let d5Payments: any[] = [];
+    if (d5Template) {
+      const { data, error } = await supabase
+        .from("payments")
+        .select(`
+          id, amount, due_date, status, description, subscription_id,
+          client:clients(id, name, phone, email),
+          subscription:subscriptions(plan_name)
+        `)
+        .eq("status", "pending")
+        .gte("due_date", startOfInFiveDaysUtc)
+        .lt("due_date", startOfInSixDaysUtc);
+
+      if (error) console.error("Error fetching D-5 payments:", error);
+      else d5Payments = data || [];
+    }
+
+    console.log(`Found ${d5Payments.length} pending payments due in 5 days`);
 
     const results = {
       due_today_sent: 0,
+      due_in_5_sent: 0,
       skipped_no_phone: 0,
       errors: [] as string[],
     };
 
     const uazapiAuthHeaders = { token: apiToken };
 
-    const sendMessageWithImageAndButton = async (phone: string, message: string) => {
-      const finalImageUrl = `${imageUrl}?v=${Date.now()}`;
+    const sendMessageWithImageAndButton = async (phone: string, message: string, template: any) => {
+      const tImageUrl = template.image_url || DEFAULT_IMAGE_URL;
+      const tButtonEnabled = template.button_enabled;
+      const tButtonText = template.button_text || "Acessar Área do Cliente";
+      const tButtonUrl = template.button_url || DEFAULT_CLIENT_AREA_URL;
+
+      const finalImageUrl = `${tImageUrl}?v=${Date.now()}`;
 
       const mediaResponse = await fetch(`${UAZAPI_BASE_URL}/send/media`, {
         method: "POST",
@@ -119,12 +151,12 @@ const handler = async (req: Request): Promise<Response> => {
 
       const imageSuccess = mediaResponse.status === 200 && (mediaResult.key || mediaResult.chatid || mediaResult.messageid);
 
-      if (imageSuccess && buttonEnabled) {
+      if (imageSuccess && tButtonEnabled) {
         const menuPayload = {
           number: phone,
           type: "button",
           text: "📱 Acesse sua área do cliente:",
-          choices: [`${buttonText} | ${buttonUrl}`],
+          choices: [`${tButtonText} | ${tButtonUrl}`],
         };
 
         const menuResponse = await fetch(`${UAZAPI_BASE_URL}/send/menu`, {
@@ -140,8 +172,8 @@ const handler = async (req: Request): Promise<Response> => {
       return { ...mediaResult, httpStatus: mediaResponse.status };
     };
 
-    if (dueTodayPayments && dueTodayPayments.length > 0) {
-      for (const payment of dueTodayPayments) {
+    const processPayments = async (payments: any[], template: any, messageType: string) => {
+      for (const payment of payments) {
         const client = payment.client as any;
 
         if (!client?.phone) {
@@ -155,8 +187,7 @@ const handler = async (req: Request): Promise<Response> => {
 
         const formattedValue = `R$ ${payment.amount.toFixed(2).replace(".", ",")}`;
 
-        // Replace placeholders in template
-        const message = messageTemplate
+        const message = template.message_template
           .replace(/\{\{client_name\}\}/g, client.name)
           .replace(/\{\{plan_name\}\}/g, planName)
           .replace(/\{\{amount\}\}/g, formattedValue);
@@ -165,18 +196,20 @@ const handler = async (req: Request): Promise<Response> => {
           let phone = client.phone.replace(/\D/g, "");
           if (!phone.startsWith("55")) phone = "55" + phone;
 
-          console.log(`Sending D-0 reminder to ${client.name} (${phone})`);
+          console.log(`Sending ${messageType} reminder to ${client.name} (${phone})`);
 
-          const result = await sendMessageWithImageAndButton(phone, message);
+          const result = await sendMessageWithImageAndButton(phone, message, template);
           const isSuccess = result.httpStatus === 200 && (result.key || result.chatid || result.messageid);
 
           if (isSuccess) {
-            results.due_today_sent++;
+            if (messageType === "auto_due_today") results.due_today_sent++;
+            else if (messageType === "auto_due_in_5_days") results.due_in_5_sent++;
+
             await supabase.from("whatsapp_messages").insert({
               client_id: client.id,
               phone: phone,
               message: message,
-              message_type: "auto_due_today",
+              message_type: messageType,
               btzap_message_id: result.key?.id || result.messageId || null,
               remote_jid: result.key?.remoteJid || null,
               status: "sent",
@@ -189,9 +222,17 @@ const handler = async (req: Request): Promise<Response> => {
           results.errors.push(`${client.name}: ${err.message}`);
         }
       }
+    };
+
+    if (dueTodayTemplate && dueTodayPayments.length > 0) {
+      await processPayments(dueTodayPayments, dueTodayTemplate, "auto_due_today");
     }
 
-    console.log("Auto reminders D-0 completed:", results);
+    if (d5Template && d5Payments.length > 0) {
+      await processPayments(d5Payments, d5Template, "auto_due_in_5_days");
+    }
+
+    console.log("Auto reminders completed:", results);
 
     return new Response(
       JSON.stringify({ success: true, results }),

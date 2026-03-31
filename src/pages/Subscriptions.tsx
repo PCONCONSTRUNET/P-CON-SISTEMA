@@ -46,6 +46,7 @@ import { differenceInCalendarDays, isPast, isToday, format, addDays } from 'date
 import { formatBrazilDate, formatDateForInput, inputDateToISO, normalizeInputDate, toBrazilTime } from '@/utils/dateUtils';
 import { toast } from 'sonner';
 import { useWhatsAppReminder } from '@/hooks/useWhatsAppReminder';
+import { useSubscriptionReminder } from '@/hooks/useSubscriptionReminder';
 
 const Subscriptions = () => {
   const [search, setSearch] = useState('');
@@ -76,6 +77,7 @@ const Subscriptions = () => {
   const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription } = useGlobalData();
   const { createPixPayment, loading: mpLoading } = useMercadoPago();
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
+  const { sendReminderIfNeeded } = useSubscriptionReminder();
 
   const filteredSubscriptions = subscriptions.filter(sub =>
     (sub.clients?.name || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -173,6 +175,22 @@ const Subscriptions = () => {
 
     if (result) {
       setIsEditDialogOpen(false);
+
+      // Após salvar, verifica se nova data é D-5 ou D-0 e dispara WhatsApp + Email na hora
+      const client = editingSubscription.clients;
+      if (client && editingSubscription.status === 'active') {
+        sendReminderIfNeeded({
+          subscriptionId: editingSubscription.id,
+          clientId: editingSubscription.client_id,
+          clientName: client.name || 'Cliente',
+          clientPhone: client.phone || null,
+          clientEmail: client.email || null,
+          planName: editingSubscription.plan_name,
+          amount: Number(editingSubscription.value),
+          nextPayment: editingSubscription.next_payment,
+        });
+      }
+
       setEditingSubscription(null);
     }
   };
