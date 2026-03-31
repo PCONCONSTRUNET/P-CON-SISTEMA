@@ -32,16 +32,16 @@ const resolveTemplateKey = (type: string, dueDate?: string | null): string => {
   // For payment type, default to due_today
   if (type === 'payment') return 'due_today';
 
-  // For subscription type without a due date or future date, use D-1
+  // For subscription type without a due date or future date, use D-5
   return 'subscription_reminder';
 };
 
 // Fallback messages if no template found
 const fallbackMessages: Record<string, (name: string, amount: string, desc?: string) => string> = {
   subscription: (name, amount, desc) =>
-    `Ola ${name}! 💈\n\nPassando para lembrar que a fatura referente a sua assinatura ativa${desc ? ` do *${desc}*` : ''} no valor de *R$ ${amount}* vence amanha.\n\nAcesse a area do cliente: https://www.assinaturaspcon.sbs/cliente\n\nQualquer duvida, estamos a disposicao.`,
+    `Ola ${name}! 💈\n\nPassando para lembrar que a fatura referente a sua assinatura ativa${desc ? ` do *${desc}*` : ''} no valor de *R$ ${amount}* vence em 5 dias.\n\nAcesse a area do cliente: https://www.assinaturaspcon.sbs/cliente\n\nQualquer duvida, estamos a disposicao.`,
   payment: (name, amount, desc) =>
-    `Ola ${name}! 💈\n\nA fatura referente a sua assinatura ativa no valor de *R$ ${amount}*${desc ? ` (*${desc}*)` : ''} esta pendente e vence amanha.\n\nAcesse a area do cliente: https://www.assinaturaspcon.sbs/cliente\n\nQualquer duvida, estamos a disposicao.`,
+    `Ola ${name}! 💈\n\nA fatura referente a sua assinatura ativa no valor de *R$ ${amount}*${desc ? ` (*${desc}*)` : ''} esta pendente e vence em 5 dias.\n\nAcesse a area do cliente: https://www.assinaturaspcon.sbs/cliente\n\nQualquer duvida, estamos a disposicao.`,
   overdue: (name, amount, desc) =>
     `Ola ${name}! 💈\n\n⚠️ A fatura referente a sua assinatura ativa de *R$ ${amount}*${desc ? ` (*${desc}*)` : ''} esta vencida.\n\nRegularize o pagamento para manter sua assinatura em dia.\n\nAcesse a area do cliente: https://www.assinaturaspcon.sbs/cliente\n\nEntre em contato se precisar de ajuda.`,
 };

@@ -81,7 +81,7 @@ const EmailSettings = () => {
         const r = data.results;
         r.emails_sent > 0
           ? toast.success(`${r.emails_sent} email(s) de cobrança enviado(s)!`)
-          : toast.info('Nenhuma assinatura vencendo amanhã (D-1) encontrada.');
+          : toast.info('Nenhuma assinatura vencendo em 5 dias (D-5) encontrada.');
       } else {
         toast.error(data?.error || 'Erro ao processar emails');
       }
@@ -275,17 +275,17 @@ const EmailSettings = () => {
           </CardContent>
         </Card>
 
-        {/* Lembrete D-1 Automático */}
+        {/* Lembrete D-5 Automático */}
         <Card className="glass-card border-border/50">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Clock className="w-5 h-5 text-primary" />
-                  Lembrete D-1 (Automático)
+                  Lembrete D-5 (Automático)
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Email enviado automaticamente quando a assinatura é marcada como D-1 (faltando 1 dia para vencer)
+                  Email enviado automaticamente 5 dias antes do vencimento da assinatura
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -321,7 +321,7 @@ const EmailSettings = () => {
                   <Info className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-muted-foreground">Gatilho</span>
                 </div>
-                <p className="text-foreground font-semibold text-sm">Assinatura marcada como D-1</p>
+                <p className="text-foreground font-semibold text-sm">Assinatura faltando 5 dias (D-5)</p>
               </div>
             </div>
 
@@ -332,7 +332,7 @@ const EmailSettings = () => {
                 Horário de Envio
               </h4>
               <p className="text-xs text-muted-foreground mb-3">
-                O sistema verifica automaticamente a cada minuto e dispara no horário configurado (BRT). Se a assinatura for marcada como D-1 após o horário, o envio acontece imediatamente.
+                O sistema verifica automaticamente a cada minuto e dispara no horário configurado (BRT). Se uma assinatura estiver a 5 dias do vencimento no momento da verificação, o envio acontece automaticamente.
               </p>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -381,7 +381,7 @@ const EmailSettings = () => {
                 {isTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 {isTesting ? 'Processando...' : 'Executar Agora (Manual)'}
               </Button>
-              <p className="text-xs text-muted-foreground">Dispara manualmente a verificação de assinaturas que vencem amanhã</p>
+              <p className="text-xs text-muted-foreground">Dispara manualmente a verificação de assinaturas que vencem em 5 dias</p>
             </div>
 
             {lastResult?.success && (
@@ -437,12 +437,12 @@ const EmailSettings = () => {
               <div className="p-6">
                 <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded mb-4">
                   <p className="text-sm text-blue-800 font-semibold">
-                    📋 Sua assinatura vence amanhã — efetue o pagamento para manter tudo em dia
+                    📋 Sua assinatura vence em 5 dias — efetue o pagamento para manter tudo em dia
                   </p>
                 </div>
                 <p className="text-gray-800 mb-2">Olá <strong>Nome do Cliente</strong>,</p>
                 <p className="text-gray-600 text-sm mb-4">
-                  Passando para lembrar que a fatura referente à sua assinatura <strong>vence amanhã</strong>.
+                  Passando para lembrar que a fatura referente à sua assinatura <strong>vence em 5 dias</strong>.
                 </p>
                 <div className="bg-gray-50 rounded-lg border p-4 mb-4">
                   <div className="flex justify-between py-2 border-b">
