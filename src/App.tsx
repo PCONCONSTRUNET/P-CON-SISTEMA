@@ -85,7 +85,7 @@ const App = () => (
                 <Route path="/area-cliente" element={<Checkout />} />
                 
                 {/* Receipt Route (Public) */}
-                <Route path="/:id" element={<Receipt />} />
+                <Route path="/c/:id" element={<Receipt />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>

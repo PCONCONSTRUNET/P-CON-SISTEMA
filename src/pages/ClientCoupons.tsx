@@ -221,7 +221,7 @@ const ClientCoupons = () => {
     const formattedDate = format(new Date(coupon.created_at), "dd/MM/yyyy", { locale: ptBR });
     
     // Link público do comprovante
-    const receiptLink = `https://www.assinaturaspcon.sbs/${coupon.id}`;
+    const receiptLink = `https://www.assinaturaspcon.sbs/c/${coupon.id}`;
     
     let message = `🎉 *COMPROVANTE DE CUPOM DE DESCONTO* 🎉\n\n`;
     message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
