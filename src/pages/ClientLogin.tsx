@@ -25,7 +25,7 @@ const ClientLogin = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast.error('Por favor, preencha todos os campos');
       return;
@@ -46,7 +46,7 @@ const ClientLogin = () => {
   return (
     <div className="min-h-[100dvh] overflow-hidden flex items-center justify-center p-4 relative">
       <BlueBackground />
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -56,22 +56,22 @@ const ClientLogin = () => {
         {/* Glass Card */}
         <div className="glass-card p-4 sm:p-10">
           {/* Logo */}
-          <motion.div 
+          <motion.div
             className="flex justify-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
-            <img 
-              src={logo} 
-              alt="P-CON Logo" 
-              className="w-full max-w-[12rem] sm:max-w-[16rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-10 sm:-mt-12 -mb-20 sm:-mb-24" 
+            <img
+              src={logo}
+              alt="P-CON Logo"
+              className="w-full max-w-[12rem] sm:max-w-[16rem] h-auto drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90 -mt-10 sm:-mt-12 -mb-20 sm:-mb-24"
               style={{ clipPath: 'inset(25% 0 38% 0)' }}
             />
           </motion.div>
 
           {/* Title */}
-          <motion.div 
+          <motion.div
             className="text-center mb-4 sm:mb-8"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -86,8 +86,8 @@ const ClientLogin = () => {
           </motion.div>
 
           {/* Form */}
-          <motion.form 
-            onSubmit={handleSubmit} 
+          <motion.form
+            onSubmit={handleSubmit}
             className="space-y-3 sm:space-y-5"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -135,8 +135,8 @@ const ClientLogin = () => {
               whileTap={{ scale: 0.99 }}
               className="pt-2"
             >
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full h-12 btn-blue text-base"
                 disabled={isLoading}
               >
@@ -156,7 +156,7 @@ const ClientLogin = () => {
           </motion.form>
 
           {/* Link para cadastro */}
-          <motion.div 
+          <motion.div
             className="mt-4 sm:mt-6 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -165,8 +165,8 @@ const ClientLogin = () => {
             <p className="text-sm text-muted-foreground mb-2">
               Ainda não tem conta?
             </p>
-            <Link 
-              to="/cliente/cadastro" 
+            <Link
+              to="/cliente/cadastro"
               className="text-sm text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1 font-medium"
             >
               <UserPlus className="h-4 w-4" />
@@ -175,7 +175,7 @@ const ClientLogin = () => {
           </motion.div>
 
           {/* Footer */}
-          <motion.div 
+          <motion.div
             className="mt-2 sm:mt-4 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
