@@ -70,11 +70,11 @@ Qualquer duvida, estamos a disposicao.',
 ),
 (
   'subscription_reminder',
-  'Lembrete de Assinatura (D-1)',
-  'Enviado um dia antes do vencimento quando a data de pagamento é alterada',
+  'Lembrete de Assinatura (D-5)',
+  'Enviado automaticamente 5 dias antes do vencimento',
   'Ola {{client_name}}! 💈
 
-Passando para lembrar que a fatura referente a sua assinatura ativa do *{{plan_name}}* no valor de *{{amount}}* vence amanha.
+Passando para lembrar que a fatura referente a sua assinatura ativa do *{{plan_name}}* no valor de *{{amount}}* vence em 5 dias.
 
 Qualquer duvida, estamos a disposicao.',
   'https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg',
