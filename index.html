@@ -3,6 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- Cache buster: limpa SW antigo e caches obsoletos para evitar tela azul no Chrome -->
+    <script>
+      (function() {
+        var BUILD_VERSION = '20260406-v2';
+        var CACHE_KEY = 'pcon_build_version';
+        var lastVersion = localStorage.getItem(CACHE_KEY);
+
+        if (lastVersion !== BUILD_VERSION) {
+          localStorage.setItem(CACHE_KEY, BUILD_VERSION);
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              var unregPromises = regs.map(function(reg) { return reg.unregister(); });
+              return Promise.all(unregPromises);
+            }).then(function() {
+              return caches.keys();
+            }).then(function(keys) {
+              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+            }).then(function() {
+              window.location.reload(true);
+            });
+          }
+        }
+      })();
+    </script>
     <title>P-CON Assinaturas | Sistema de Gestão de Clientes e Cobranças</title>
     <meta name="description" content="Sistema interno de gestão de clientes, assinaturas e cobranças da P-CON CONSTRUNET">
     <meta name="author" content="P-CON Construct" />
