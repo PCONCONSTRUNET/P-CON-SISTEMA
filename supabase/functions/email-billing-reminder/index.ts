@@ -42,7 +42,7 @@ const generateEmailHTML = (
                 <tr>
                   <td style="background-color:#DBEAFE;border-left:4px solid #3B82F6;padding:12px 16px;border-radius:6px;">
                     <p style="margin:0;font-size:14px;color:#1E40AF;font-weight:600;">
-                      📋 Sua assinatura vence em 5 dias — efetue o pagamento para manter tudo em dia
+                      📋 Sua assinatura vence amanhã — efetue o pagamento para manter tudo em dia
                     </p>
                   </td>
                 </tr>
@@ -57,7 +57,7 @@ const generateEmailHTML = (
                 Olá <strong>${clientName}</strong>,
               </p>
               <p style="font-size:15px;color:#4a4a5a;line-height:1.6;margin:0 0 24px;">
-                Passando para lembrar que a fatura referente à sua assinatura <strong>vence em 5 dias</strong>. Confira os detalhes abaixo e efetue o pagamento para manter sua assinatura em dia.
+                Passando para lembrar que a fatura referente à sua assinatura <strong>vence amanhã</strong>. Confira os detalhes abaixo e efetue o pagamento para manter sua assinatura em dia.
               </p>
 
               <!-- Detalhes da fatura -->
@@ -180,7 +180,7 @@ const sendEmailForSubscription = async (sub: any, client: any, resendApiKey: str
     body: JSON.stringify({
       from: "P-CON CONSTRUNET <cobranca@assinaturaspcon.sbs>",
       to: [client.email],
-      subject: `📋 Lembrete: ${planName} vence em 5 dias | P-CON CONSTRUNET`,
+      subject: `📋 Lembrete: ${planName} vence amanhã | P-CON CONSTRUNET`,
       html: emailHTML,
     }),
   });
@@ -293,7 +293,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const settings = new Map((rawSettings ?? []).map((row) => [row.setting_key, row.setting_value]));
+    const settings = new Map((rawSettings ?? []).map((row: { setting_key: string; setting_value: string }) => [row.setting_key, row.setting_value]));
     const autoSendEnabled = settings.get("auto_send_enabled") === "true";
 
     const parsedHour = Number.parseInt(settings.get("reminder_hour") ?? "8", 10);
@@ -344,21 +344,21 @@ const handler = async (req: Request): Promise<Response> => {
 
     const todayBrt = toYMDInSaoPaulo(now);
 
-    // D-5 = subscription due date in 5 days: we send 5 days before
-    const inFiveDays = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() + 5 * 86400000);
-    const inFiveDaysStr = toYMDInSaoPaulo(inFiveDays);
+    // D-1 = subscription due date tomorrow: we send 1 day before
+    const inOneDay = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() + 1 * 86400000);
+    const inOneDayStr = toYMDInSaoPaulo(inOneDay);
 
-    const startOfInFiveDaysUtc = new Date(`${inFiveDaysStr}T00:00:00-03:00`).toISOString();
-    const endOfInFiveDaysUtc = new Date(`${inFiveDaysStr}T23:59:59-03:00`).toISOString();
+    const startOfInOneDayUtc = new Date(`${inOneDayStr}T00:00:00-03:00`).toISOString();
+    const endOfInOneDayUtc = new Date(`${inOneDayStr}T23:59:59-03:00`).toISOString();
 
-    console.log(`Checking subscriptions due in 5 days (D-5 reminder) in BRT: ${inFiveDaysStr} | forceRun=${forceRun}`);
+    console.log(`Checking subscriptions due tomorrow (D-1 reminder) in BRT: ${inOneDayStr} | forceRun=${forceRun}`);
 
     const { data: dueSubs, error: queryError } = await supabase
       .from("subscriptions")
       .select(`id, plan_name, value, next_payment, client:clients(id, name, phone, email)`)
       .eq("status", "active")
-      .gte("next_payment", startOfInFiveDaysUtc)
-      .lte("next_payment", endOfInFiveDaysUtc);
+      .gte("next_payment", startOfInOneDayUtc)
+      .lte("next_payment", endOfInOneDayUtc);
 
     if (queryError) {
       return new Response(
@@ -367,7 +367,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Found ${dueSubs?.length || 0} subscriptions due in 5 days (D-5)`);
+    console.log(`Found ${dueSubs?.length || 0} subscriptions due tomorrow (D-1)`);
 
     const results = { emails_sent: 0, skipped_no_email: 0, errors: [] as string[] };
 
@@ -385,10 +385,10 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    console.log("D-5 subscription email results:", results);
+    console.log("D-1 subscription email results:", results);
 
     // Also update the comment in automatic mode label
-    // ====== AUTOMATIC MODE: D-5 subscription reminder ======
+    // ====== AUTOMATIC MODE: D-1 subscription reminder ======
 
     return new Response(
       JSON.stringify({ success: true, results, forceRun }),
