@@ -95,7 +95,7 @@ const ClientRegister = () => {
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth?action=self-register`,
+        `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth-new?action=self-register`,
         {
           method: 'POST',
           headers: {
