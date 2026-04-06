@@ -4,27 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-    <!-- Cache buster: limpa SW antigo e caches obsoletos para evitar tela azul no Chrome -->
+    <!-- Script automático definitivo para aniquilar Service Workers antigos do Safari -->
     <script>
       (function() {
-        var BUILD_VERSION = '20260406-v2';
-        var CACHE_KEY = 'pcon_build_version';
-        var lastVersion = localStorage.getItem(CACHE_KEY);
-
-        if (lastVersion !== BUILD_VERSION) {
-          localStorage.setItem(CACHE_KEY, BUILD_VERSION);
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            if (regs.length > 0) {
+              console.log('Unregistering stuck Service Workers...', regs);
               var unregPromises = regs.map(function(reg) { return reg.unregister(); });
-              return Promise.all(unregPromises);
-            }).then(function() {
-              return caches.keys();
-            }).then(function(keys) {
-              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-            }).then(function() {
-              window.location.reload(true);
-            });
-          }
+              Promise.all(unregPromises)
+                .then(function() { return caches.keys(); })
+                .then(function(keys) { return Promise.all(keys.map(function(k) { return caches.delete(k); })); })
+                .then(function() { 
+                  console.log('Caches cleared. Reloading...');
+                  window.location.reload(true); 
+                });
+            }
+          });
         }
       })();
     </script>
