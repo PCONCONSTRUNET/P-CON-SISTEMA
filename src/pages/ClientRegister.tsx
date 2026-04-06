@@ -95,12 +95,12 @@ const ClientRegister = () => {
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth-new?action=self-register`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth?action=self-register`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY_NEW,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             name: formData.name.trim(),
