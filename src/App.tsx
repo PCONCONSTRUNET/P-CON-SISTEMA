@@ -52,6 +52,7 @@ const App = () => (
               <Routes>
                 {/* Admin Routes */}
                 <Route path="/" element={<Login />} />
+                <Route path="/admin" element={<Login />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
                 <Route path="/clients/:id" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
@@ -79,6 +80,7 @@ const App = () => (
                 
                 {/* Client Routes */}
                 <Route path="/cliente" element={<ClientLogin />} />
+                <Route path="/portal" element={<ClientLogin />} />
                 <Route path="/cliente/cadastro" element={<ClientRegister />} />
                 <Route path="/cliente/implantacoes" element={<ClientImplementations />} />
                 <Route path="/checkout" element={<Checkout />} />
