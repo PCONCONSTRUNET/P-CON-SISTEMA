@@ -11,6 +11,7 @@ interface SendMessageRequest {
   message: string;
   clientId: string;
   type: string;
+  paymentId?: string;
   sendImage?: boolean;
   imageUrl?: string;
   sendButton?: boolean;
@@ -40,7 +41,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-     const { phone, message, clientId, type, sendImage = true, imageUrl, sendButton = true, buttonText, buttonUrl }: SendMessageRequest = await req.json();
+     const { phone, message, clientId, type, paymentId, sendImage = true, imageUrl, sendButton = true, buttonText, buttonUrl }: SendMessageRequest = await req.json();
 
     if (!phone || !message) {
       return new Response(
@@ -260,6 +261,7 @@ const handler = async (req: Request): Promise<Response> => {
       phone: formattedPhone,
       message: message,
       message_type: type || "manual",
+      payment_id: paymentId || null,
       btzap_message_id: messageId,
       remote_jid: result?.key?.remoteJid || null,
       status: messageStatus,

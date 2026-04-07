@@ -126,14 +126,21 @@ serve(async (req: Request) => {
       return new Response("OK", { status: 200 });
     }
 
-    // Update payment status
-    const { error: updateError } = await supabase
+    // Atomic conditional UPDATE: only update if the status has NOT already been changed
+    // by a concurrent webhook. If rowsAffected === 0, another instance already processed this.
+    const { data: updatedRows, error: updateError } = await supabase
       .from("payments")
       .update({ status: dbStatus, paid_at: paidAt, transaction_id: paymentId.toString() })
-      .eq("id", paymentRecord.id);
+      .eq("id", paymentRecord.id)
+      .neq("status", dbStatus)
+      .select("id");
 
     if (updateError) {
       console.error("Error updating payment in DB:", updateError);
+    } else if (!updatedRows || updatedRows.length === 0) {
+      // Another concurrent webhook already updated this payment - skip to avoid duplicates
+      console.log("Payment was already updated by another concurrent webhook - skipping");
+      return new Response("OK", { status: 200 });
     } else {
       console.log("Payment updated successfully:", { paymentId, status: dbStatus });
     }
@@ -290,22 +297,22 @@ serve(async (req: Request) => {
         }
       }
 
-      // Send WhatsApp payment confirmation (with idempotency guard)
+      // Send WhatsApp payment confirmation (with idempotency guard using payment_id)
       if (paymentRecord.client_id) {
         try {
-          // Check if a confirmation was already sent for this payment (prevent duplicate webhooks)
-          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          // Check if a confirmation was already sent for this specific payment (prevent duplicate webhooks)
+          // We use the payment record id as deduplication key - much more precise than client+time window
           const { data: existingMsg } = await supabase
             .from("whatsapp_messages")
             .select("id")
             .eq("client_id", paymentRecord.client_id)
             .eq("message_type", "payment_confirmed_auto")
-            .gte("created_at", fiveMinutesAgo)
+            .eq("payment_id", paymentRecord.id)
             .limit(1)
             .maybeSingle();
 
           if (existingMsg) {
-            console.log("WhatsApp confirmation already sent recently for this client, skipping duplicate");
+            console.log("WhatsApp confirmation already sent for payment", paymentRecord.id, "- skipping duplicate");
           } else {
           const { data: client } = await supabase
             .from("clients")
@@ -378,6 +385,7 @@ serve(async (req: Request) => {
                 message: confirmMessage,
                 clientId: client.id,
                 type: "payment_confirmed_auto",
+                paymentId: paymentRecord.id,
                 sendImage,
                 imageUrl,
                 sendButton,
@@ -386,7 +394,7 @@ serve(async (req: Request) => {
               }),
             });
 
-            console.log("WhatsApp payment confirmation sent");
+            console.log("WhatsApp payment confirmation sent for payment", paymentRecord.id);
           }
           }
         } catch (whatsappErr: any) {
