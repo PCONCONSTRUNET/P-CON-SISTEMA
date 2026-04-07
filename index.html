@@ -13,26 +13,30 @@
     <script>
       window.addEventListener('error', function(e) {
         if (e.message && (e.message.includes('Failed to fetch dynamically imported module') || e.message.includes('Importing a module script failed'))) {
-          console.warn('Detectado erro de cache do Vite. Forçando recarregamento...');
-          window.location.reload(true);
+          console.warn('Detectado erro de cache do Vite. Forçando recarregamento ignorando cache...');
+          window.location.href = window.location.pathname + '?v=' + new Date().getTime() + window.location.hash;
         }
       });
       window.addEventListener('unhandledrejection', function(e) {
         if (e.reason && e.reason.message && (e.reason.message.includes('Failed to fetch dynamically imported module') || e.reason.message.includes('Importing a module script failed'))) {
-          console.warn('Detectado erro de cache do Vite em promise. Forçando recarregamento...');
-          window.location.reload(true);
+          console.warn('Detectado erro de cache do Vite em promise. Forçando recarregamento ignorando cache...');
+          window.location.href = window.location.pathname + '?v=' + new Date().getTime() + window.location.hash;
         }
       });
 
-      // Fallback definitivo para tela azul/branca: Se o React não montar em 4 segundos, forçar reload
+      // Fallback definitivo para tela vazia: Se o React não montar em 4 segundos, forçar reload burlando o cache do celular
       window.addEventListener('load', function() {
         setTimeout(function() {
           var root = document.getElementById('root');
           if (root && root.innerHTML.trim() === '') {
-            if (!sessionStorage.getItem('reloaded-fallback')) {
-              sessionStorage.setItem('reloaded-fallback', 'true');
-              console.warn('React não iniciou. Provável erro de cache do módulo principal. Recarregando...');
-              window.location.reload(true);
+            if (!sessionStorage.getItem('reloaded-fallback') || sessionStorage.getItem('reloaded-fallback') === '1') {
+              // Marca que já tentou 2 vezes para não ficar em loop infinito se o servidor estiver realmente fora do ar
+              var attempts = parseInt(sessionStorage.getItem('reloaded-fallback') || '0');
+              sessionStorage.setItem('reloaded-fallback', (attempts + 1).toString());
+              
+              console.warn('React não iniciou. Provável tela azul de cache. Forçando nova versão do servidor...');
+              // Burla o cache agressivo do navegador de forma infalível
+              window.location.href = window.location.pathname + '?clear_cache=' + new Date().getTime() + window.location.hash;
             }
           } else {
             sessionStorage.removeItem('reloaded-fallback'); // Sucesso, limpar trava
