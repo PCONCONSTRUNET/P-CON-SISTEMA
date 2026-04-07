@@ -297,22 +297,21 @@ serve(async (req: Request) => {
         }
       }
 
-      // Send WhatsApp payment confirmation (with idempotency guard using payment_id)
+      // Send WhatsApp payment confirmation
+      // ATOMIC DEDUP: We use a single UPDATE ... WHERE notification_sent_at IS NULL
+      // as a mutex. Only the first concurrent webhook wins and gets to send.
+      // The loser gets 0 rows updated and skips silently.
       if (paymentRecord.client_id) {
         try {
-          // Check if a confirmation was already sent for this specific payment (prevent duplicate webhooks)
-          // We use the payment record id as deduplication key - much more precise than client+time window
-          const { data: existingMsg } = await supabase
-            .from("whatsapp_messages")
-            .select("id")
-            .eq("client_id", paymentRecord.client_id)
-            .eq("message_type", "payment_confirmed_auto")
-            .eq("payment_id", paymentRecord.id)
-            .limit(1)
-            .maybeSingle();
+          const { data: claimedRows } = await supabase
+            .from("payments")
+            .update({ notification_sent_at: new Date().toISOString() })
+            .eq("id", paymentRecord.id)
+            .is("notification_sent_at", null)
+            .select("id");
 
-          if (existingMsg) {
-            console.log("WhatsApp confirmation already sent for payment", paymentRecord.id, "- skipping duplicate");
+          if (!claimedRows || claimedRows.length === 0) {
+            console.log("WhatsApp confirmation already sent for payment", paymentRecord.id, "- skipping duplicate (atomic guard)");
           } else {
           const { data: client } = await supabase
             .from("clients")
@@ -396,7 +395,7 @@ serve(async (req: Request) => {
 
             console.log("WhatsApp payment confirmation sent for payment", paymentRecord.id);
           }
-          }
+          } // end else (atomic claim succeeded)
         } catch (whatsappErr: any) {
           console.error("Error sending WhatsApp confirmation:", whatsappErr.message);
         }
