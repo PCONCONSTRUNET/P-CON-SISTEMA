@@ -4,7 +4,44 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-    <!-- Script automático definitivo para aniquilar Service Workers antigos do Safari -->
+    <!-- Anti-cache rigoroso para o arquivo HTML principal -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <!-- Script de proteção contra Tela Azul (Erro de carregamento de chunk do Vite) -->
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.message && (e.message.includes('Failed to fetch dynamically imported module') || e.message.includes('Importing a module script failed'))) {
+          console.warn('Detectado erro de cache do Vite. Forçando recarregamento...');
+          window.location.reload(true);
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && e.reason.message && (e.reason.message.includes('Failed to fetch dynamically imported module') || e.reason.message.includes('Importing a module script failed'))) {
+          console.warn('Detectado erro de cache do Vite em promise. Forçando recarregamento...');
+          window.location.reload(true);
+        }
+      });
+
+      // Fallback definitivo para tela azul/branca: Se o React não montar em 4 segundos, forçar reload
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          var root = document.getElementById('root');
+          if (root && root.innerHTML.trim() === '') {
+            if (!sessionStorage.getItem('reloaded-fallback')) {
+              sessionStorage.setItem('reloaded-fallback', 'true');
+              console.warn('React não iniciou. Provável erro de cache do módulo principal. Recarregando...');
+              window.location.reload(true);
+            }
+          } else {
+            sessionStorage.removeItem('reloaded-fallback'); // Sucesso, limpar trava
+          }
+        }, 4000);
+      });
+    </script>
+
+    <!-- Script automático definitivo para aniquilar Service Workers antigos -->
     <script>
       (function() {
         if ('serviceWorker' in navigator) {
