@@ -212,7 +212,7 @@ const BudgetPublic = () => {
       description: type === 'entry'
         ? `Entrada da proposta - ${proposal.project_title}`
         : `Pagamento total da proposta - ${proposal.project_title}`,
-      clientEmail: proposal.client_email || 'contato@assinaturaspcon.sbs',
+      clientEmail: proposal.client_email || 'contato@pconassinantes.site',
       clientName: proposal.client_name,
       clientPhone: proposal.client_phone || undefined,
       proposalId: proposal.id,
@@ -253,7 +253,7 @@ const BudgetPublic = () => {
       description: type === 'entry'
         ? `Entrada da proposta - ${proposal.project_title}`
         : `Pagamento total da proposta - ${proposal.project_title}`,
-      clientEmail: proposal.client_email || 'contato@assinaturaspcon.sbs',
+      clientEmail: proposal.client_email || 'contato@pconassinantes.site',
       clientName: proposal.client_name,
       clientPhone: proposal.client_phone || undefined,
       proposalId: proposal.id,

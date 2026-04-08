@@ -114,7 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
 
          // Step 2: Send button after image
           const finalButtonText = buttonText || "Acessar Área do Cliente";
-          const finalButtonUrl = buttonUrl || "https://www.assinaturaspcon.sbs/cliente";
+          const finalButtonUrl = buttonUrl || "https://www.pconassinantes.site/cliente";
           const menuPayload = {
             number: formattedPhone,
             type: "button",
@@ -291,4 +291,5 @@ const handler = async (req: Request): Promise<Response> => {
 };
 
 serve(handler);
+
 

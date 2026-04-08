@@ -8,7 +8,7 @@ const corsHeaders = {
 
 // Fallback values
 const DEFAULT_IMAGE_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
-const DEFAULT_CLIENT_AREA_URL = "https://www.assinaturaspcon.sbs/cliente";
+const DEFAULT_CLIENT_AREA_URL = "https://www.pconassinantes.site/cliente";
 const UAZAPI_BASE_URL = "https://btzap.uazapi.com";
 
 const AUTO_REMINDERS_ENABLED = true;
@@ -248,4 +248,5 @@ const handler = async (req: Request): Promise<Response> => {
 };
 
 serve(handler);
+
 

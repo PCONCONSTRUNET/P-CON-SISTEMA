@@ -9,7 +9,7 @@ const puppeteer = require('puppeteer');
     page.on('requestfailed', request => console.log('REQUEST FAILED:', request.url(), request.failure().errorText));
 
     console.log('Navigating...');
-    await page.goto('https://assinaturaspcon.sbs', { waitUntil: 'networkidle2', timeout: 15000 }).catch(e => console.log("GOTO error:", e.message));
+    await page.goto('https://pconassinantes.site', { waitUntil: 'networkidle2', timeout: 15000 }).catch(e => console.log("GOTO error:", e.message));
     
     // Wait a bit
     await new Promise(r => setTimeout(r, 6000));

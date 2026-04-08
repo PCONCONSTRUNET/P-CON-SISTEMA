@@ -481,7 +481,7 @@ export default function WhatsAppReminders() {
                             value={(getCurrentValue(template, 'button_url') as string) || ''}
                             onChange={(e) => setEditedValue(template.id, 'button_url', e.target.value)}
                             className="bg-secondary/30 border-border/50"
-                            placeholder="https://www.assinaturaspcon.sbs/cliente"
+                            placeholder="https://www.pconassinantes.site/cliente"
                           />
                         </div>
                       </>
@@ -565,3 +565,4 @@ export default function WhatsAppReminders() {
     </DashboardLayout>
   );
 }
+

@@ -34,7 +34,7 @@ const settingsCards = [
 ];
 
 const BudgetSettings = () => {
-  const [notificationEmail, setNotificationEmail] = useState('contato@assinaturaspcon.sbs');
+  const [notificationEmail, setNotificationEmail] = useState('contato@pconassinantes.site');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -85,7 +85,7 @@ const BudgetSettings = () => {
     setSaving(true);
 
     try {
-      await saveSetting('proposal_notification_email', notificationEmail.trim() || 'contato@assinaturaspcon.sbs');
+      await saveSetting('proposal_notification_email', notificationEmail.trim() || 'contato@pconassinantes.site');
 
       toast.success('Configurações de notificações salvas');
     } catch (error) {
@@ -114,7 +114,7 @@ const BudgetSettings = () => {
                 type="email"
                 value={notificationEmail}
                 onChange={(event) => setNotificationEmail(event.target.value)}
-                placeholder="contato@assinaturaspcon.sbs"
+                placeholder="contato@pconassinantes.site"
               />
               <p className="text-xs text-muted-foreground">
                 Os alertas de visualização, aprovação e recusa dos orçamentos são enviados automaticamente pela integração de e-mail já conectada com a Resend.

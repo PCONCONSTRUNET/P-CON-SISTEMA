@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const LOGO_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
-const CLIENT_AREA_URL = "https://www.assinaturaspcon.sbs/cliente";
+const CLIENT_AREA_URL = "https://www.pconassinantes.site/cliente";
 
 const generateEmailHTML = (
   clientName: string,
@@ -130,7 +130,7 @@ const generateEmailHTML = (
                         </td>
                         <td style="color:#475569;">|</td>
                         <td style="padding:0 8px;">
-                          <a href="mailto:contato@assinaturaspcon.sbs" style="font-size:13px;color:#60a5fa;text-decoration:none;">✉️ contato@assinaturaspcon.sbs</a>
+                          <a href="mailto:contato@pconassinantes.site" style="font-size:13px;color:#60a5fa;text-decoration:none;">✉️ contato@pconassinantes.site</a>
                         </td>
                       </tr>
                     </table>
@@ -143,7 +143,7 @@ const generateEmailHTML = (
                     </p>
                     <p style="margin:4px 0 0;font-size:11px;color:#64748b;">
                       <a href="${CLIENT_AREA_URL}" style="color:#60a5fa;text-decoration:none;">Área do Cliente</a> · 
-                      <a href="https://www.assinaturaspcon.sbs" style="color:#60a5fa;text-decoration:none;">Site</a>
+                      <a href="https://www.pconassinantes.site" style="color:#60a5fa;text-decoration:none;">Site</a>
                     </p>
                   </td>
                 </tr>
@@ -178,7 +178,7 @@ const sendEmailForSubscription = async (sub: any, client: any, resendApiKey: str
       Authorization: `Bearer ${resendApiKey}`,
     },
     body: JSON.stringify({
-      from: "P-CON CONSTRUNET <cobranca@assinaturaspcon.sbs>",
+      from: "P-CON CONSTRUNET <cobranca@pconassinantes.site>",
       to: [client.email],
       subject: `📋 Lembrete: ${planName} vence amanhã | P-CON CONSTRUNET`,
       html: emailHTML,
@@ -404,4 +404,5 @@ const handler = async (req: Request): Promise<Response> => {
 };
 
 serve(handler);
+
 

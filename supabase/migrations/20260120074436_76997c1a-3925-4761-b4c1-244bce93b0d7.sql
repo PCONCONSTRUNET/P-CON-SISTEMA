@@ -10,7 +10,7 @@ DECLARE
   formatted_phone TEXT;
   message_text TEXT;
   formatted_value TEXT;
-  client_area_url TEXT := 'https://www.assinaturaspcon.sbs/cliente';
+  client_area_url TEXT := 'https://www.pconassinantes.site/cliente';
 BEGIN
   -- Only proceed if next_payment was changed
   IF OLD.next_payment IS DISTINCT FROM NEW.next_payment THEN

@@ -41,7 +41,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const REFERRAL_DOMAIN = 'https://www.assinaturaspcon.sbs';
+const REFERRAL_DOMAIN = 'https://www.pconassinantes.site';
 
 const ClientReferrals = ({ clientId }: ClientReferralsProps) => {
   const { link, clicks, leads, rewards, settings, stats, loading } = useClientReferrals(clientId);
@@ -409,3 +409,4 @@ const ClientReferrals = ({ clientId }: ClientReferralsProps) => {
 };
 
 export default ClientReferrals;
+

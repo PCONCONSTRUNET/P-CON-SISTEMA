@@ -111,8 +111,8 @@ export const useSubscriptionReminder = () => {
         } else {
           // Fallback caso template não esteja cadastrado/ativo
           message = isD0
-            ? `Olá ${params.clientName}! ⚠️\n\nSua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence *HOJE*.\n\nAcesse a área do cliente: https://www.assinaturaspcon.sbs/cliente`
-            : `Olá ${params.clientName}! 💈\n\nSua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence em *5 dias*.\n\nAcesse a área do cliente: https://www.assinaturaspcon.sbs/cliente`;
+            ? `Olá ${params.clientName}! ⚠️\n\nSua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence *HOJE*.\n\nAcesse a área do cliente: https://www.pconassinantes.site/cliente`
+            : `Olá ${params.clientName}! 💈\n\nSua assinatura *${params.planName}* no valor de *R$ ${formattedAmount}* vence em *5 dias*.\n\nAcesse a área do cliente: https://www.pconassinantes.site/cliente`;
         }
 
         let phone = String(params.clientPhone).replace(/\D/g, '');
@@ -170,3 +170,4 @@ export const useSubscriptionReminder = () => {
 
   return { sendReminderIfNeeded, isSending };
 };
+

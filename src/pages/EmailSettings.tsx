@@ -168,7 +168,7 @@ const EmailSettings = () => {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
-              <Badge variant="outline" className="text-sm px-3 py-1">cobranca@assinaturaspcon.sbs</Badge>
+              <Badge variant="outline" className="text-sm px-3 py-1">cobranca@pconassinantes.site</Badge>
               <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Verificado</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-3">DKIM, SPF e MX configurados via Resend + Vercel DNS.</p>
@@ -314,7 +314,7 @@ const EmailSettings = () => {
                   <Mail className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-muted-foreground">Remetente</span>
                 </div>
-                <p className="text-foreground font-semibold text-sm">cobranca@assinaturaspcon.sbs</p>
+                <p className="text-foreground font-semibold text-sm">cobranca@pconassinantes.site</p>
               </div>
               <div className="bg-secondary/30 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-1">
@@ -477,4 +477,5 @@ const EmailSettings = () => {
 };
 
 export default EmailSettings;
+
 

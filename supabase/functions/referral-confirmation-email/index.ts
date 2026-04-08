@@ -107,7 +107,7 @@ const generateEmailHTML = (referrerName: string, referredName: string) => `
                 P-CON CONSTRUNET
               </p>
               <p style="color:rgba(255,255,255,0.5);font-size:12px;margin:0;">
-                Criação de Sistemas • www.assinaturaspcon.sbs
+                Criação de Sistemas • www.pconassinantes.site
               </p>
             </td>
           </tr>
@@ -165,7 +165,7 @@ serve(async (req) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "P-CON Indicações <indicacoes@assinaturaspcon.sbs>",
+        from: "P-CON Indicações <indicacoes@pconassinantes.site>",
         to: [referrerEmail],
         subject: "🎉 Sua indicação foi recebida! - P-CON CONSTRUNET",
         html: emailHTML,
@@ -196,4 +196,5 @@ serve(async (req) => {
     );
   }
 });
+
 

@@ -77,7 +77,7 @@ const Referrals = () => {
   const [adminNotes, setAdminNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
 
-  const FORM_URL = 'https://www.assinaturaspcon.sbs/indicar';
+  const FORM_URL = 'https://www.pconassinantes.site/indicar';
 
   const fetchSubmissions = useCallback(async () => {
     const { data, error } = await (supabase as any)
@@ -504,3 +504,4 @@ const Referrals = () => {
 };
 
 export default Referrals;
+

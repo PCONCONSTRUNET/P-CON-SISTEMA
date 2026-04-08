@@ -321,7 +321,7 @@ const Clients = () => {
 
   const sendWhatsAppLink = () => {
     if (!selectedClient) return;
-    const checkoutUrl = 'https://www.assinaturaspcon.sbs/cliente';
+    const checkoutUrl = 'https://www.pconassinantes.site/cliente';
     const message = `Olá ${selectedClient.name}!\n\nSeu acesso ao portal de pagamentos foi criado.\n\n📱 Acesse: ${checkoutUrl}\n📧 Email: ${selectedClient.email}\n🔐 Senha: ${accessPassword}\n\nQualquer dúvida, estamos à disposição!`;
     const whatsappUrl = `https://wa.me/${selectedClient.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -329,7 +329,7 @@ const Clients = () => {
 
   const handleResendLink = () => {
     if (!selectedClient) return;
-    const checkoutUrl = 'https://www.assinaturaspcon.sbs/cliente';
+    const checkoutUrl = 'https://www.pconassinantes.site/cliente';
     const message = `Olá ${selectedClient.name}!\n\nSegue o link para acessar seu portal de pagamentos:\n\n📱 Acesse: ${checkoutUrl}\n📧 Email: ${selectedClient.email}\n\nCaso tenha esquecido a senha, entre em contato conosco.`;
     const whatsappUrl = `https://wa.me/${selectedClient.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -337,13 +337,13 @@ const Clients = () => {
   };
 
   const copyCheckoutLink = () => {
-    const checkoutUrl = 'https://www.assinaturaspcon.sbs/cliente';
+    const checkoutUrl = 'https://www.pconassinantes.site/cliente';
     navigator.clipboard.writeText(checkoutUrl);
     toast.success('Link copiado!');
   };
 
   const copyRegisterLink = () => {
-    const registerUrl = 'https://www.assinaturaspcon.sbs/cliente/cadastro';
+    const registerUrl = 'https://www.pconassinantes.site/cliente/cadastro';
     navigator.clipboard.writeText(registerUrl);
     toast.success('Link de cadastro copiado!');
   };
@@ -1019,3 +1019,4 @@ const Clients = () => {
 };
 
 export default Clients;
+

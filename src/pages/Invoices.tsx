@@ -283,7 +283,7 @@ const Invoices = () => {
       
       doc.text('Documento gerado automaticamente pelo sistema P-CON', pageWidth / 2, footerY, { align: 'center' });
       doc.text(`Emitido em: ${format(new Date(), "dd/MM/yyyy 'as' HH:mm", { locale: ptBR })}`, pageWidth / 2, footerY + 7, { align: 'center' });
-      doc.text('www.assinaturaspcon.sbs', pageWidth / 2, footerY + 14, { align: 'center' });
+      doc.text('www.pconassinantes.site', pageWidth / 2, footerY + 14, { align: 'center' });
       
       // Save PDF
       doc.save(`${invoice.number}.pdf`);
@@ -538,3 +538,4 @@ const Invoices = () => {
 };
 
 export default Invoices;
+

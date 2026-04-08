@@ -9,7 +9,7 @@ CREATE TABLE public.whatsapp_templates (
   image_url TEXT, -- URL of the promotional image
   button_enabled BOOLEAN NOT NULL DEFAULT true,
   button_text TEXT DEFAULT 'Acessar Área do Cliente',
-  button_url TEXT DEFAULT 'https://www.assinaturaspcon.sbs/cliente',
+  button_url TEXT DEFAULT 'https://www.pconassinantes.site/cliente',
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
@@ -48,7 +48,7 @@ Qualquer duvida, estamos a disposicao.',
   'https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg',
   true,
   'Acessar Área do Cliente',
-  'https://www.assinaturaspcon.sbs/cliente'
+  'https://www.pconassinantes.site/cliente'
 ),
 (
   'payment_confirmed',
@@ -66,7 +66,7 @@ Qualquer duvida, estamos a disposicao.',
   'https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg',
   true,
   'Acessar Área do Cliente',
-  'https://www.assinaturaspcon.sbs/cliente'
+  'https://www.pconassinantes.site/cliente'
 ),
 (
   'subscription_reminder',
@@ -80,5 +80,6 @@ Qualquer duvida, estamos a disposicao.',
   'https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg',
   true,
   'Acessar Área do Cliente',
-  'https://www.assinaturaspcon.sbs/cliente'
+  'https://www.pconassinantes.site/cliente'
 );
+

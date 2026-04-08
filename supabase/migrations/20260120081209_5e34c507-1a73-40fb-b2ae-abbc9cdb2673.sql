@@ -10,7 +10,7 @@ DECLARE
   formatted_phone TEXT;
   message_text TEXT;
   formatted_value TEXT;
-  client_area_url TEXT := 'https://www.assinaturaspcon.sbs/cliente';
+  client_area_url TEXT := 'https://www.pconassinantes.site/cliente';
   next_payment_brt DATE;
   anon_jwt TEXT := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjbmFwdGVmY2Vib3JhdHhoem94Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0ODM2ODksImV4cCI6MjA4MTA1OTY4OX0.0VYNRkLGDPGdum2sGLAWPDZJlR7ZWNOCuxhwKmr3bW4';
 BEGIN

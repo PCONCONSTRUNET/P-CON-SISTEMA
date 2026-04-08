@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const APP_URL = "https://pconassinaturas.lovable.app";
-const EMAIL_FALLBACK = "contato@assinaturaspcon.sbs";
+const EMAIL_FALLBACK = "contato@pconassinantes.site";
 const WHATSAPP_FALLBACK = "11978363600";
 
 type EventType = "viewed" | "approved" | "rejected";
@@ -228,7 +228,7 @@ serve(async (req) => {
           Authorization: `Bearer ${resendApiKey}`,
         },
         body: JSON.stringify({
-          from: "P-CON Orçamentos <cobranca@assinaturaspcon.sbs>",
+          from: "P-CON Orçamentos <cobranca@pconassinantes.site>",
           to: [notificationEmail],
           subject: `${config.subject} • ${proposal.project_title}`,
           html: generateEmailHTML(proposal, eventType as EventType, publicUrl),

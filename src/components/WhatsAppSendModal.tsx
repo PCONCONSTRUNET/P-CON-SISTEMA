@@ -41,10 +41,10 @@ const buildManualMessage = (params: WhatsAppSendParams): string => {
   const formattedAmount = formatCurrency(amount);
 
   if (type === 'overdue') {
-    return `Olá ${clientName}! 💈\n\n⚠️ A fatura referente a sua assinatura ativa de *${formattedAmount}*${description ? ` (*${description}*)` : ''} está vencida.\n\nRegularize o pagamento para manter sua assinatura em dia.\n\nAcesse a área do cliente: https://www.assinaturaspcon.sbs/cliente\n\nEntre em contato se precisar de ajuda.`;
+    return `Olá ${clientName}! 💈\n\n⚠️ A fatura referente a sua assinatura ativa de *${formattedAmount}*${description ? ` (*${description}*)` : ''} está vencida.\n\nRegularize o pagamento para manter sua assinatura em dia.\n\nAcesse a área do cliente: https://www.pconassinantes.site/cliente\n\nEntre em contato se precisar de ajuda.`;
   }
 
-  return `Olá ${clientName}! 💈\n\nPassando para lembrar que a fatura referente a sua assinatura ativa${description ? ` do *${description}*` : ''} no valor de *${formattedAmount}* está pendente.\n\nAcesse a área do cliente: https://www.assinaturaspcon.sbs/cliente\n\nQualquer dúvida, estamos à disposição.`;
+  return `Olá ${clientName}! 💈\n\nPassando para lembrar que a fatura referente a sua assinatura ativa${description ? ` do *${description}*` : ''} no valor de *${formattedAmount}* está pendente.\n\nAcesse a área do cliente: https://www.pconassinantes.site/cliente\n\nQualquer dúvida, estamos à disposição.`;
 };
 
 const WhatsAppSendModal = ({ open, onOpenChange, params, onSendViaApi, sendingId }: WhatsAppSendModalProps) => {
@@ -127,3 +127,4 @@ const WhatsAppSendModal = ({ open, onOpenChange, params, onSendViaApi, sendingId
 };
 
 export default WhatsAppSendModal;
+

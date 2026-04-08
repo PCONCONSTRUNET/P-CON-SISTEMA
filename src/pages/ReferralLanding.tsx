@@ -204,7 +204,7 @@ const ReferralLanding = () => {
             Verifique se o link está correto ou entre em contato conosco.
           </p>
           <Button asChild>
-            <a href="https://www.assinaturaspcon.sbs" target="_blank" rel="noopener noreferrer">
+            <a href="https://www.pconassinantes.site" target="_blank" rel="noopener noreferrer">
               Ir para o site
             </a>
           </Button>
@@ -231,7 +231,7 @@ const ReferralLanding = () => {
             Você veio através da indicação de <strong>{linkData?.clients?.name}</strong>.
           </p>
           <Button variant="outline" asChild>
-            <a href="https://www.assinaturaspcon.sbs" target="_blank" rel="noopener noreferrer">
+            <a href="https://www.pconassinantes.site" target="_blank" rel="noopener noreferrer">
               Conhecer mais sobre nós
             </a>
           </Button>
@@ -349,3 +349,4 @@ const ReferralLanding = () => {
 };
 
 export default ReferralLanding;
+
