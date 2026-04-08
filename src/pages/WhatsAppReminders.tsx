@@ -608,24 +608,24 @@ export default function WhatsAppReminders() {
 
                   {/* Chat Area */}
                   <div className="bg-[#0b141a] p-4 space-y-2 min-h-[300px]">
-                    {/* Image bubble */}
-                    {template.image_url && (
-                      <div className="max-w-[280px] ml-auto">
-                        <div className="bg-[#005c4b] rounded-lg overflow-hidden">
+                    {/* Main message bubble (with or without image) */}
+                    <div className="max-w-[280px] ml-auto">
+                      <div className="bg-[#005c4b] rounded-lg overflow-hidden">
+                        {(template.image_url || 'https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg') && (
                           <img
-                            src={`${template.image_url}?v=${Date.now()}`}
+                            src={`${template.image_url || 'https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg'}?v=${Date.now()}`}
                             alt="Preview"
                             className="w-full h-auto max-h-[150px] object-cover"
                           />
-                          <div className="p-2">
-                            <p className="text-white text-xs whitespace-pre-wrap leading-relaxed">
-                              {getPreviewMessage(template)}
-                            </p>
-                            <p className="text-white/40 text-[10px] text-right mt-1">09:00</p>
-                          </div>
+                        )}
+                        <div className="p-2">
+                          <p className="text-white text-xs whitespace-pre-wrap leading-relaxed">
+                            {getPreviewMessage(template)}
+                          </p>
+                          <p className="text-white/40 text-[10px] text-right mt-1">09:00</p>
                         </div>
                       </div>
-                    )}
+                    </div>
 
                     {/* Button bubble */}
                     {(getCurrentValue(template, 'button_enabled') as boolean) && (
