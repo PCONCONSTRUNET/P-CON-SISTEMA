@@ -11,7 +11,9 @@ import {
   Info,
   Check,
   X,
+  Send,
 } from 'lucide-react';
+import { ManualWhatsAppDialog } from '@/components/ManualWhatsAppDialog';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +56,8 @@ export default function WhatsAppReminders() {
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<Record<string, { file: File; preview: string }>>({});
+  const [isManualSendOpen, setIsManualSendOpen] = useState(false);
+  const [selectedTemplateForManual, setSelectedTemplateForManual] = useState<WhatsAppTemplate | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -294,6 +298,17 @@ export default function WhatsAppReminders() {
                     onCheckedChange={(val) => setEditedValue(template.id, 'is_active', val)}
                   />
                 </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedTemplateForManual(template);
+                    setIsManualSendOpen(true);
+                  }}
+                  className="gap-2 border-primary/50 text-primary hover:bg-primary/10"
+                >
+                  <Send className="w-4 h-4" />
+                  Enviar Manualmente
+                </Button>
                 <Button
                   onClick={() => handleSave(template)}
                   disabled={!hasChanges(template.id) || saving === template.id}
@@ -562,6 +577,12 @@ export default function WhatsAppReminders() {
           </TabsContent>
         ))}
       </Tabs>
+
+      <ManualWhatsAppDialog 
+        isOpen={isManualSendOpen}
+        onOpenChange={setIsManualSendOpen}
+        template={selectedTemplateForManual}
+      />
     </DashboardLayout>
   );
 }
