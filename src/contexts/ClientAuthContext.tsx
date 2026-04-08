@@ -20,19 +20,15 @@ interface ClientAuthContextType {
 const ClientAuthContext = createContext<ClientAuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'client_session_token';
-const DB_KEY = 'client_session_db'; // 'old' | 'new'
 
-// URLs das Edge Functions de cada banco
-const OLD_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth`;
-const NEW_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL_NEW}/functions/v1/client-auth-new`;
+// URL única da Edge Function de autenticação (banco consolidado)
+const AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth-new`;
+const API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-const OLD_API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const NEW_API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY_NEW;
-
-async function callAuth(baseUrl: string, apiKey: string, action: string, body: object) {
-  const res = await fetch(`${baseUrl}?action=${action}`, {
+async function callAuth(action: string, body: object) {
+  const res = await fetch(`${AUTH_URL}?action=${action}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+    headers: { 'Content-Type': 'application/json', 'apikey': API_KEY },
     body: JSON.stringify(body),
   });
   return res;
@@ -50,27 +46,21 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const verifySession = async () => {
     const token = localStorage.getItem(TOKEN_KEY);
-    const db = localStorage.getItem(DB_KEY) as 'old' | 'new' | null;
-    if (!token || !db) { setIsLoading(false); return; }
+    if (!token) { setIsLoading(false); return; }
 
     try {
-      const [url, key] = db === 'new'
-        ? [NEW_AUTH_URL, NEW_API_KEY]
-        : [OLD_AUTH_URL, OLD_API_KEY];
-
-      const res = await callAuth(url, key, 'verify', { token });
+      const res = await callAuth('verify', { token });
 
       if (res.ok) {
         const data = await res.json();
         setClient(data.client);
         localStorage.setItem('client_data', JSON.stringify(data.client));
       } else {
-        if (res.status === 401 || res.status === 403 || res.status === 404) {
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(DB_KEY);
-          localStorage.removeItem('client_data');
-          setClient(null);
-        }
+        // Sessão inválida ou expirada — limpar tudo
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem('client_session_db'); // limpar chave legada
+        localStorage.removeItem('client_data');
+        setClient(null);
       }
     } catch (err) {
       console.error('Session verification network error, keeping token:', err);
@@ -83,26 +73,16 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      // 1. Tenta no banco ANTIGO (clientes existentes)
-      let res = await callAuth(OLD_AUTH_URL, OLD_API_KEY, 'login', { email, password });
-      let db: 'old' | 'new' = 'old';
+      const res = await callAuth('login', { email, password });
 
-      // 2. Se falhou (usuário não encontrado), tenta no banco NOVO
       if (!res.ok) {
         const errData = await res.json();
-        // Só tenta no banco novo se o erro for "não encontrado/senha inválida", não erros de rede
-        res = await callAuth(NEW_AUTH_URL, NEW_API_KEY, 'login', { email, password });
-        db = 'new';
-
-        if (!res.ok) {
-          const newErrData = await res.json();
-          return { success: false, error: newErrData.error || errData.error || 'Email ou senha incorretos' };
-        }
+        return { success: false, error: errData.error || 'Email ou senha incorretos' };
       }
 
       const data = await res.json();
       localStorage.setItem(TOKEN_KEY, data.token);
-      localStorage.setItem(DB_KEY, db);
+      localStorage.removeItem('client_session_db'); // remover chave legada
       localStorage.setItem('client_data', JSON.stringify(data.client));
       setClient(data.client);
       return { success: true };
@@ -114,20 +94,16 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
 
   const logout = async () => {
     const token = localStorage.getItem(TOKEN_KEY);
-    const db = localStorage.getItem(DB_KEY) as 'old' | 'new' | null;
 
     try {
-      if (token && db) {
-        const [url, key] = db === 'new'
-          ? [NEW_AUTH_URL, NEW_API_KEY]
-          : [OLD_AUTH_URL, OLD_API_KEY];
-        await callAuth(url, key, 'logout', { token });
+      if (token) {
+        await callAuth('logout', { token });
       }
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
       localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(DB_KEY);
+      localStorage.removeItem('client_session_db'); // remover chave legada
       localStorage.removeItem('client_data');
       setClient(null);
     }

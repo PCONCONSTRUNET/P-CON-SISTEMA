@@ -236,7 +236,7 @@ const Clients = () => {
     setIsCreatingAccess(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth?action=register`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth-new?action=register`,
         {
           method: 'POST',
           headers: {
@@ -287,7 +287,7 @@ const Clients = () => {
     setIsCreatingAccess(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth?action=reset-password`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth-new?action=reset-password`,
         {
           method: 'POST',
           headers: {

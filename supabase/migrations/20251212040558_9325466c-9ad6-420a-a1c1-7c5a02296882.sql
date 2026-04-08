@@ -1,5 +1,5 @@
 -- Create clients table
-CREATE TABLE public.clients (
+CREATE TABLE IF NOT EXISTS public.clients (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE public.clients (
 );
 
 -- Create subscriptions table
-CREATE TABLE public.subscriptions (
+CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
   plan_name TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE public.subscriptions (
 );
 
 -- Create payments table
-CREATE TABLE public.payments (
+CREATE TABLE IF NOT EXISTS public.payments (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   subscription_id UUID NOT NULL REFERENCES public.subscriptions(id) ON DELETE CASCADE,
   amount DECIMAL(10,2) NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE public.payments (
 );
 
 -- Create invoices table
-CREATE TABLE public.invoices (
+CREATE TABLE IF NOT EXISTS public.invoices (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL,
   client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
@@ -47,7 +47,7 @@ CREATE TABLE public.invoices (
 );
 
 -- Create notifications table
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
