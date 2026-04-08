@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 const LOGO_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
@@ -293,7 +294,12 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const settings = new Map((rawSettings ?? []).map((row: { setting_key: string; setting_value: string }) => [row.setting_key, row.setting_value]));
+    const settings = new Map<string, string>(
+      (rawSettings ?? []).map((row: { setting_key: string; setting_value: string }) => [
+        row.setting_key,
+        row.setting_value,
+      ])
+    );
     const autoSendEnabled = settings.get("auto_send_enabled") === "true";
 
     const parsedHour = Number.parseInt(settings.get("reminder_hour") ?? "8", 10);

@@ -110,19 +110,28 @@ export default function WhatsAppReminders() {
       return;
     }
 
+    // Remove read-only fields before sending to Supabase
+    const safeChanges: Partial<WhatsAppTemplate> = { ...changes };
+    delete (safeChanges as any).id;
+    delete (safeChanges as any).created_at;
+    delete (safeChanges as any).updated_at;
+    delete (safeChanges as any).template_key;
+
     setSaving(template.id);
     try {
-      const { error } = await supabase
+      const { data: updatedData, error } = await supabase
         .from('whatsapp_templates')
-        .update(changes as any)
-        .eq('id', template.id);
+        .update(safeChanges as any)
+        .eq('id', template.id)
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Update local state
+      // Update local state with confirmed data from DB
       setTemplates(prev =>
         prev.map(t =>
-          t.id === template.id ? { ...t, ...changes } as WhatsAppTemplate : t
+          t.id === template.id ? (updatedData as unknown as WhatsAppTemplate) ?? { ...t, ...safeChanges } as WhatsAppTemplate : t
         )
       );
       

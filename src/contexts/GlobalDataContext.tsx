@@ -368,6 +368,44 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error creating invoice:', invoiceError);
       }
 
+      // Advance next_payment and create next cycle — only when payment has a subscription
+      if (paymentData?.subscription_id) {
+        try {
+          // Fetch current subscription to get next_payment date
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('next_payment, value')
+            .eq('id', paymentData.subscription_id)
+            .single();
+
+          if (subData?.next_payment) {
+            const currentNext = new Date(subData.next_payment);
+            const nextDay = currentNext.getDate();
+            const nextMonth = currentNext.getMonth() + 1;
+            const nextYear = currentNext.getFullYear();
+
+            let newDate: Date;
+            if (nextMonth > 11) {
+              newDate = new Date(nextYear + 1, 0, 1);
+            } else {
+              newDate = new Date(nextYear, nextMonth, 1);
+            }
+            // Preserve same day, clamping to last day of month
+            const lastDay = new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0).getDate();
+            newDate.setDate(Math.min(nextDay, lastDay));
+            newDate.setHours(12, 0, 0, 0);
+
+            // Update subscription next_payment to next month
+            await supabase
+              .from('subscriptions')
+              .update({ next_payment: newDate.toISOString() })
+              .eq('id', paymentData.subscription_id);
+          }
+        } catch (cycleError) {
+          console.error('Error advancing subscription cycle:', cycleError);
+        }
+      }
+
       // Send WhatsApp confirmation if client has phone
       const client = paymentData?.clients;
       if (client?.phone) {
@@ -427,8 +465,9 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      toast.success('Pagamento marcado como pago!');
-      await Promise.all([fetchPayments(), fetchInvoices()]);
+      toast.success('Pagamento marcado como pago! Vencimento atualizado para o próximo mês.');
+      await Promise.all([fetchPayments(), fetchInvoices(), fetchSubscriptions()]);
+
       return true;
     } catch (error) {
       console.error('Error marking payment as paid:', error);

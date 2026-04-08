@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface SendMessageRequest {
@@ -256,16 +257,19 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("UAZAPI response:", result);
 
     // Save to whatsapp_messages table for tracking
-    await supabase.from("whatsapp_messages").insert({
+    const { error: insertError } = await supabase.from("whatsapp_messages").insert({
       client_id: clientId || null,
       phone: formattedPhone,
       message: message,
       message_type: type || "manual",
-      payment_id: paymentId || null,
       btzap_message_id: messageId,
       remote_jid: result?.key?.remoteJid || null,
       status: messageStatus,
     });
+
+    if (insertError) {
+      console.error("Failed to save whatsapp_message record:", insertError);
+    }
 
     // Create notification record
     if (clientId) {

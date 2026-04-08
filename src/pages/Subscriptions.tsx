@@ -354,19 +354,6 @@ const Subscriptions = () => {
         next_payment: newDate.toISOString(),
       });
 
-      // 3. Create new pending payment for next cycle
-      await supabase
-        .from('payments')
-        .insert({
-          subscription_id: subscription.id,
-          client_id: subscription.client_id,
-          amount,
-          status: 'pending',
-          payment_method: 'pix',
-          description: planName,
-          due_date: newDate.toISOString(),
-        });
-
       // 4. Send WhatsApp confirmation if client has phone
       if (clientPhone) {
         const formattedAmount = amount.toFixed(2).replace('.', ',');
@@ -420,7 +407,8 @@ const Subscriptions = () => {
         }
       }
 
-      toast.success('Pagamento confirmado! Fatura do próximo mês gerada.');
+      toast.success('Pagamento confirmado! Vencimento atualizado para o próximo mês.');
+
     } catch (error) {
       console.error('Error marking subscription as paid:', error);
       toast.error('Erro ao confirmar pagamento da assinatura');

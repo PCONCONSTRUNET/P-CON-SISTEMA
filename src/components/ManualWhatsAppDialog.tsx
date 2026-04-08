@@ -80,6 +80,11 @@ export function ManualWhatsAppDialog({
 
   const handleSend = async () => {
     if (!selectedClient || !template) return;
+
+    if (!selectedClient.phone) {
+      toast.error(`Cliente ${selectedClient.name} não possui telefone cadastrado.`);
+      return;
+    }
     
     setIsSending(true);
     try {
@@ -89,6 +94,7 @@ export function ManualWhatsAppDialog({
           message: getFormattedMessage(),
           clientId: selectedClient.id,
           type: template.template_key,
+          sendImage: !!template.image_url,
           imageUrl: template.image_url,
           sendButton: template.button_enabled,
           buttonText: template.button_text,
@@ -97,13 +103,22 @@ export function ManualWhatsAppDialog({
       });
 
       if (error) throw error;
+
+      // Verifica se a API do WhatsApp realmente enviou a mensagem
+      if (!data?.success) {
+        const apiError = data?.error || 'Falha ao enviar via UAZAPI. Verifique se o bot está conectado.';
+        console.error('WhatsApp API error:', apiError, data);
+        toast.error(`Falha no envio: ${apiError}`);
+        return;
+      }
       
       toast.success(`Mensagem enviada com sucesso para ${selectedClient.name}!`);
       onOpenChange(false);
       setSelectedClientId("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending manual WhatsApp:", error);
-      toast.error("Erro ao enviar mensagem. Verifique a conexão.");
+      const msg = error?.message || 'Erro desconhecido';
+      toast.error(`Erro ao enviar mensagem: ${msg}`);
     } finally {
       setIsSending(false);
     }
