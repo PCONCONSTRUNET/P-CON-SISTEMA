@@ -586,16 +586,44 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
   const updateWhatsAppSettings = async (updates: Partial<WhatsAppSettings>): Promise<boolean> => {
     try {
-      if (!whatsappSettings) return false;
-      const { error } = await supabase
-        .from('whatsapp_settings')
-        .update(updates)
-        .eq('id', whatsappSettings.id);
-      if (error) throw error;
-      toast.success('Configurações salvas!');
+      let result;
+      if (!whatsappSettings?.id) {
+        // Se ainda não existia no estado, cria a linha pela primeira vez
+        const { data, error } = await supabase
+          .from('whatsapp_settings')
+          .insert({
+            send_hour: updates.send_hour ?? 9,
+            send_minute: updates.send_minute ?? 0
+          })
+          .select()
+          .single();
+          
+        if (error) throw error;
+        result = data;
+      } else {
+        // Atualiza a linha existente
+        const safeUpdates = { ...updates };
+        delete (safeUpdates as any).id;
+        delete (safeUpdates as any).created_at;
+        delete (safeUpdates as any).updated_at;
+
+        const { data, error } = await supabase
+          .from('whatsapp_settings')
+          .update(safeUpdates)
+          .eq('id', whatsappSettings.id)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        result = data;
+      }
+
+      setWhatsappSettings(result);
+      toast.success('Horário de envio salvo com sucesso!');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating settings:', error);
+      toast.error('Erro ao salvar horário: ' + (error.message || 'Desconhecido'));
       return false;
     }
   };
