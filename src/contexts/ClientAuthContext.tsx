@@ -21,11 +21,12 @@ const ClientAuthContext = createContext<ClientAuthContextType | undefined>(undef
 
 const TOKEN_KEY = 'client_session_token';
 
-// URL única da Edge Function de autenticação (banco consolidado)
-const AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-auth-new`;
-const API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// URL e Chave fixas para garantir que o cache não interfira (banco consolidado)
+const AUTH_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/functions/v1/client-auth-new";
+const API_KEY = "sb_publishable_ziYHN3SayMmRYxusCm7qQQ_-rqQG7gM";
 
 async function callAuth(action: string, body: object) {
+  console.log(`[DEBUG AUTH] Chamando ${action}`, { url: AUTH_URL, apiKey: API_KEY });
   const res = await fetch(`${AUTH_URL}?action=${action}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': API_KEY },

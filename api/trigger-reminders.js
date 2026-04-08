@@ -2,7 +2,7 @@
 // Dispara os lembretes automáticos do WhatsApp (D-0 e D-1)
 // A Edge Function whatsapp-auto-reminders tem verify_jwt=false, então a anon key é suficiente.
 
-const SUPABASE_URL = 'https://lcnaptefceboratxhzox.supabase.co';
+const SUPABASE_URL = 'https://bevahgtmcdicyhjnrylk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjbmFwdGVmY2Vib3JhdHhoem94Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0ODM2ODksImV4cCI6MjA4MTA1OTY4OX0.0VYNRkLGDPGdum2sGLAWPDZJlR7ZWNOCuxhwKmr3bW4';
 
 export default async function handler(req, res) {
@@ -41,3 +41,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+

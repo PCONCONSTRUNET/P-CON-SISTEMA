@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const LOGO_URL = "https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
+const LOGO_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
 const CLIENT_AREA_URL = "https://www.assinaturaspcon.sbs/cliente";
 
 const generateEmailHTML = (
@@ -31,7 +31,7 @@ const generateEmailHTML = (
           <!-- Header com logo -->
           <tr>
             <td style="background: linear-gradient(135deg, #0d1b3e 0%, #1E4FA3 100%);padding:32px 40px;text-align:center;">
-              <img src="https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/assets%2Flogo-pcon-white.png" alt="P-CON CONSTRUNET" width="180" style="display:block;margin:0 auto;" />
+              <img src="https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/assets%2Flogo-pcon-white.png" alt="P-CON CONSTRUNET" width="180" style="display:block;margin:0 auto;" />
             </td>
           </tr>
 
@@ -404,3 +404,4 @@ const handler = async (req: Request): Promise<Response> => {
 };
 
 serve(handler);
+

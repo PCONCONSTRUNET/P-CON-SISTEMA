@@ -1,12 +1,9 @@
-project_id = "lcnaptefceboratxhzox"
+project_id = "bevahgtmcdicyhjnrylk"
+
+[functions.client-auth-new]
+verify_jwt = false
 
 [functions.client-auth]
-verify_jwt = false
-
-[functions.affiliate-auth]
-verify_jwt = false
-
-[functions.affiliate-approval-email]
 verify_jwt = false
 
 [functions.mercadopago]

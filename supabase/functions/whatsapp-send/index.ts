@@ -20,7 +20,7 @@ interface SendMessageRequest {
 }
 
  // Default promo image URL - hosted on Supabase Storage
- const DEFAULT_IMAGE_URL = "https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
+ const DEFAULT_IMAGE_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/whatsapp/promo-pcon.jpg";
  
 // UAZAPI base URL (token identifies the instance via header)
 const UAZAPI_BASE_URL = "https://btzap.uazapi.com";
@@ -291,3 +291,4 @@ const handler = async (req: Request): Promise<Response> => {
 };
 
 serve(handler);
+

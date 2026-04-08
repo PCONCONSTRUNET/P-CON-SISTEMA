@@ -5,8 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const LOGO_URL = "https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/email%2Flogo-pcon-pdf.png";
-const MASCOTE_URL = "https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/email%2Fmascote-pcon.png";
+const LOGO_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/email%2Flogo-pcon-pdf.png";
+const MASCOTE_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/email%2Fmascote-pcon.png";
 
 const generateEmailHTML = (referrerName: string, referredName: string) => `
 <!DOCTYPE html>
@@ -196,3 +196,4 @@ serve(async (req) => {
     );
   }
 });
+

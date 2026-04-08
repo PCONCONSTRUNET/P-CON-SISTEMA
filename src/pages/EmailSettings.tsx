@@ -429,7 +429,7 @@ const EmailSettings = () => {
             <div className="bg-white rounded-lg overflow-hidden border">
               <div style={{ background: 'linear-gradient(135deg, #0d1b3e 0%, #1E4FA3 100%)' }} className="p-6 text-center">
                 <img
-                  src="https://lcnaptefceboratxhzox.supabase.co/storage/v1/object/public/contracts/assets%2Flogo-pcon-white.png"
+                  src="https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/assets%2Flogo-pcon-white.png"
                   alt="P-CON"
                   className="h-10 mx-auto"
                 />
@@ -477,3 +477,4 @@ const EmailSettings = () => {
 };
 
 export default EmailSettings;
+
