@@ -12,7 +12,9 @@ import {
   Check,
   X,
   Send,
+  Clock,
 } from 'lucide-react';
+import { useGlobalData } from '@/contexts/GlobalDataContext';
 import { ManualWhatsAppDialog } from '@/components/ManualWhatsAppDialog';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -59,9 +61,21 @@ export default function WhatsAppReminders() {
   const [isManualSendOpen, setIsManualSendOpen] = useState(false);
   const [selectedTemplateForManual, setSelectedTemplateForManual] = useState<WhatsAppTemplate | null>(null);
 
+  const { whatsappSettings, updateWhatsAppSettings } = useGlobalData();
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  useEffect(() => {
+    if (whatsappSettings) {
+      const h = whatsappSettings.send_hour.toString().padStart(2, '0');
+      const m = whatsappSettings.send_minute.toString().padStart(2, '0');
+      setScheduleTime(`${h}:${m}`);
+    }
+  }, [whatsappSettings]);
 
   const fetchTemplates = async () => {
     try {
@@ -148,6 +162,19 @@ export default function WhatsAppReminders() {
       toast.error('Erro ao salvar template');
     } finally {
       setSaving(null);
+    }
+  };
+
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true);
+    try {
+      const [hourStr, minuteStr] = scheduleTime.split(':');
+      await updateWhatsAppSettings({
+        send_hour: parseInt(hourStr, 10),
+        send_minute: parseInt(minuteStr, 10)
+      });
+    } finally {
+      setSavingSchedule(false);
     }
   };
 
@@ -262,6 +289,37 @@ export default function WhatsAppReminders() {
             <Badge variant="secondary" className="text-xs font-mono">{'{{plan_name}}'} = Nome do plano</Badge>
             <Badge variant="secondary" className="text-xs font-mono">{'{{amount}}'} = Valor formatado</Badge>
           </div>
+        </div>
+      </div>
+
+      {/* Auto Schedule Banner */}
+      <div className="glass-card p-4 sm:p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-border/50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 sm:p-2.5 bg-primary/10 rounded-lg text-primary shrink-0">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">Horário de Envio Automático</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Defina o horário em que os lembretes automáticos diários (D-0 e D-5) serão disparados.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Input 
+            type="time" 
+            value={scheduleTime}
+            onChange={(e) => setScheduleTime(e.target.value)}
+            className="w-full sm:w-32 bg-secondary/50 border-border/50" 
+          />
+          <Button 
+            onClick={handleSaveSchedule} 
+            disabled={savingSchedule}
+            className="shrink-0"
+          >
+            {savingSchedule ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            Salvar Horário
+          </Button>
         </div>
       </div>
 

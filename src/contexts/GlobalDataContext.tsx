@@ -73,18 +73,41 @@ export interface Invoice {
   };
 }
 
+export interface WhatsAppTemplate {
+  id: string;
+  template_key: string;
+  name: string;
+  message_template: string;
+  is_active: boolean;
+  image_url: string | null;
+  button_enabled: boolean;
+  button_text: string | null;
+  button_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppSettings {
+  id: string;
+  send_hour: number;
+  send_minute: number;
+}
+
 interface GlobalDataContextType {
   // Data
   clients: Client[];
   subscriptions: Subscription[];
   payments: Payment[];
   invoices: Invoice[];
+  whatsappTemplates: WhatsAppTemplate[];
+  whatsappSettings: WhatsAppSettings | null;
   
   // Loading states
   loadingClients: boolean;
   loadingSubscriptions: boolean;
   loadingPayments: boolean;
   loadingInvoices: boolean;
+  loadingTemplates: boolean;
   
   // Refetch functions
   refetchClients: () => Promise<void>;
@@ -110,6 +133,10 @@ interface GlobalDataContextType {
   // CRUD operations - Invoices
   addInvoice: (invoice: Omit<Invoice, 'id' | 'issued_at'>) => Promise<Invoice | null>;
   deleteInvoice: (id: string) => Promise<boolean>;
+
+  // WhatsApp
+  updateWhatsAppTemplate: (id: string, updates: Partial<WhatsAppTemplate>) => Promise<boolean>;
+  updateWhatsAppSettings: (updates: Partial<WhatsAppSettings>) => Promise<boolean>;
 }
 
 const GlobalDataContext = createContext<GlobalDataContextType | undefined>(undefined);
@@ -120,11 +147,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [whatsappSettings, setWhatsappSettings] = useState<WhatsAppSettings | null>(null);
   
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
 
   // Fetch functions
   const fetchClients = useCallback(async () => {
@@ -204,14 +234,32 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const fetchWhatsApp = useCallback(async () => {
+    try {
+      const [templatesRes, settingsRes] = await Promise.all([
+        supabase.from('whatsapp_templates').select('*'),
+        supabase.from('whatsapp_settings').select('*').maybeSingle()
+      ]);
+
+      if (templatesRes.error) throw templatesRes.error;
+      setWhatsappTemplates(templatesRes.data || []);
+      setWhatsappSettings(settingsRes.data || null);
+    } catch (error) {
+      console.error('Error fetching WhatsApp data:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, []);
+
   const refetchAll = useCallback(async () => {
     await Promise.all([
       fetchClients(),
       fetchSubscriptions(),
       fetchPayments(),
-      fetchInvoices()
+      fetchInvoices(),
+      fetchWhatsApp()
     ]);
-  }, [fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices]);
+  }, [fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp]);
 
   // CRUD - Clients
   const addClient = async (client: Omit<Client, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<Client | null> => {
@@ -326,7 +374,6 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   // CRUD - Payments
   const markPaymentAsPaid = async (id: string): Promise<boolean> => {
     try {
-      // First get the payment details with client info and subscription
       const { data: paymentData, error: fetchError } = await supabase
         .from('payments')
         .select('*, clients(id, name, phone), subscriptions(plan_name)')
@@ -335,7 +382,6 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
       if (fetchError) throw fetchError;
 
-      // Update payment status
       const { error } = await supabase
         .from('payments')
         .update({ 
@@ -346,7 +392,6 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
 
-      // Create invoice with plan description
       const planName = paymentData?.subscriptions?.plan_name || 'Pagamento Avulso';
       const year = new Date().getFullYear();
       const month = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -368,10 +413,8 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error creating invoice:', invoiceError);
       }
 
-      // Advance next_payment and create next cycle — only when payment has a subscription
       if (paymentData?.subscription_id) {
         try {
-          // Fetch current subscription to get next_payment date
           const { data: subData } = await supabase
             .from('subscriptions')
             .select('next_payment, value')
@@ -390,12 +433,10 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
             } else {
               newDate = new Date(nextYear, nextMonth, 1);
             }
-            // Preserve same day, clamping to last day of month
             const lastDay = new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0).getDate();
             newDate.setDate(Math.min(nextDay, lastDay));
             newDate.setHours(12, 0, 0, 0);
 
-            // Update subscription next_payment to next month
             await supabase
               .from('subscriptions')
               .update({ next_payment: newDate.toISOString() })
@@ -406,7 +447,6 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // Send WhatsApp confirmation if client has phone
       const client = paymentData?.clients;
       if (client?.phone) {
         const formattedAmount = paymentData?.amount 
@@ -414,7 +454,6 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
           : '0,00';
         
         try {
-          // Fetch payment_confirmed template from DB
           const { data: templateData } = await supabase
             .from('whatsapp_templates')
             .select('*')
@@ -529,47 +568,56 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // WhatsApp Settings/Templates
+  const updateWhatsAppTemplate = async (id: string, updates: Partial<WhatsAppTemplate>): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('whatsapp_templates')
+        .update(updates)
+        .eq('id', id);
+      if (error) throw error;
+      toast.success('Template atualizado!');
+      return true;
+    } catch (error) {
+      console.error('Error updating template:', error);
+      return false;
+    }
+  };
+
+  const updateWhatsAppSettings = async (updates: Partial<WhatsAppSettings>): Promise<boolean> => {
+    try {
+      if (!whatsappSettings) return false;
+      const { error } = await supabase
+        .from('whatsapp_settings')
+        .update(updates)
+        .eq('id', whatsappSettings.id);
+      if (error) throw error;
+      toast.success('Configurações salvas!');
+      return true;
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      return false;
+    }
+  };
+
   // Initialize and set up realtime subscriptions
   useEffect(() => {
-    // Initial fetch
     refetchAll();
 
-    // Set up realtime subscriptions for all tables
-    const clientsChannel = supabase
-      .channel('global-clients-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
-        fetchClients();
-      })
-      .subscribe();
-
-    const subscriptionsChannel = supabase
-      .channel('global-subscriptions-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
-        fetchSubscriptions();
-      })
-      .subscribe();
-
-    const paymentsChannel = supabase
-      .channel('global-payments-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
-        fetchPayments();
-      })
-      .subscribe();
-
-    const invoicesChannel = supabase
-      .channel('global-invoices-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
-        fetchInvoices();
-      })
-      .subscribe();
+    const clientsChannel = supabase.channel('global-clients-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => fetchClients()).subscribe();
+    const subscriptionsChannel = supabase.channel('global-subscriptions-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => fetchSubscriptions()).subscribe();
+    const paymentsChannel = supabase.channel('global-payments-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => fetchPayments()).subscribe();
+    const invoicesChannel = supabase.channel('global-invoices-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => fetchInvoices()).subscribe();
+    const whatsappChannel = supabase.channel('global-whatsapp-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => fetchWhatsApp()).subscribe();
 
     return () => {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(subscriptionsChannel);
       supabase.removeChannel(paymentsChannel);
       supabase.removeChannel(invoicesChannel);
+      supabase.removeChannel(whatsappChannel);
     };
-  }, [refetchAll, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices]);
+  }, [refetchAll, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp]);
 
   return (
     <GlobalDataContext.Provider
@@ -578,10 +626,13 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         subscriptions,
         payments,
         invoices,
+        whatsappTemplates,
+        whatsappSettings,
         loadingClients,
         loadingSubscriptions,
         loadingPayments,
         loadingInvoices,
+        loadingTemplates,
         refetchClients: fetchClients,
         refetchSubscriptions: fetchSubscriptions,
         refetchPayments: fetchPayments,
@@ -597,6 +648,8 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         deletePayment,
         addInvoice,
         deleteInvoice,
+        updateWhatsAppTemplate,
+        updateWhatsAppSettings,
       }}
     >
       {children}

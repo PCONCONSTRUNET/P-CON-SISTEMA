@@ -42,6 +42,40 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Get current schedule settings from DB
+    const { data: settings } = await supabase
+      .from('whatsapp_settings')
+      .select('send_hour, send_minute')
+      .maybeSingle();
+
+    const scheduledHour = settings?.send_hour ?? 9;
+    const scheduledMinute = settings?.send_minute ?? 0;
+
+    // Get current time in Sao Paulo (BRT timezone)
+    const nowBrtParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Sao_Paulo',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(new Date());
+
+    const currentHour = parseInt(nowBrtParts.find(p => p.type === 'hour')?.value || "0");
+    const currentMinute = parseInt(nowBrtParts.find(p => p.type === 'minute')?.value || "0");
+
+    console.log(`Current time BRT: ${currentHour}:${currentMinute.toString().padStart(2, '0')} | Scheduled at: ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')}`);
+
+    if (currentHour !== scheduledHour || currentMinute !== scheduledMinute) {
+      console.log('Skipping auto reminders: Not the scheduled time.');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Skipped: scheduled time is ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')}, but current time is ${currentHour}:${currentMinute.toString().padStart(2, '0')} (BRT)`, 
+          results: { due_today_sent: 0, due_in_1_sent: 0, errors: [] } 
+        }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     // Fetch templates from DB
     const { data: templatesData } = await supabase
       .from("whatsapp_templates")
