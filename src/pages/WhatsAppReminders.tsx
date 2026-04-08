@@ -231,9 +231,9 @@ export default function WhatsAppReminders() {
 
       setTemplates(prev => prev.map(t => t.id === templateId ? { ...t, image_url: imageUrl } : t));
       toast.success('Imagem atualizada com sucesso!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      toast.error('Erro ao fazer upload da imagem');
+      toast.error('Erro ao fazer upload da imagem: ' + (error?.message || 'Erro Desconhecido'));
     } finally {
       setUploadingImage(null);
       handleImageCancel(templateId);
