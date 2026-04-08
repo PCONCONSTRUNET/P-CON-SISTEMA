@@ -106,16 +106,16 @@ const handler = async (req: Request): Promise<Response> => {
       new Date(`${todayBrt}T00:00:00-03:00`).getTime() + 86400000
     ).toISOString();
 
-    // Boundaries for D-1
-    const inOneDay = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() + 1 * 86400000);
-    const inOneDayBrt = toYMDInSaoPaulo(inOneDay);
-    const startOfInOneDayUtc = new Date(`${inOneDayBrt}T00:00:00-03:00`).toISOString();
-    const startOfInTwoDaysUtc = new Date(
-      new Date(`${inOneDayBrt}T00:00:00-03:00`).getTime() + 86400000
+    // Boundaries for D-5 (5 days from today)
+    const inFiveDays = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() + 5 * 86400000);
+    const inFiveDaysBrt = toYMDInSaoPaulo(inFiveDays);
+    const startOfInFiveDaysUtc = new Date(`${inFiveDaysBrt}T00:00:00-03:00`).toISOString();
+    const startOfInSixDaysUtc = new Date(
+      new Date(`${inFiveDaysBrt}T00:00:00-03:00`).getTime() + 86400000
     ).toISOString();
 
     console.log(`Checking payments due TODAY (D-0) in BRT: ${todayBrt}`);
-    console.log(`Checking payments due in 1 DAY (D-1) in BRT: ${inOneDayBrt}`);
+    console.log(`Checking payments due in 5 DAYS (D-5) in BRT: ${inFiveDaysBrt}`);
 
     let dueTodayPayments: any[] = [];
     if (dueTodayTemplate) {
@@ -136,8 +136,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Found ${dueTodayPayments.length} pending payments due today`);
 
-    let d1Payments: any[] = [];
-    if (d1Template) {
+    let d5Payments: any[] = [];
+    if (d1Template) { // Using the same subscription_reminder template object, but logic is D-5
       const { data, error } = await supabase
         .from("payments")
         .select(`
@@ -146,18 +146,18 @@ const handler = async (req: Request): Promise<Response> => {
           subscription:subscriptions(plan_name)
         `)
         .eq("status", "pending")
-        .gte("due_date", startOfInOneDayUtc)
-        .lt("due_date", startOfInTwoDaysUtc);
+        .gte("due_date", startOfInFiveDaysUtc)
+        .lt("due_date", startOfInSixDaysUtc);
 
-      if (error) console.error("Error fetching D-1 payments:", error);
-      else d1Payments = data || [];
+      if (error) console.error("Error fetching D-5 payments:", error);
+      else d5Payments = data || [];
     }
 
-    console.log(`Found ${d1Payments.length} pending payments due in 1 day`);
+    console.log(`Found ${d5Payments.length} pending payments due in 5 days`);
 
     const results = {
       due_today_sent: 0,
-      due_in_1_sent: 0,
+      due_in_5_sent: 0,
       skipped_no_phone: 0,
       errors: [] as string[],
     };
@@ -238,7 +238,7 @@ const handler = async (req: Request): Promise<Response> => {
 
           if (isSuccess) {
             if (messageType === "auto_due_today") results.due_today_sent++;
-            else if (messageType === "auto_due_in_1_day") results.due_in_1_sent++;
+            else if (messageType === "auto_due_in_5_days") results.due_in_5_sent++;
 
             await supabase.from("whatsapp_messages").insert({
               client_id: client.id,
@@ -263,8 +263,8 @@ const handler = async (req: Request): Promise<Response> => {
       await processPayments(dueTodayPayments, dueTodayTemplate, "auto_due_today");
     }
 
-    if (d1Template && d1Payments.length > 0) {
-      await processPayments(d1Payments, d1Template, "auto_due_in_1_day");
+    if (d1Template && d5Payments.length > 0) {
+      await processPayments(d5Payments, d1Template, "auto_due_in_5_days");
     }
 
     console.log("Auto reminders completed:", results);
