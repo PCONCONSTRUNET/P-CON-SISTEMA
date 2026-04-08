@@ -92,16 +92,17 @@ const handler = async (req: Request): Promise<Response> => {
     const { data: templatesData } = await supabase
       .from("whatsapp_templates")
       .select("*")
-      .in("template_key", ["due_today", "subscription_reminder"])
+      .in("template_key", ["due_today", "subscription_reminder", "overdue_1_day"])
       .eq("is_active", true);
 
     const dueTodayTemplate = templatesData?.find((t: any) => t.template_key === "due_today");
     const d1Template = templatesData?.find((t: any) => t.template_key === "subscription_reminder");
+    const overdue1Template = templatesData?.find((t: any) => t.template_key === "overdue_1_day");
 
-    if (!dueTodayTemplate && !d1Template) {
+    if (!dueTodayTemplate && !d1Template && !overdue1Template) {
       console.log("No active templates found");
       return new Response(
-        JSON.stringify({ success: true, message: "Templates inactive", results: { due_today_sent: 0, due_in_1_sent: 0, errors: [] } }),
+        JSON.stringify({ success: true, message: "Templates inactive", results: { due_today_sent: 0, due_in_5_sent: 0, overdue_1_sent: 0, errors: [] } }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -126,8 +127,17 @@ const handler = async (req: Request): Promise<Response> => {
       new Date(`${inFiveDaysBrt}T00:00:00-03:00`).getTime() + 86400000
     ).toISOString();
 
+    // Boundaries for D+1 (Overdue 1 day: exactly 1 day ago)
+    const overdue1Day = new Date(new Date(`${todayBrt}T12:00:00-03:00`).getTime() - 1 * 86400000);
+    const overdue1DayBrt = toYMDInSaoPaulo(overdue1Day);
+    const startOfOverdue1DayUtc = new Date(`${overdue1DayBrt}T00:00:00-03:00`).toISOString();
+    const startOfOverdueZeroDaysUtc = new Date(
+      new Date(`${overdue1DayBrt}T00:00:00-03:00`).getTime() + 86400000
+    ).toISOString();
+
     console.log(`Checking payments due TODAY (D-0) in BRT: ${todayBrt}`);
     console.log(`Checking payments due in 5 DAYS (D-5) in BRT: ${inFiveDaysBrt}`);
+    console.log(`Checking payments OVERDUE 1 DAY (D+1) in BRT: ${overdue1DayBrt}`);
 
     let dueTodaySubs: any[] = [];
     if (dueTodayTemplate) {
@@ -165,9 +175,28 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Found ${d5Subs.length} active subscriptions due in 5 days`);
 
+    let overdue1Subs: any[] = [];
+    if (overdue1Template) {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select(`
+          id, value, next_payment, status, plan_name,
+          client:clients(id, name, phone, email)
+        `)
+        .eq("status", "active")
+        .gte("next_payment", startOfOverdue1DayUtc)
+        .lt("next_payment", startOfOverdueZeroDaysUtc);
+
+      if (error) console.error("Error fetching Overdue 1 day subs:", error);
+      else overdue1Subs = data || [];
+    }
+
+    console.log(`Found ${overdue1Subs.length} active subscriptions overdue by 1 day`);
+
     const results = {
       due_today_sent: 0,
       due_in_5_sent: 0,
+      overdue_1_sent: 0,
       skipped_no_phone: 0,
       errors: [] as string[],
     };
@@ -246,6 +275,7 @@ const handler = async (req: Request): Promise<Response> => {
           if (isSuccess) {
             if (messageType === "auto_due_today") results.due_today_sent++;
             else if (messageType === "auto_due_in_5_days") results.due_in_5_sent++;
+            else if (messageType === "auto_overdue_1_day") results.overdue_1_sent++;
 
             await supabase.from("whatsapp_messages").insert({
               client_id: client.id,
@@ -272,6 +302,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (d1Template && d5Subs.length > 0) {
       await processSubs(d5Subs, d1Template, "auto_due_in_5_days");
+    }
+
+    if (overdue1Template && overdue1Subs.length > 0) {
+      await processSubs(overdue1Subs, overdue1Template, "auto_overdue_1_day");
     }
 
     console.log("Auto reminders completed:", results);

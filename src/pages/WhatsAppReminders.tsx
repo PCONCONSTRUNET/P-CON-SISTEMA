@@ -48,6 +48,7 @@ const placeholderInfo: Record<string, string[]> = {
   due_today: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
   payment_confirmed: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
   subscription_reminder: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
+  overdue_1_day: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
 };
 
 export default function WhatsAppReminders() {
@@ -252,12 +253,14 @@ export default function WhatsAppReminders() {
     due_today: MessageSquare,
     payment_confirmed: MessageSquare,
     subscription_reminder: MessageSquare,
+    overdue_1_day: MessageSquare,
   };
 
   const templateColors: Record<string, string> = {
     due_today: 'text-amber-500',
     payment_confirmed: 'text-emerald-500',
     subscription_reminder: 'text-blue-500',
+    overdue_1_day: 'text-red-500',
   };
 
   if (loading) {
