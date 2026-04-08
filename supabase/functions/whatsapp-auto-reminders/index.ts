@@ -223,7 +223,7 @@ const handler = async (req: Request): Promise<Response> => {
       let mediaResult;
       try { mediaResult = JSON.parse(mediaResponseText); } catch { mediaResult = { raw: mediaResponseText }; }
 
-      const imageSuccess = mediaResponse.status === 200 && (mediaResult.key || mediaResult.chatid || mediaResult.messageid);
+      const imageSuccess = mediaResponse.status === 200 && (mediaResult.key || mediaResult.chatid || mediaResult.messageid || mediaResult.messageId);
 
       if (imageSuccess && tButtonEnabled) {
         const menuPayload = {
