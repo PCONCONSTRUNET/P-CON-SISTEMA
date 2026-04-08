@@ -42,6 +42,18 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Parse body for forceRun
+    let body: any = {};
+    try {
+      if (req.body) {
+        body = await req.json();
+      }
+    } catch (e) {
+      // Body might be empty
+    }
+
+    const forceRun = body?.forceRun === true;
+
     // Get current schedule settings from DB
     const { data: settings } = await supabase
       .from('whatsapp_settings')
@@ -62,15 +74,15 @@ const handler = async (req: Request): Promise<Response> => {
     const currentHour = parseInt(nowBrtParts.find(p => p.type === 'hour')?.value || "0");
     const currentMinute = parseInt(nowBrtParts.find(p => p.type === 'minute')?.value || "0");
 
-    console.log(`Current time BRT: ${currentHour}:${currentMinute.toString().padStart(2, '0')} | Scheduled at: ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')}`);
+    console.log(`Current time BRT: ${currentHour}:${currentMinute.toString().padStart(2, '0')} | Scheduled at: ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} | forceRun: ${forceRun}`);
 
-    if (currentHour !== scheduledHour || currentMinute !== scheduledMinute) {
+    if (!forceRun && (currentHour !== scheduledHour || currentMinute !== scheduledMinute)) {
       console.log('Skipping auto reminders: Not the scheduled time.');
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: `Skipped: scheduled time is ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')}, but current time is ${currentHour}:${currentMinute.toString().padStart(2, '0')} (BRT)`, 
-          results: { due_today_sent: 0, due_in_1_sent: 0, errors: [] } 
+          results: { due_today_sent: 0, due_in_5_sent: 0, errors: [] } 
         }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
@@ -117,43 +129,41 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Checking payments due TODAY (D-0) in BRT: ${todayBrt}`);
     console.log(`Checking payments due in 5 DAYS (D-5) in BRT: ${inFiveDaysBrt}`);
 
-    let dueTodayPayments: any[] = [];
+    let dueTodaySubs: any[] = [];
     if (dueTodayTemplate) {
       const { data, error } = await supabase
-        .from("payments")
+        .from("subscriptions")
         .select(`
-          id, amount, due_date, status, description, subscription_id,
-          client:clients(id, name, phone, email),
-          subscription:subscriptions(plan_name)
+          id, value, next_payment, status, plan_name,
+          client:clients(id, name, phone, email)
         `)
-        .eq("status", "pending")
-        .gte("due_date", startOfTodayUtc)
-        .lt("due_date", startOfTomorrowUtc);
+        .eq("status", "active")
+        .gte("next_payment", startOfTodayUtc)
+        .lt("next_payment", startOfTomorrowUtc);
 
-      if (error) console.error("Error fetching due today payments:", error);
-      else dueTodayPayments = data || [];
+      if (error) console.error("Error fetching due today subs:", error);
+      else dueTodaySubs = data || [];
     }
 
-    console.log(`Found ${dueTodayPayments.length} pending payments due today`);
+    console.log(`Found ${dueTodaySubs.length} active subscriptions due today`);
 
-    let d5Payments: any[] = [];
+    let d5Subs: any[] = [];
     if (d1Template) { // Using the same subscription_reminder template object, but logic is D-5
       const { data, error } = await supabase
-        .from("payments")
+        .from("subscriptions")
         .select(`
-          id, amount, due_date, status, description, subscription_id,
-          client:clients(id, name, phone, email),
-          subscription:subscriptions(plan_name)
+          id, value, next_payment, status, plan_name,
+          client:clients(id, name, phone, email)
         `)
-        .eq("status", "pending")
-        .gte("due_date", startOfInFiveDaysUtc)
-        .lt("due_date", startOfInSixDaysUtc);
+        .eq("status", "active")
+        .gte("next_payment", startOfInFiveDaysUtc)
+        .lt("next_payment", startOfInSixDaysUtc);
 
-      if (error) console.error("Error fetching D-5 payments:", error);
-      else d5Payments = data || [];
+      if (error) console.error("Error fetching D-5 subs:", error);
+      else d5Subs = data || [];
     }
 
-    console.log(`Found ${d5Payments.length} pending payments due in 5 days`);
+    console.log(`Found ${d5Subs.length} active subscriptions due in 5 days`);
 
     const results = {
       due_today_sent: 0,
@@ -207,20 +217,17 @@ const handler = async (req: Request): Promise<Response> => {
       return { ...mediaResult, httpStatus: mediaResponse.status };
     };
 
-    const processPayments = async (payments: any[], template: any, messageType: string) => {
-      for (const payment of payments) {
-        const client = payment.client as any;
+    const processSubs = async (subs: any[], template: any, messageType: string) => {
+      for (const sub of subs) {
+        const client = sub.client as any;
 
         if (!client?.phone) {
           results.skipped_no_phone++;
           continue;
         }
 
-        const planName = (payment.subscription as any)?.plan_name ||
-                        payment.description?.replace("Cobrança - ", "") ||
-                        "Assinatura";
-
-        const formattedValue = `R$ ${payment.amount.toFixed(2).replace(".", ",")}`;
+        const planName = sub.plan_name || "Assinatura";
+        const formattedValue = `R$ ${sub.value.toFixed(2).replace(".", ",")}`;
 
         const message = template.message_template
           .replace(/\{\{client_name\}\}/g, client.name)
@@ -259,12 +266,12 @@ const handler = async (req: Request): Promise<Response> => {
       }
     };
 
-    if (dueTodayTemplate && dueTodayPayments.length > 0) {
-      await processPayments(dueTodayPayments, dueTodayTemplate, "auto_due_today");
+    if (dueTodayTemplate && dueTodaySubs.length > 0) {
+      await processSubs(dueTodaySubs, dueTodayTemplate, "auto_due_today");
     }
 
-    if (d1Template && d5Payments.length > 0) {
-      await processPayments(d5Payments, d1Template, "auto_due_in_5_days");
+    if (d1Template && d5Subs.length > 0) {
+      await processSubs(d5Subs, d1Template, "auto_due_in_5_days");
     }
 
     console.log("Auto reminders completed:", results);
