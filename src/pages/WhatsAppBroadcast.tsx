@@ -323,6 +323,7 @@ const WhatsAppBroadcast = () => {
             type: 'broadcast',
             sendImage,
             imageUrl: imageUrl || undefined,
+            sendButton: false,
             mediaType,
             fileName: fileName || undefined
           }
@@ -341,7 +342,10 @@ const WhatsAppBroadcast = () => {
           });
         }
 
-        if (!isSuccess) throw new Error(error?.message || data?.error || 'Erro na API');
+        if (!isSuccess) {
+          const apiError = data?.error || (typeof data === 'string' ? data : 'Erro na API');
+          throw new Error(apiError);
+        }
 
         setContacts(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'sent' } : c));
         localSent++;

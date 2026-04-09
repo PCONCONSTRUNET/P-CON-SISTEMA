@@ -96,9 +96,9 @@ const handler = async (req: Request): Promise<Response> => {
        // Step 1: Send image with text as caption
        const mediaPayload = {
          number: formattedPhone,
-         type: "image",
+         type: mediaType,
          file: finalImageUrl,
-         text: message,
+         text: message, filename: fileName,
        };
 
        console.log("Media payload:", JSON.stringify(mediaPayload));
@@ -176,9 +176,9 @@ const handler = async (req: Request): Promise<Response> => {
 
        const mediaPayload = {
          number: formattedPhone,
-         type: "image",
+         type: mediaType,
          file: finalImageUrl,
-         text: message,
+         text: message, filename: fileName,
        };
 
        console.log("Media payload:", JSON.stringify(mediaPayload));
@@ -217,7 +217,7 @@ const handler = async (req: Request): Promise<Response> => {
            },
            body: JSON.stringify({
              number: formattedPhone,
-             text: message,
+             text: message, filename: fileName,
            }),
          });
   
@@ -243,7 +243,7 @@ const handler = async (req: Request): Promise<Response> => {
          },
          body: JSON.stringify({
            number: formattedPhone,
-           text: message,
+           text: message, filename: fileName,
          }),
        });
   
