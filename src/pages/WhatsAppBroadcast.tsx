@@ -86,7 +86,7 @@ const WhatsAppBroadcast = () => {
   const [mediaType, setMediaType] = useState<'image' | 'document'>('image');
   const [fileName, setFileName] = useState('');
   const [interval, setInterval] = useState([10, 20]);
-  const [defaultDdd, setDefaultDdd] = useState('11');
+  const [settingsId, setSettingsId] = useState<string | null>(null);
   
   // App States
   const [isSending, setIsSending] = useState(false);
@@ -114,11 +114,11 @@ const WhatsAppBroadcast = () => {
           .single();
         
         if (data) {
+          setSettingsId(data.id);
           setMessage(data.last_message || 'Olá {nome}, tudo bem?');
           setImageUrl(data.last_image_url || '');
           setSendImage(data.send_image || false);
           setInterval([data.min_interval || 10, data.max_interval || 20]);
-          // Note: we don't strictly need to find the media type from URL, but could add it to settings table
         }
       } catch (err) {
         console.error('Error fetching settings:', err);
@@ -129,28 +129,39 @@ const WhatsAppBroadcast = () => {
     fetchSettings();
   }, []);
 
-  // Auto-save logic (Debounced)
+  // 2. Manual Save & Auto-save logic
+  const saveCurrentSettings = async (showToast = false) => {
+    if (!settingsId) return;
+    
+    const { error } = await supabase
+      .from('whatsapp_broadcast_settings')
+      .update({
+        last_message: message,
+        last_image_url: imageUrl,
+        send_image: sendImage,
+        min_interval: interval[0],
+        max_interval: interval[1],
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', settingsId);
+
+    if (error) {
+      console.error('Error saving settings:', error);
+      if (showToast) toast.error('Erro ao salvar configurações');
+    } else if (showToast) {
+      toast.success('Configurações salvas!');
+    }
+  };
+
   useEffect(() => {
-    if (isLoadingSettings) return;
+    if (isLoadingSettings || !settingsId) return;
 
-    const timer = setTimeout(async () => {
-      const { error } = await supabase
-        .from('whatsapp_broadcast_settings')
-        .update({
-          last_message: message,
-          last_image_url: imageUrl,
-          send_image: sendImage,
-          min_interval: interval[0],
-          max_interval: interval[1],
-          updated_at: new Date().toISOString()
-        })
-        .match({ id: (await supabase.from('whatsapp_broadcast_settings').select('id').single()).data?.id });
-
-      if (error) console.error('Error saving settings:', error);
-    }, 2000);
+    const timer = setTimeout(() => {
+      saveCurrentSettings();
+    }, 3000);
 
     return () => clearTimeout(timer);
-  }, [message, imageUrl, sendImage, interval]);
+  }, [message, imageUrl, sendImage, interval, settingsId]);
 
   // 2. Fetch History
   const fetchCampaigns = async () => {
@@ -489,9 +500,20 @@ const WhatsAppBroadcast = () => {
               {/* Intervalo */}
               <Card className="glass-card">
                 <CardContent className="p-6 space-y-6">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-primary" />
-                    <CardTitle className="text-lg">Configurações de Fluxo</CardTitle>
+                  <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-4">
+                    <div className="flex items-center gap-2">
+                       <Clock className="w-5 h-5 text-primary" />
+                       <CardTitle className="text-lg">Configurações de Fluxo</CardTitle>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 gap-2" 
+                      onClick={() => saveCurrentSettings(true)}
+                    >
+                       <CheckCircle2 className="w-3 h-3 text-green-500" />
+                       Salvar Tudo
+                    </Button>
                   </div>
                   <div className="space-y-4">
                     <div className="flex justify-between text-sm">
