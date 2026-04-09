@@ -21,6 +21,10 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught React error:", error, errorInfo);
     
+    const isChunkError = error.name === 'ChunkLoadError' || 
+                         error.message.includes('Failed to fetch dynamically imported module') ||
+                         error.message.includes('Importing a module script failed');
+
     // Prevent infinite reload loops
     const reloadCount = parseInt(sessionStorage.getItem('react_crash_reload') || '0');
     
@@ -33,11 +37,13 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       sessionStorage.clear(); // We cleared the crash count too, so we set it back.
       sessionStorage.setItem('react_crash_reload', (reloadCount + 1).toString());
       
-      // Wipe Supabase tokens specifically just in case
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith('sb-')) {
-          localStorage.removeItem(key);
-        }
+      if (isChunkError) {
+         console.warn("ChunkLoadError Detectado. Matando SW e forcando recarregamento pela rede...");
+         if ('serviceWorker' in navigator) {
+             navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+         }
+         window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+         return;
       }
 
       console.warn("Cleared corrupted local data. Reloading application to recover...");

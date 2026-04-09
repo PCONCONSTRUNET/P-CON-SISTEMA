@@ -24,24 +24,37 @@
         }
       });
 
-      // Fallback definitivo para tela vazia: Se o React não montar em 4 segundos, forçar reload burlando o cache do celular
+      // Fallback definitivo para tela azul/branca: Se o React não montar em 5 segundos, forçar reload burlando o cache
       window.addEventListener('load', function() {
         setTimeout(function() {
-          var root = document.getElementById('root');
-          if (root && root.innerHTML.trim() === '') {
+          var loader = document.querySelector('.initial-loader');
+          // Se o loader ainda estiver presente após 5 segundos, significa que o React (main.tsx) falhou em iniciar
+          if (loader) {
             if (!sessionStorage.getItem('reloaded-fallback') || sessionStorage.getItem('reloaded-fallback') === '1') {
-              // Marca que já tentou 2 vezes para não ficar em loop infinito se o servidor estiver realmente fora do ar
               var attempts = parseInt(sessionStorage.getItem('reloaded-fallback') || '0');
               sessionStorage.setItem('reloaded-fallback', (attempts + 1).toString());
               
-              console.warn('React não iniciou. Provável tela azul de cache. Forçando nova versão do servidor...');
-              // Burla o cache agressivo do navegador de forma infalível
-              window.location.href = window.location.pathname + '?clear_cache=' + new Date().getTime() + window.location.hash;
+              console.warn('React não iniciou (Loader não foi substituído). Provável problema de cache severo. Forçando limpeza e recarregamento...');
+              
+              // Tenta forçar limpeza total via Service Worker
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                  regs.forEach(function(reg) { reg.unregister(); });
+                });
+              }
+              
+              window.location.href = window.location.pathname + '?clear_cache_hard=' + new Date().getTime() + window.location.hash;
+            } else {
+               // Falhou duplamente. Mostrar botão manual.
+               var root = document.getElementById('root');
+               if(root) {
+                 root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a1628;color:white;font-family:sans-serif;padding:20px;text-align:center;"><h2>Falha Crítica de Carregamento</h2><p>O sistema não conseguiu carregar a nova versão.</p><button onclick="localStorage.clear(); sessionStorage.clear(); window.location.href=\'/\';" style="padding:10px 20px; background:#3b82f6; border:none; border-radius:6px; color:white; cursor:pointer; margin-top:20px;">Forçar Limpeza e Restaurar</button></div>';
+               }
             }
           } else {
-            sessionStorage.removeItem('reloaded-fallback'); // Sucesso, limpar trava
+            sessionStorage.removeItem('reloaded-fallback'); // Sucesso
           }
-        }, 4000);
+        }, 5000);
       });
     </script>
 
@@ -120,7 +133,26 @@
 </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #0a1628; color: #ffffff; font-family: system-ui, -apple-system, sans-serif;">
+        <style>
+          @keyframes spin-loader {
+            to { transform: rotate(360deg); }
+          }
+          .initial-loader {
+            width: 40px; height: 40px; 
+            border: 3px solid rgba(255,255,255,0.1); 
+            border-top-color: #3b82f6; 
+            border-radius: 50%; 
+            animation: spin-loader 0.8s linear infinite; 
+            margin-bottom: 20px;
+          }
+        </style>
+        <div class="initial-loader"></div>
+        <h2 style="font-size: 1.2rem; font-weight: 600; margin: 0 0 8px;">P-CON Plataforma</h2>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0; text-align: center; max-width: 80%;">Carregando sistema com segurança...<br>Isso pode levar alguns segundos na primeira vez.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
