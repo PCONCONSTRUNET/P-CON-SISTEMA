@@ -17,7 +17,15 @@ import {
   Image as ImageIcon,
   Loader2,
   History,
-  Info
+  Info,
+  Upload,
+  FileText,
+  FileSearch,
+  Check,
+  ChevronRight,
+  Eye,
+  FileJson,
+  FileSpreadsheet
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -29,16 +37,17 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription,
-  DialogFooter
-} from '@/components/ui/dialog';
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Contact {
   id: string;
@@ -48,66 +57,210 @@ interface Contact {
   error?: string;
 }
 
+interface Campaign {
+  id: string;
+  name: string;
+  total_contacts: number;
+  sent_count: number;
+  failed_count: number;
+  status: string;
+  created_at: string;
+}
+
+interface LogEntry {
+  id: string;
+  contact_name: string;
+  phone: string;
+  status: string;
+  error_message: string;
+  created_at: string;
+}
+
 const WhatsAppBroadcast = () => {
+  // Config States
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [inputText, setInputText] = useState('');
-  const [message, setMessage] = useState('Olá {nome}, tudo bem?\n\nPassando para informar que...');
+  const [message, setMessage] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [sendImage, setSendImage] = useState(false);
-  const [interval, setInterval] = useState([10, 20]); // min, max seconds
+  const [mediaType, setMediaType] = useState<'image' | 'document'>('image');
+  const [fileName, setFileName] = useState('');
+  const [interval, setInterval] = useState([10, 20]);
+  const [defaultDdd, setDefaultDdd] = useState('11');
+  
+  // App States
   const [isSending, setIsSending] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [stats, setStats] = useState({ sent: 0, failed: 0, total: 0 });
-  const [defaultDdd, setDefaultDdd] = useState('11');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [activeTab, setActiveTab] = useState('disparar');
+
+  // History States
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [campaignLogs, setCampaignLogs] = useState<LogEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
   const stopRef = useRef(false);
 
-  // Smart Detector "IA"
+  // 1. Fetch & Persist Settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('whatsapp_broadcast_settings')
+          .select('*')
+          .single();
+        
+        if (data) {
+          setMessage(data.last_message || 'Olá {nome}, tudo bem?');
+          setImageUrl(data.last_image_url || '');
+          setSendImage(data.send_image || false);
+          setInterval([data.min_interval || 10, data.max_interval || 20]);
+          // Note: we don't strictly need to find the media type from URL, but could add it to settings table
+        }
+      } catch (err) {
+        console.error('Error fetching settings:', err);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Auto-save logic (Debounced)
+  useEffect(() => {
+    if (isLoadingSettings) return;
+
+    const timer = setTimeout(async () => {
+      const { error } = await supabase
+        .from('whatsapp_broadcast_settings')
+        .update({
+          last_message: message,
+          last_image_url: imageUrl,
+          send_image: sendImage,
+          min_interval: interval[0],
+          max_interval: interval[1],
+          updated_at: new Date().toISOString()
+        })
+        .match({ id: (await supabase.from('whatsapp_broadcast_settings').select('id').single()).data?.id });
+
+      if (error) console.error('Error saving settings:', error);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [message, imageUrl, sendImage, interval]);
+
+  // 2. Fetch History
+  const fetchCampaigns = async () => {
+    setIsLoadingHistory(true);
+    const { data, error } = await supabase
+      .from('whatsapp_broadcast_campaigns')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (data) setCampaigns(data);
+    setIsLoadingHistory(false);
+  };
+
+  const viewCampaignLogs = async (campaign: Campaign) => {
+    setSelectedCampaign(campaign);
+    const { data, error } = await supabase
+      .from('whatsapp_broadcast_logs')
+      .select('*')
+      .eq('campaign_id', campaign.id)
+      .order('created_at', { ascending: true });
+    
+    if (data) setCampaignLogs(data);
+  };
+
+  // 3. File Uploders
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileNameRaw = `${Math.random()}-${Date.now()}.${fileExt}`;
+      const filePath = `whatsapp/broadcast/${fileNameRaw}`;
+
+      const { data, error } = await supabase.storage
+        .from('contracts')
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('contracts')
+        .getPublicUrl(filePath);
+
+      setImageUrl(publicUrl);
+      setFileName(file.name);
+      setSendImage(true);
+      
+      // Auto-detect media type
+      if (['jpg', 'jpeg', 'png', 'webp'].includes(fileExt?.toLowerCase() || '')) {
+        setMediaType('image');
+      } else {
+        setMediaType('document');
+      }
+
+      toast.success('Arquivo enviado com sucesso!');
+    } catch (err: any) {
+      toast.error('Erro no upload: ' + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleContactFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setInputText(content);
+      toast.info('Arquivo de contatos carregado. Clique em Análisar para processar.');
+    };
+    reader.readAsText(file);
+  };
+
+  // 4. Contact Logic
   const detectContacts = () => {
     if (!inputText.trim()) return;
 
-    const lines = inputText.split('\n');
+    const lines = inputText.split(/\r?\n/);
     const newContacts: Contact[] = [];
     
     lines.forEach(line => {
-      // Basic cleaning
       const cleanLine = line.trim();
       if (!cleanLine) return;
 
-      // Try to find numbers (matches sequences of 8-13 digits)
-      const numberMatches = cleanLine.replace(/\D/g, '');
-      
-      let phone = '';
-      let name = 'Cliente';
-
-      // Logic to identify name vs number in dirty text
-      // If the line has words and numbers, try to separate
       const words = cleanLine.split(/[\s\t,;]+/);
-      const nameParts: string[] = [];
+      let phone = '';
+      let nameParts: string[] = [];
       
       words.forEach(word => {
         const onlyDigits = word.replace(/\D/g, '');
         if (onlyDigits.length >= 8 && onlyDigits.length <= 13 && !phone) {
           phone = onlyDigits;
-        } else if (isNaN(Number(word.replace(/[()-]/g, ''))) || word.length < 5) {
+        } else {
           nameParts.push(word);
         }
       });
 
       if (phone) {
-        // Format to Full International
         if (phone.length === 8 || phone.length === 9) phone = defaultDdd + phone;
         if (!phone.startsWith('55')) phone = '55' + phone;
 
-        // Try to refine name from non-numeric parts
         const detectedName = nameParts.join(' ').replace(/[0-9()-]/g, '').trim();
-        if (detectedName.length > 2) name = detectedName;
-
         newContacts.push({
           id: Math.random().toString(36).substring(7),
           phone,
-          name,
+          name: detectedName || 'Cliente',
           status: 'pending'
         });
       }
@@ -116,36 +269,37 @@ const WhatsAppBroadcast = () => {
     if (newContacts.length > 0) {
       setContacts(prev => [...prev, ...newContacts]);
       setInputText('');
-      toast.success(`${newContacts.length} contatos detectados!`);
-    } else {
-      toast.error('Nenhum número válido encontrado no texto.');
+      toast.success(`${newContacts.length} contatos adicionados!`);
     }
   };
 
-  const clearContacts = () => {
-    if (isSending) return;
-    setContacts([]);
-    setStats({ sent: 0, failed: 0, total: 0 });
-    setCurrentIndex(-1);
-  };
-
-  // Broadcast Engine
+  // 5. Execution Engine
   const startBroadcast = async () => {
     if (contacts.length === 0) return;
     setIsSending(true);
-    setIsPaused(false);
     stopRef.current = false;
     
-    const pendingContacts = contacts.filter(c => c.status === 'pending');
-    setStats(prev => ({ ...prev, total: contacts.length }));
+    // Create Campaign Header
+    const campaignName = `Disparo ${format(new Date(), 'dd/MM HH:mm')}`;
+    const { data: campaignData } = await supabase
+      .from('whatsapp_broadcast_campaigns')
+      .insert({
+        name: campaignName,
+        total_contacts: contacts.length,
+        status: 'sending'
+      })
+      .select()
+      .single();
+
+    const campaignId = campaignData?.id;
+    let localSent = 0;
+    let localFailed = 0;
 
     for (let i = 0; i < contacts.length; i++) {
       if (stopRef.current) break;
       if (contacts[i].status !== 'pending') continue;
 
       setCurrentIndex(i);
-      
-      // Update status to sending
       setContacts(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'sending' } : c));
 
       try {
@@ -155,29 +309,60 @@ const WhatsAppBroadcast = () => {
           body: {
             phone: contacts[i].phone,
             message: personalizedMessage,
-            clientId: null, // Mass broadcast doesn't strictly need a CRM clientId link
+            clientId: null,
             type: 'broadcast',
             sendImage,
-            imageUrl: imageUrl || undefined
+            imageUrl: imageUrl || undefined,
+            mediaType,
+            fileName: fileName || undefined
           }
         });
 
-        if (error || !data?.success) {
-          throw new Error(error?.message || data?.error || 'Erro na API');
+        const isSuccess = !error && data?.success;
+        
+        // Log individual result
+        if (campaignId) {
+          await supabase.from('whatsapp_broadcast_logs').insert({
+            campaign_id: campaignId,
+            contact_name: contacts[i].name,
+            phone: contacts[i].phone,
+            status: isSuccess ? 'success' : 'failed',
+            error_message: !isSuccess ? (error?.message || data?.error || 'Erro desconhecido') : null
+          });
         }
 
+        if (!isSuccess) throw new Error(error?.message || data?.error || 'Erro na API');
+
         setContacts(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'sent' } : c));
-        setStats(prev => ({ ...prev, sent: prev.sent + 1 }));
+        localSent++;
+        setStats(prev => ({ ...prev, sent: localSent }));
       } catch (err: any) {
         setContacts(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'failed', error: err.message } : c));
-        setStats(prev => ({ ...prev, failed: prev.failed + 1 }));
+        localFailed++;
+        setStats(prev => ({ ...prev, failed: localFailed }));
       }
 
-      // Wait interval before next
+      // Update Campaign Summary
+      if (campaignId && i % 5 === 0) {
+        await supabase.from('whatsapp_broadcast_campaigns').update({
+          sent_count: localSent,
+          failed_count: localFailed
+        }).eq('id', campaignId);
+      }
+
       if (i < contacts.length - 1 && !stopRef.current) {
         const waitTime = Math.floor(Math.random() * (interval[1] - interval[0] + 1) + interval[0]) * 1000;
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
+    }
+
+    // Final Campaign Update
+    if (campaignId) {
+      await supabase.from('whatsapp_broadcast_campaigns').update({
+        sent_count: localSent,
+        failed_count: localFailed,
+        status: stopRef.current ? 'stopped' : 'completed'
+      }).eq('id', campaignId);
     }
 
     setIsSending(false);
@@ -185,311 +370,353 @@ const WhatsAppBroadcast = () => {
     toast.success('Disparo finalizado!');
   };
 
-  const stopBroadcast = () => {
-    stopRef.current = true;
-    setIsSending(false);
-    toast.info('Disparo interrompido.');
-  };
-
-  const progress = contacts.length > 0 ? (stats.sent + stats.failed) / contacts.length * 100 : 0;
-
   return (
-    <DashboardLayout title="WhatsApp Broadcast" subtitle="Envio de mensagens em massa com controle anti-bloqueio">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Lado Esquerdo: Configurações */}
-        <div className="lg:col-span-7 space-y-6">
-          
-          {/* 1. Importador Inteligente */}
-          <Card className="glass-card overflow-hidden">
-            <CardHeader className="bg-primary/5 border-b border-border/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Smart Detector</CardTitle>
-                    <CardDescription>Cole sua lista suja aqui (Excel, Bloco, etc)</CardDescription>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="ddd" className="text-xs text-muted-foreground">DDD Padrão:</Label>
-                  <Input 
-                    id="ddd"
-                    value={defaultDdd} 
-                    onChange={e => setDefaultDdd(e.target.value)}
-                    className="w-12 h-8 text-center px-1"
-                  />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              <Textarea 
-                placeholder="Exemplo de texto sujo:&#10;João da silva (11) 99999-9999&#10;Maria Santos; 21988887777&#10;VENDEDOR Pedro: 31 9 7777-6666"
-                className="min-h-[120px] bg-secondary/30 font-mono text-sm"
-                value={inputText}
-                onChange={e => setInputText(e.target.value)}
-              />
-              <Button 
-                onClick={detectContacts} 
-                className="w-full gap-2 shadow-lg shadow-primary/20"
-                disabled={!inputText.trim() || isSending}
-              >
-                <Search className="w-4 h-4" />
-                Analisar e Adicionar Contatos
-              </Button>
-            </CardContent>
-          </Card>
+    <DashboardLayout title="WhatsApp Broadcast" subtitle="Central Corporativa de Disparos">
+      <Tabs defaultValue="disparar" className="space-y-6" onValueChange={(val) => {
+        setActiveTab(val);
+        if (val === 'historico') fetchCampaigns();
+      }}>
+        <TabsList className="bg-secondary/50 p-1">
+          <TabsTrigger value="disparar" className="gap-2">
+            <Send className="w-4 h-4" />
+            Novo Disparo
+          </TabsTrigger>
+          <TabsTrigger value="historico" className="gap-2">
+            <History className="w-4 h-4" />
+            Histórico de Envios
+          </TabsTrigger>
+        </TabsList>
 
-          {/* 2. Mensagem e Mídia */}
-          <Card className="glass-card">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-primary" />
-                <CardTitle className="text-lg">Conteúdo da Campanha</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <Label>Texto da Mensagem</Label>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Variável: {'{nome}'}</span>
-                </div>
-                <Textarea 
-                  value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  className="min-h-[150px] bg-secondary/30"
-                  placeholder="Olá {nome}..."
-                />
-              </div>
-
-              <div className="pt-2 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-muted-foreground" />
-                    <Label className="cursor-pointer" htmlFor="send-img">Anexar Imagem</Label>
-                  </div>
-                  <Switch 
-                    id="send-img" 
-                    checked={sendImage} 
-                    onCheckedChange={setSendImage} 
-                  />
-                </div>
-                
-                <AnimatePresence>
-                  {sendImage && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <Input 
-                        placeholder="Link da imagem (https://...)"
-                        value={imageUrl}
-                        onChange={e => setImageUrl(e.target.value)}
-                        className="bg-secondary/30"
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 3. Configurações de Envio */}
-          <Card className="glass-card">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary" />
-                <CardTitle className="text-lg">Intervalo entre Mensagens</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span>Mínimo: <strong>{interval[0]}s</strong></span>
-                  <span>Máximo: <strong>{interval[1]}s</strong></span>
-                </div>
-                <Slider 
-                  defaultValue={interval} 
-                  max={60} 
-                  min={2} 
-                  step={1} 
-                  onValueChange={setInterval}
-                  className="py-4"
-                />
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                  <Info className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-orange-200/80 leading-relaxed">
-                    <strong>Dica Anti-Spam:</strong> Mantenha intervalos acima de 10s para envios pequenos e acima de 30s para listas grandes. Isso evita que o WhatsApp detecte padrões automatizados.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Lado Direito: Preview e Status */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Progress Dashboard */}
-          <Card className="glass-card border-primary/20 bg-primary/5">
-            <CardContent className="p-6 space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-lg flex items-center gap-2">
-                  <History className="w-5 h-5" />
-                  Status do Disparo
-                </h3>
-                <Badge variant={isSending ? 'default' : 'outline'} className={isSending ? 'animate-pulse' : ''}>
-                  {isSending ? 'Processando' : 'Aguardando'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-3 rounded-xl bg-background/50 border border-border/50">
-                  <p className="text-[10px] text-muted-foreground uppercase">Total</p>
-                  <p className="text-2xl font-bold">{contacts.length}</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-green-500/10 border border-green-500/20">
-                  <p className="text-[10px] text-green-500 uppercase">Sucesso</p>
-                  <p className="text-2xl font-bold text-green-500">{stats.sent}</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <p className="text-[10px] text-red-500 uppercase">Falhas</p>
-                  <p className="text-2xl font-bold text-red-500">{stats.failed}</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-medium">
-                  <span>Progresso Geral</span>
-                  <span>{Math.round(progress)}%</span>
-                </div>
-                <Progress value={progress} className="h-2" />
-              </div>
-
-              <div className="flex gap-3">
-                {!isSending ? (
-                  <Button 
-                    variant="default" 
-                    className="flex-1 gap-2 h-12 text-lg" 
-                    onClick={startBroadcast}
-                    disabled={contacts.length === 0}
-                  >
-                    <Play className="w-5 h-5" />
-                    Iniciar Campanha
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="destructive" 
-                    className="flex-1 gap-2 h-12 text-lg" 
-                    onClick={stopBroadcast}
-                  >
-                    <Square className="w-5 h-5 fill-current" />
-                    Parar Disparo
-                  </Button>
-                )}
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="h-12 w-12"
-                  onClick={clearContacts}
-                  disabled={isSending}
-                >
-                  <Trash2 className="w-5 h-5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Fila de Contatos */}
-          <Card className="glass-card">
-            <CardHeader className="p-4 border-b border-border/50">
-              <CardTitle className="text-sm">Fila de Envio ({contacts.length})</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 max-h-[400px] overflow-y-auto">
-              <div className="divide-y divide-border/50">
-                {contacts.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground space-y-2">
-                    <Phone className="w-8 h-8 mx-auto opacity-20" />
-                    <p className="text-sm">Nenhum contato na lista</p>
-                  </div>
-                ) : (
-                  contacts.map((contact, idx) => (
-                    <div 
-                      key={contact.id} 
-                      className={cn(
-                        "p-3 flex items-center justify-between transition-colors",
-                        currentIndex === idx ? "bg-primary/10" : "",
-                        contact.status === 'sent' ? "opacity-50" : ""
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                          contact.status === 'sent' ? "bg-green-500/20 text-green-500" : 
-                          contact.status === 'failed' ? "bg-red-500/20 text-red-500" :
-                          contact.status === 'sending' ? "bg-primary/20 text-primary animate-pulse" :
-                          "bg-secondary text-muted-foreground"
-                        )}>
-                          {idx + 1}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{contact.name}</p>
-                          <p className="text-[10px] text-muted-foreground">+{contact.phone}</p>
-                        </div>
+        {/* --- ABA ENVIAR --- */}
+        <TabsContent value="disparar" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Lado Esquerdo: Config */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              {/* Importador */}
+              <Card className="glass-card shadow-xl border-primary/20 bg-primary/5">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                        <ListPlus className="w-5 h-5 text-primary" />
                       </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {contact.status === 'sending' && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
-                        {contact.status === 'sent' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                        {contact.status === 'failed' && (
-                          <div className="flex items-center gap-1 group relative">
-                            <XCircle className="w-4 h-4 text-red-500" />
-                            <AlertCircle className="w-3 h-3 text-red-400 cursor-help" />
-                            <div className="absolute right-full mr-2 hidden group-hover:block bg-red-900/90 text-[10px] p-2 rounded w-32 z-50">
-                              {contact.error}
-                            </div>
-                          </div>
-                        )}
+                      <div>
+                        <CardTitle>Audiência</CardTitle>
+                        <CardDescription>Importe seus contatos para o lote</CardDescription>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Visualização da Mensagem */}
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground ml-1">PREVIEW DO WHATSAPP</Label>
-            <div className="p-4 rounded-2xl bg-[#0b141a] border border-white/5 relative overflow-hidden">
-               {/* Background pattern placeholder */}
-               <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
-               
-               <div className="relative space-y-3">
-                  {sendImage && imageUrl && (
-                     <div className="bg-[#202c33] p-1 rounded-lg w-full max-w-[280px]">
-                        <img src={imageUrl} alt="Preview" className="w-full h-auto rounded-md" />
-                     </div>
-                  )}
-                  
-                  <div className="bg-[#005c4b] text-white p-3 rounded-lg rounded-tl-none max-w-[85%] relative shadow-sm">
-                    <p className="text-xs whitespace-pre-wrap leading-relaxed">
-                      {message.replace(/{nome}/g, contacts[0]?.name || 'Cliente')}
-                    </p>
-                    <span className="text-[9px] text-white/50 block text-right mt-1">21:38</span>
-                    {/* Tail */}
-                    <div className="absolute -left-2 top-0 w-0 h-0 border-t-[8px] border-t-[#005c4b] border-l-[8px] border-l-transparent" />
                   </div>
-               </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="relative group">
+                       <input 
+                         type="file" 
+                         accept=".txt,.csv" 
+                         onChange={handleContactFile} 
+                         disabled={isSending}
+                         className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                       />
+                       <div className="h-20 border-2 border-dashed border-border group-hover:border-primary/50 transition-colors rounded-xl flex flex-col items-center justify-center gap-1 bg-background/50">
+                          <Upload className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-xs font-medium">Subir CSV ou TXT</span>
+                       </div>
+                    </div>
+                    <div className="flex flex-col justify-center gap-2">
+                        <Label className="text-xs">DDD Padrão (se não houver):</Label>
+                        <Input value={defaultDdd} onChange={e => setDefaultDdd(e.target.value)} className="h-9 w-20 text-center font-bold" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Textarea 
+                      placeholder="Ou cole o conteúdo aqui (IA Smart Detector identificará os nomes e números)"
+                      className="min-h-[100px] bg-secondary/30 font-mono text-sm"
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                    />
+                    <Button onClick={detectContacts} className="w-full gap-2" variant="secondary">
+                       <Search className="w-4 h-4" /> Analisar e Adicionar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Mensagem */}
+              <Card className="glass-card">
+                <CardContent className="p-6 space-y-6">
+                  <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Configurar Campanha</CardTitle>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Texto Principal</Label>
+                      <Textarea 
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        className="min-h-[160px] bg-secondary/10 focus:bg-secondary/20"
+                        placeholder="Olá {nome}..."
+                      />
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-secondary/10 border border-border/50 space-y-4">
+                       <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Upload className="w-4 h-4 text-primary" />
+                            <Label>Anexar Arquivo (Foto ou PDF)</Label>
+                          </div>
+                          <Switch checked={sendImage} onCheckedChange={setSendImage} />
+                       </div>
+
+                       {sendImage && (
+                         <div className="space-y-3">
+                            <div className="relative">
+                               <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                               <Button variant="outline" className="w-full gap-2 bg-background" disabled={isUploading}>
+                                  {isUploading ? <Loader2 className="animate-spin w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                                  {fileName ? fileName : 'Escolher arquivo do computador'}
+                               </Button>
+                            </div>
+                            {imageUrl && (
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground truncate bg-background/50 p-2 rounded border border-border/50">
+                                 <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                 {imageUrl}
+                              </div>
+                            )}
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Intervalo */}
+              <Card className="glass-card">
+                <CardContent className="p-6 space-y-6">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Configurações de Fluxo</CardTitle>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-sm">
+                      <span>Espaçamento humano: <strong>{interval[0]}s a {interval[1]}s</strong></span>
+                    </div>
+                    <Slider defaultValue={interval} max={60} min={5} step={1} onValueChange={setInterval} />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Lado Direito: Live Controller */}
+            <div className="lg:col-span-5 space-y-6">
+               <Card className="glass-card border-2 border-primary/20 shadow-2xl relative overflow-hidden">
+                  {isSending && <div className="absolute top-0 left-0 h-1 bg-primary animate-progress-indefinite w-full" />}
+                  <CardContent className="p-6 space-y-6">
+                     <div className="flex justify-between items-center">
+                        <Badge className="bg-primary/20 text-primary hover:bg-primary/30 py-1 px-3">
+                           {isSending ? 'EM EXECUÇÃO' : 'MODO PRONTO'}
+                        </Badge>
+                        <div className="flex gap-2">
+                           {isSending ? (
+                              <Button variant="destructive" size="sm" onClick={() => stopRef.current = true} className="gap-2">
+                                <Square className="w-3 h-3 fill-current" /> Parar
+                              </Button>
+                           ) : (
+                              <Button size="sm" onClick={startBroadcast} disabled={contacts.length === 0} className="gap-2 shadow-lg shadow-primary/30">
+                                <Play className="w-3 h-3 fill-current" /> Iniciar
+                              </Button>
+                           )}
+                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setContacts([]); setStats({sent:0, failed:0, total:0}); }} disabled={isSending}>
+                              <Trash2 className="w-3 h-3" />
+                           </Button>
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-background/80 p-3 rounded-xl border border-border/50 text-center">
+                           <p className="text-[10px] text-muted-foreground uppercase">Fila</p>
+                           <p className="text-xl font-bold">{contacts.length}</p>
+                        </div>
+                        <div className="bg-green-500/5 p-3 rounded-xl border border-green-500/20 text-center">
+                           <p className="text-[10px] text-green-500 uppercase font-bold">Enviados</p>
+                           <p className="text-xl font-bold text-green-500">{stats.sent}</p>
+                        </div>
+                        <div className="bg-red-500/5 p-3 rounded-xl border border-red-500/20 text-center">
+                           <p className="text-[10px] text-red-500 uppercase font-bold">Erros</p>
+                           <p className="text-xl font-bold text-red-500">{stats.failed}</p>
+                        </div>
+                     </div>
+
+                     <div className="space-y-2">
+                        <Progress value={(stats.sent + stats.failed) / (contacts.length || 1) * 100} className="h-2" />
+                        <p className="text-right text-[10px] font-mono opacity-60">
+                           Processando: {stats.sent + stats.failed}/{contacts.length}
+                        </p>
+                     </div>
+                  </CardContent>
+               </Card>
+
+               {/* Console em Tempo Real */}
+               <Card className="glass-card h-[400px] flex flex-col">
+                  <CardHeader className="p-4 border-b border-border/50 flex flex-row items-center justify-between">
+                     <CardTitle className="text-xs uppercase tracking-tighter">Log de Transmissão</CardTitle>
+                     <Loader2 className={cn("w-3 h-3", isSending ? "animate-spin text-primary" : "hidden")} />
+                  </CardHeader>
+                  <CardContent className="p-0 flex-1 overflow-y-auto font-mono text-[11px] bg-background/20">
+                     {contacts.length === 0 ? (
+                       <div className="h-full flex flex-col items-center justify-center opacity-30 text-center p-8">
+                          <FileSearch className="w-10 h-10 mb-2" />
+                          <p>Carregue contatos para ver a atividade</p>
+                       </div>
+                     ) : (
+                       <div className="divide-y divide-border/30">
+                          {contacts.map((c, idx) => (
+                             <div key={idx} className={cn(
+                               "px-4 py-2.5 flex items-center justify-between group",
+                               currentIndex === idx ? "bg-primary/5 border-l-2 border-primary" : ""
+                             )}>
+                                <div className="flex items-center gap-3">
+                                   <span className="text-white/20 w-4">{idx + 1}.</span>
+                                   <div className="flex flex-col">
+                                      <span className="font-semibold">{c.name}</span>
+                                      <span className="text-[9px] opacity-40">{c.phone}</span>
+                                   </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                   {c.status === 'pending' && <Clock className="w-3 h-3 opacity-20" />}
+                                   {c.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                                   {c.status === 'sent' && <Check className="w-3 h-3 text-green-500" />}
+                                   {c.status === 'failed' && (
+                                      <div className="flex items-center gap-1">
+                                         <XCircle className="w-3 h-3 text-red-500" />
+                                         <span className="text-[8px] text-red-400 hidden group-hover:block">{c.error}</span>
+                                      </div>
+                                   )}
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                     )}
+                  </CardContent>
+               </Card>
             </div>
           </div>
+        </TabsContent>
 
-        </div>
-      </div>
+        {/* --- ABA HISTÓRICO --- */}
+        <TabsContent value="historico">
+           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-5 space-y-4">
+                 <h3 className="text-sm font-bold opacity-60 flex items-center gap-2">
+                    <History className="w-4 h-4" /> ÚLTIMOS DISPAROS
+                 </h3>
+                 <div className="space-y-3">
+                    {campaigns.length === 0 && !isLoadingHistory ? (
+                       <Card className="p-8 text-center opacity-50">
+                          <p>Nenhuma campanha registrada.</p>
+                       </Card>
+                    ) : (
+                      campaigns.map((camp) => (
+                        <Card 
+                          key={camp.id} 
+                          className={cn(
+                            "glass-card cursor-pointer transition-all hover:border-primary/50",
+                            selectedCampaign?.id === camp.id ? "border-primary bg-primary/5 shadow-lg" : ""
+                          )}
+                          onClick={() => viewCampaignLogs(camp)}
+                        >
+                          <CardContent className="p-4 flex items-center justify-between">
+                             <div className="space-y-1">
+                                <p className="font-bold text-sm">{camp.name}</p>
+                                <p className="text-[10px] text-muted-foreground">{format(new Date(camp.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}</p>
+                             </div>
+                             <div className="text-right">
+                                <div className="flex items-center gap-2 mb-1">
+                                   <Badge variant="outline" className="text-[9px] h-5">{camp.total_contacts} contatos</Badge>
+                                   {camp.failed_count > 0 && <Badge variant="destructive" className="text-[9px] h-5">{camp.failed_count} falhas</Badge>}
+                                </div>
+                                <ChevronRight className="w-4 h-4 ml-auto opacity-30" />
+                             </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                 </div>
+              </div>
+
+              <div className="lg:col-span-7">
+                 <AnimatePresence mode="wait">
+                    {!selectedCampaign ? (
+                       <motion.div 
+                         initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                         className="h-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl opacity-40 p-20 text-center"
+                       >
+                          <Eye className="w-12 h-12 mb-4" />
+                          <p className="text-lg font-medium">Selecione um disparo ao lado</p>
+                          <p className="text-sm">Para visualizar o log detalhado de cada recebimento</p>
+                       </motion.div>
+                    ) : (
+                       <motion.div 
+                          key={selectedCampaign.id}
+                          initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                          className="space-y-4"
+                       >
+                           <Card className="glass-card">
+                              <CardHeader className="bg-primary/5 border-b border-border/50">
+                                 <div className="flex justify-between items-center">
+                                    <div>
+                                       <CardTitle className="text-lg">{selectedCampaign.name}</CardTitle>
+                                       <CardDescription>Resumo detalhado dos envios</CardDescription>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 text-center">
+                                       <div className="bg-green-500/10 p-2 rounded-lg border border-green-500/20">
+                                          <p className="text-[9px] text-green-500 font-bold uppercase">Entregues</p>
+                                          <p className="text-lg font-bold text-green-500">{selectedCampaign.sent_count}</p>
+                                       </div>
+                                       <div className="bg-red-500/10 p-2 rounded-lg border border-red-500/20">
+                                          <p className="text-[9px] text-red-500 font-bold uppercase">Falhas</p>
+                                          <p className="text-lg font-bold text-red-500">{selectedCampaign.failed_count}</p>
+                                       </div>
+                                    </div>
+                                 </div>
+                              </CardHeader>
+                              <CardContent className="p-0">
+                                 <div className="divide-y divide-border/50">
+                                    {campaignLogs.map((log) => (
+                                       <div key={log.id} className="p-4 flex items-center justify-between hover:bg-secondary/20 transition-colors">
+                                          <div className="flex items-center gap-4">
+                                             <div className={cn(
+                                                "w-10 h-10 rounded-full flex items-center justify-center",
+                                                log.status === 'success' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                                             )}>
+                                                {log.status === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                                             </div>
+                                             <div>
+                                                <p className="font-bold text-sm">{log.contact_name}</p>
+                                                <p className="text-xs text-muted-foreground">{log.phone}</p>
+                                             </div>
+                                          </div>
+                                          {log.status === 'failed' && (
+                                             <div className="text-xs text-red-400 bg-red-400/10 px-3 py-1 rounded-full border border-red-400/20 flex items-center gap-2">
+                                                <AlertCircle className="w-3 h-3" />
+                                                {log.error_message}
+                                             </div>
+                                          )}
+                                       </div>
+                                    ))}
+                                 </div>
+                              </CardContent>
+                           </Card>
+                       </motion.div>
+                    )}
+                 </AnimatePresence>
+              </div>
+           </div>
+        </TabsContent>
+      </Tabs>
     </DashboardLayout>
   );
 };

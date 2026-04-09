@@ -15,6 +15,8 @@ interface SendMessageRequest {
   paymentId?: string;
   sendImage?: boolean;
   imageUrl?: string;
+  mediaType?: 'image' | 'document';
+  fileName?: string;
   sendButton?: boolean;
   buttonText?: string;
   buttonUrl?: string;
@@ -42,7 +44,20 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-     const { phone, message, clientId, type, paymentId, sendImage = true, imageUrl, sendButton = true, buttonText, buttonUrl }: SendMessageRequest = await req.json();
+     const { 
+       phone, 
+       message, 
+       clientId, 
+       type, 
+       paymentId, 
+       sendImage = true, 
+       imageUrl, 
+       mediaType = 'image', 
+       fileName,
+       sendButton = true, 
+       buttonText, 
+       buttonUrl 
+     }: SendMessageRequest = await req.json();
 
     if (!phone || !message) {
       return new Response(
