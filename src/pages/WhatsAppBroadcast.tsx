@@ -158,7 +158,7 @@ const WhatsAppBroadcast = () => {
 
     const timer = setTimeout(() => {
       saveCurrentSettings();
-    }, 3000);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [message, imageUrl, sendImage, interval, settingsId]);
@@ -519,7 +519,14 @@ const WhatsAppBroadcast = () => {
                     <div className="flex justify-between text-sm">
                       <span>Espaçamento humano: <strong>{interval[0]}s a {interval[1]}s</strong></span>
                     </div>
-                    <Slider defaultValue={interval} max={60} min={5} step={1} onValueChange={setInterval} />
+                    <Slider 
+                  defaultValue={interval} 
+                  max={60} 
+                  min={5} 
+                  step={1} 
+                  onValueChange={setInterval} 
+                  onValueCommit={() => saveCurrentSettings(true)}
+                />
                   </div>
                 </CardContent>
               </Card>
