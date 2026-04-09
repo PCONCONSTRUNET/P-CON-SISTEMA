@@ -253,8 +253,7 @@ const WhatsAppBroadcast = () => {
       });
 
       if (phone) {
-        if (phone.length === 8 || phone.length === 9) phone = defaultDdd + phone;
-        if (!phone.startsWith('55')) phone = '55' + phone;
+        if (!phone.startsWith('55') && phone.length <= 11) phone = '55' + phone;
 
         const detectedName = nameParts.join(' ').replace(/[0-9()-]/g, '').trim();
         newContacts.push({
@@ -410,7 +409,7 @@ const WhatsAppBroadcast = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="relative group">
+                    <div className="relative group overflow-hidden h-20 border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-xl flex flex-col items-center justify-center gap-1 bg-background/50">
                        <input 
                          type="file" 
                          accept=".txt,.csv" 
@@ -418,14 +417,8 @@ const WhatsAppBroadcast = () => {
                          disabled={isSending}
                          className="absolute inset-0 opacity-0 cursor-pointer z-10" 
                        />
-                       <div className="h-20 border-2 border-dashed border-border group-hover:border-primary/50 transition-colors rounded-xl flex flex-col items-center justify-center gap-1 bg-background/50">
-                          <Upload className="w-5 h-5 text-muted-foreground" />
-                          <span className="text-xs font-medium">Subir CSV ou TXT</span>
-                       </div>
-                    </div>
-                    <div className="flex flex-col justify-center gap-2">
-                        <Label className="text-xs">DDD Padrão (se não houver):</Label>
-                        <Input value={defaultDdd} onChange={e => setDefaultDdd(e.target.value)} className="h-9 w-20 text-center font-bold" />
+                       <Upload className="w-5 h-5 text-muted-foreground" />
+                       <span className="text-xs font-medium">Subir CSV ou TXT</span>
                     </div>
                   </div>
 
