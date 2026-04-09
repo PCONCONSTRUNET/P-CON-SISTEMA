@@ -108,6 +108,7 @@ const WhatsAppBroadcast = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
+        toast.info('Versão 1.5.1 Carregada - Diagnóstico Ativo');
         const { data, error } = await supabase
           .from('whatsapp_broadcast_settings')
           .select('*')
@@ -390,7 +391,7 @@ const WhatsAppBroadcast = () => {
   };
 
   return (
-    <DashboardLayout title="WhatsApp Broadcast" subtitle="Central Corporativa de Disparos">
+    <DashboardLayout title="WhatsApp Broadcast v1.5.1" subtitle="Central Corporativa de Disparos - Otimizado">
       <Tabs defaultValue="disparar" className="space-y-6" onValueChange={(val) => {
         setActiveTab(val);
         if (val === 'historico') fetchCampaigns();
