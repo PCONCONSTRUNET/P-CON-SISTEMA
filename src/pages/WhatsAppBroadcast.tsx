@@ -108,7 +108,6 @@ const WhatsAppBroadcast = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        toast.info('Versão 1.5.1 Carregada - Diagnóstico Ativo');
         const { data, error } = await supabase
           .from('whatsapp_broadcast_settings')
           .select('*')
@@ -391,7 +390,7 @@ const WhatsAppBroadcast = () => {
   };
 
   return (
-    <DashboardLayout title="WhatsApp Broadcast v1.5.1" subtitle="Central Corporativa de Disparos - Otimizado">
+    <DashboardLayout title="WhatsApp Broadcast" subtitle="Central Corporativa de Disparos">
       <Tabs defaultValue="disparar" className="space-y-6" onValueChange={(val) => {
         setActiveTab(val);
         if (val === 'historico') fetchCampaigns();
@@ -705,8 +704,7 @@ const WhatsAppBroadcast = () => {
                               <CardHeader className="bg-primary/5 border-b border-border/50">
                                  <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
-                                       <CardTitle className="text-xl">Disparo em Massa</CardTitle>
-                                       <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded leading-none">v1.5.1</span>
+                                       <CardTitle className="text-xl">Resumo do Disparo</CardTitle>
                                     </div>
                                     <CardDescription>Resumo detalhado dos envios</CardDescription>
                                     <div className="grid grid-cols-2 gap-4 text-center">

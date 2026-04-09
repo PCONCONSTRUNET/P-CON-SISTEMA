@@ -6,7 +6,7 @@ import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 // Mecanismo infalível de Força Bruta para Limpeza de Dados:
 // Ao subir uma nova versão crítica (como migração de bd ou domínio), mude este número.
 // O app local de TODOS os clientes será completamente pulverizado em cache, assegurando integridade.
-const APP_VERSION = "2.1.0"; 
+const APP_VERSION = "2.2.0"; 
 
 const currentVersion = localStorage.getItem("APP_VERSION");
 if (currentVersion !== APP_VERSION) {
