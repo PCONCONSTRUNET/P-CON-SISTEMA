@@ -23,6 +23,7 @@ import {
   Calculator,
   FolderPlus,
   Settings2,
+  Send,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
