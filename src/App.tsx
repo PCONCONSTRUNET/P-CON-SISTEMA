@@ -22,6 +22,7 @@ import ClientCoupons from "./pages/ClientCoupons";
 import ReferralForm from "./pages/ReferralForm";
 import WhatsAppMessages from "./pages/WhatsAppMessages";
 import WhatsAppReminders from "./pages/WhatsAppReminders";
+import WhatsAppBroadcast from "./pages/WhatsAppBroadcast";
 import Financial from "./pages/Financial";
 import Expenses from "./pages/Expenses";
 import EmailSettings from "./pages/EmailSettings";
@@ -62,6 +63,7 @@ const App = () => (
                  <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                  <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppMessages /></ProtectedRoute>} />
                  <Route path="/whatsapp/lembretes" element={<ProtectedRoute><WhatsAppReminders /></ProtectedRoute>} />
+                 <Route path="/whatsapp/disparo" element={<ProtectedRoute><WhatsAppBroadcast /></ProtectedRoute>} />
                  <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
                  <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
                  <Route path="/implementations" element={<ProtectedRoute><Implementations /></ProtectedRoute>} />

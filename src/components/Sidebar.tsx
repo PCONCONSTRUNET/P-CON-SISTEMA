@@ -43,6 +43,7 @@ const navItems = [
   { icon: FileText, label: 'Notas Fiscais', path: '/invoices' },
   { icon: WhatsAppIcon, label: 'WhatsApp', path: '/whatsapp' },
   { icon: BellRing, label: 'Lembretes', path: '/whatsapp/lembretes' },
+  { icon: Send, label: 'Disparos', path: '/whatsapp/disparo' },
   { icon: Mail, label: 'Email', path: '/email' },
   { icon: Rocket, label: 'Implantações', path: '/implementations' },
   { icon: Ticket, label: 'Cupons', path: '/coupons' },
