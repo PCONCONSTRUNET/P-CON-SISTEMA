@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGlobalData, Subscription } from '@/contexts/GlobalDataContext';
-import { useMercadoPago } from '@/hooks/useMercadoPago';
+
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInCalendarDays, isPast, isToday, format, addDays } from 'date-fns';
 import { formatBrazilDate, formatDateForInput, inputDateToISO, normalizeInputDate, toBrazilTime } from '@/utils/dateUtils';
@@ -75,7 +75,7 @@ const Subscriptions = () => {
   const [whatsappParams, setWhatsappParams] = useState<WhatsAppSendParams | null>(null);
 
   const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription } = useGlobalData();
-  const { createPixPayment, loading: mpLoading } = useMercadoPago();
+
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
   const { sendReminderIfNeeded } = useSubscriptionReminder();
 
@@ -136,22 +136,30 @@ const Subscriptions = () => {
 
     setIsCreatingCharge(true);
     try {
-      // Create PIX payment via Mercado Pago
-      const pixResult = await createPixPayment({
-        amount: parseFloat(newCharge.value),
-        description: newCharge.description || `Cobrança para ${selectedClient.name}`,
-        clientId: selectedClient.id,
-        clientEmail: selectedClient.email,
-        clientName: selectedClient.name,
-        clientDocument: selectedClient.document?.replace(/[^\d]/g, '') || undefined,
-      });
+      // Salvar cobrança diretamente no banco como pendente
+      const { error: dbError } = await supabase
+        .from('payments')
+        .insert({
+          client_id: selectedClient.id,
+          subscription_id: null,
+          amount: parseFloat(newCharge.value),
+          status: 'pending',
+          payment_method: newCharge.billingType === 'PIX' ? 'PIX' : 'CREDIT_CARD',
+          description: newCharge.description || `Cobrança para ${selectedClient.name}`,
+          due_date: new Date(newCharge.dueDate + 'T12:00:00').toISOString(),
+        });
 
-      if (pixResult?.success) {
-        toast.success('Cobrança PIX criada com sucesso!');
-        setIsDialogOpen(false);
-        setNewCharge({ clientId: '', value: '', description: '', dueDate: '', billingType: 'PIX' });
+      if (dbError) {
+        console.error('Error creating charge:', dbError);
+        toast.error('Erro ao criar cobrança: ' + dbError.message);
+        return;
       }
-    } catch (error) {
+
+      toast.success('Cobrança criada com sucesso!');
+      setIsDialogOpen(false);
+      setNewCharge({ clientId: '', value: '', description: '', dueDate: '', billingType: 'PIX' });
+    } catch (error: any) {
+      console.error('Error in handleCreateSingleCharge:', error);
       toast.error('Erro ao criar cobrança');
     } finally {
       setIsCreatingCharge(false);
