@@ -87,6 +87,8 @@ const Referrals = () => {
 
     if (error) {
       console.error('Error fetching submissions:', error);
+      toast.error('Erro de permissão ou tabela não encontrada: ' + error.message);
+      setLoading(false);
       return;
     }
     setSubmissions(data || []);
