@@ -705,7 +705,7 @@ const WhatsAppBroadcast = () => {
                                  <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
                                        <CardTitle className="text-xl">Disparo em Massa</CardTitle>
-                                       <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded leading-none">v1.5</span>
+                                       <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded leading-none">v1.5.1</span>
                                     </div>
                                     <CardDescription>Resumo detalhado dos envios</CardDescription>
                                     <div className="grid grid-cols-2 gap-4 text-center">
