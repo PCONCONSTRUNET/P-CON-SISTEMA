@@ -329,7 +329,12 @@ const WhatsAppBroadcast = () => {
           }
         });
 
-        const isSuccess = !error && data?.success;
+        // Detailed success check: If data.success is false but UAZAPI returned success evidence, we consider it sent
+        const rawResult = data?.data;
+        const isSuccess = !error && (
+          data?.success === true || 
+          (rawResult && (rawResult.key || rawResult.messageid || rawResult.chatid || rawResult.status === 'success' || rawResult.status === 'sent'))
+        );
         
         // Log individual result
         if (campaignId) {
@@ -343,7 +348,7 @@ const WhatsAppBroadcast = () => {
         }
 
         if (!isSuccess) {
-          const apiError = data?.error || (typeof data === 'string' ? data : 'Erro na API');
+          const apiError = error?.message || data?.error || (typeof data === 'string' ? data : 'Falha na confirmação');
           throw new Error(apiError);
         }
 
@@ -611,14 +616,19 @@ const WhatsAppBroadcast = () => {
                                       <span className="text-[9px] opacity-40">{c.phone}</span>
                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col items-end gap-1">
                                    {c.status === 'pending' && <Clock className="w-3 h-3 opacity-20" />}
                                    {c.status === 'sending' && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
                                    {c.status === 'sent' && <Check className="w-3 h-3 text-green-500" />}
                                    {c.status === 'failed' && (
-                                      <div className="flex items-center gap-1">
-                                         <XCircle className="w-3 h-3 text-red-500" />
-                                         <span className="text-[8px] text-red-400 hidden group-hover:block">{c.error}</span>
+                                      <div className="flex flex-col items-end gap-1">
+                                         <div className="flex items-center gap-1">
+                                            <XCircle className="w-3 h-3 text-red-500" />
+                                            <span className="text-[9px] text-red-500 font-bold uppercase">Erro</span>
+                                         </div>
+                                         <span className="text-[8px] text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded leading-none max-w-[120px] truncate">
+                                            {c.error}
+                                         </span>
                                       </div>
                                    )}
                                 </div>
@@ -693,10 +703,11 @@ const WhatsAppBroadcast = () => {
                            <Card className="glass-card">
                               <CardHeader className="bg-primary/5 border-b border-border/50">
                                  <div className="flex justify-between items-center">
-                                    <div>
-                                       <CardTitle className="text-lg">{selectedCampaign.name}</CardTitle>
-                                       <CardDescription>Resumo detalhado dos envios</CardDescription>
+                                    <div className="flex items-center gap-2">
+                                       <CardTitle className="text-xl">Disparo em Massa</CardTitle>
+                                       <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded leading-none">v1.5</span>
                                     </div>
+                                    <CardDescription>Resumo detalhado dos envios</CardDescription>
                                     <div className="grid grid-cols-2 gap-4 text-center">
                                        <div className="bg-green-500/10 p-2 rounded-lg border border-green-500/20">
                                           <p className="text-[9px] text-green-500 font-bold uppercase">Entregues</p>
