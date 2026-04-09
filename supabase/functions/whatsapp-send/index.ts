@@ -123,7 +123,7 @@ const handler = async (req: Request): Promise<Response> => {
        }
 
        let imageSent = false;
-       if (mediaResponse.ok && (result?.key || result?.messageid || result?.chatid)) {
+       if (mediaResponse.ok) {
          messageId = result?.key?.id || result?.messageid || result?.messageId || null;
          imageSent = true;
          console.log("Image with caption sent successfully");
@@ -202,7 +202,7 @@ const handler = async (req: Request): Promise<Response> => {
          result = { raw: mediaResponseText };
        }
   
-       if (mediaResponse.ok && (result?.key || result?.messageid || result?.chatid)) {
+       if (mediaResponse.ok) {
          messageId = result?.key?.id || result?.messageid || result?.messageId || null;
          messageStatus = "sent";
          console.log("Media sent successfully via /send/media");
@@ -231,7 +231,7 @@ const handler = async (req: Request): Promise<Response> => {
          }
   
          messageId = result?.key?.id || result?.messageid || result?.messageId || null;
-         messageStatus = textResponse.ok && (result?.chatid || result?.key) ? "sent" : "failed";
+         messageStatus = textResponse.ok ? "sent" : "failed";
        }
      } else {
        // Send text-only message using UAZAPI /send/text endpoint
@@ -266,7 +266,7 @@ const handler = async (req: Request): Promise<Response> => {
        }
   
        messageId = result?.key?.id || result?.messageId || null;
-       messageStatus = response.ok && (result?.status === "success" || result?.key) ? "sent" : "failed";
+       messageStatus = response.ok ? "sent" : "failed";
      }
 
     console.log("UAZAPI response:", result);
