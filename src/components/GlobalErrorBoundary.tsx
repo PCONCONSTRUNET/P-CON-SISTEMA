@@ -55,7 +55,18 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       // If it failed 2 times, show a hard fallback message instead of an endless blank blue screen.
       return (
-        <div style={{ padding: "40px", color: "white", textAlign: "center", fontFamily: "sans-serif" }}>
+        <div style={{ 
+          padding: "40px", 
+          color: "white", 
+          textAlign: "center", 
+          fontFamily: "sans-serif",
+          backgroundColor: "#0a1628",
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
           <h2>Ocorreu um erro no sistema.</h2>
           <p>Tente limpar o histórico/cache do seu navegador ou clique no botão abaixo.</p>
           <button 
