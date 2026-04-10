@@ -39,26 +39,33 @@ export const initVersionControl = async () => {
 
       // Limpar todos os caches do navegador
       if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(key => caches.delete(key)));
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(key => caches.delete(key)));
+        } catch (e) { console.error("Erro caches:", e); }
       }
 
       // Desregistrar Service Workers (Garantia extra)
       if ("serviceWorker" in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map(registration => registration.unregister()));
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(registration => registration.unregister()));
+        } catch (e) { console.error("Erro SW:", e); }
       }
 
       // 5. Salvar a nova versão no localStorage
       localStorage.setItem(VERSION_KEY, APP_VERSION);
 
-      // 6. Forçar reload da página
-      console.log("[VersionControl] Limpeza concluída. Forçando recarregamento.");
+      // 6. Forçar reload da página com cache bypass
+      console.log("[VersionControl] Limpeza concluída. Forçando recarregamento seguro.");
       
       // Pequeno delay para o usuário ver a mensagem
       setTimeout(() => {
-        window.location.reload();
-      }, 800);
+        const url = new URL(window.location.href);
+        url.searchParams.set("v", Date.now().toString());
+        url.searchParams.set("updated", "true");
+        window.location.href = url.toString();
+      }, 1000);
     }
   } catch (error) {
     console.error("[VersionControl] Erro crítico no sistema de versão:", error);

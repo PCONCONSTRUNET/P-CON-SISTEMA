@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Lock, User, ArrowRight } from 'lucide-react';
@@ -17,10 +17,13 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  if (isAuthenticated) {
-    navigate('/dashboard');
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  if (isAuthenticated) return null;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
