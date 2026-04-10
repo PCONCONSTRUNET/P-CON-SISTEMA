@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { safeStorage } from '../utils/storage';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -14,23 +15,28 @@ const VALID_CREDENTIALS = {
   password: 'admin123',
 };
 
+const AUTH_KEY = 'pcon_auth';
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('pcon_auth') === 'true';
+    // Validação simples: o valor deve ser exatamente booleano true se salvo como JSON
+    return safeStorage.getItem<boolean>(AUTH_KEY, (val) => typeof val === 'boolean') === true;
   });
+
   const [user, setUser] = useState<{ username: string } | null>(() => {
-    return localStorage.getItem('pcon_auth') === 'true' ? { username: 'admin' } : null;
+    const isAuth = safeStorage.getItem<boolean>(AUTH_KEY, (val) => typeof val === 'boolean') === true;
+    return isAuth ? { username: 'admin' } : null;
   });
 
   useEffect(() => {
-    // State is now initialized synchronously from localStorage
+    // Sync logic if needed
   }, []);
 
   const login = (username: string, password: string): boolean => {
     if (username === VALID_CREDENTIALS.username && password === VALID_CREDENTIALS.password) {
       setIsAuthenticated(true);
       setUser({ username });
-      localStorage.setItem('pcon_auth', 'true');
+      safeStorage.setItem(AUTH_KEY, true);
       return true;
     }
     return false;
@@ -39,7 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setIsAuthenticated(false);
     setUser(null);
-    localStorage.removeItem('pcon_auth');
+    safeStorage.removeItem(AUTH_KEY);
   };
 
   return (
@@ -56,3 +62,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

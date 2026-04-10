@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { safeStorage } from '../utils/storage';
 
 interface Client {
   id: string;
@@ -20,6 +21,7 @@ interface ClientAuthContextType {
 const ClientAuthContext = createContext<ClientAuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'client_session_token';
+const DATA_KEY = 'client_data';
 
 // URL e Chave fixas para garantir que o cache não interfira (banco consolidado)
 const AUTH_URL = "https://bevahgtmcdicyhjnrylk.supabase.co/functions/v1/client-auth-new";
@@ -37,16 +39,13 @@ async function callAuth(action: string, body: object) {
 
 export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [client, setClient] = useState<Client | null>(() => {
-    const saved = localStorage.getItem('client_data');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return null; }
-    }
-    return null;
+    // Validação básica do objeto Client
+    return safeStorage.getItem<Client>(DATA_KEY, (val) => val && typeof val === 'object' && 'id' in val);
   });
   const [isLoading, setIsLoading] = useState(true);
 
   const verifySession = async () => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = safeStorage.getItem<string>(TOKEN_KEY);
     if (!token) { setIsLoading(false); return; }
 
     try {
@@ -55,12 +54,12 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
       if (res.ok) {
         const data = await res.json();
         setClient(data.client);
-        localStorage.setItem('client_data', JSON.stringify(data.client));
+        safeStorage.setItem(DATA_KEY, data.client);
       } else {
-        // Sessão inválida ou expirada — limpar tudo
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem('client_session_db'); // limpar chave legada
-        localStorage.removeItem('client_data');
+        // Sessão inválida ou expirada — limpar tudo via safeStorage
+        safeStorage.removeItem(TOKEN_KEY);
+        safeStorage.removeItem('client_session_db'); // limpar chave legada
+        safeStorage.removeItem(DATA_KEY);
         setClient(null);
       }
     } catch (err) {
@@ -82,9 +81,9 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
       }
 
       const data = await res.json();
-      localStorage.setItem(TOKEN_KEY, data.token);
-      localStorage.removeItem('client_session_db'); // remover chave legada
-      localStorage.setItem('client_data', JSON.stringify(data.client));
+      safeStorage.setItem(TOKEN_KEY, data.token);
+      safeStorage.removeItem('client_session_db'); // remover chave legada
+      safeStorage.setItem(DATA_KEY, data.client);
       setClient(data.client);
       return { success: true };
     } catch (err) {
@@ -94,7 +93,7 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = safeStorage.getItem<string>(TOKEN_KEY);
 
     try {
       if (token) {
@@ -103,9 +102,9 @@ export const ClientAuthProvider: React.FC<{ children: ReactNode }> = ({ children
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem('client_session_db'); // remover chave legada
-      localStorage.removeItem('client_data');
+      safeStorage.removeItem(TOKEN_KEY);
+      safeStorage.removeItem('client_session_db'); // remover chave legada
+      safeStorage.removeItem(DATA_KEY);
       setClient(null);
     }
   };
@@ -122,3 +121,4 @@ export const useClientAuth = () => {
   if (!context) throw new Error('useClientAuth must be used within a ClientAuthProvider');
   return context;
 };
+

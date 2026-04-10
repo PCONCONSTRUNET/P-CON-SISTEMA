@@ -9,74 +9,30 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
-    <!-- Script de proteção contra Tela Azul (Erro de carregamento de chunk do Vite) -->
+    <!-- Proteção básica contra falhas catastróficas de carregamento (Tela Azul) -->
     <script>
       window.addEventListener('error', function(e) {
-        if (e.message && (e.message.includes('Failed to fetch dynamically imported module') || e.message.includes('Importing a module script failed'))) {
-          console.warn('Detectado erro de cache do Vite. Forçando recarregamento ignorando cache...');
-          window.location.href = window.location.pathname + '?v=' + new Date().getTime() + window.location.hash;
-        }
-      });
-      window.addEventListener('unhandledrejection', function(e) {
-        if (e.reason && e.reason.message && (e.reason.message.includes('Failed to fetch dynamically imported module') || e.reason.message.includes('Importing a module script failed'))) {
-          console.warn('Detectado erro de cache do Vite em promise. Forçando recarregamento ignorando cache...');
-          window.location.href = window.location.pathname + '?v=' + new Date().getTime() + window.location.hash;
+        if (e.message && (e.message.includes('Failed to fetch') || e.message.includes('ChunkLoadError'))) {
+          console.warn('Erro de chunk detectado no index.html. Forçando recarregamento...');
+          window.location.reload();
         }
       });
 
-      // Fallback definitivo para tela azul/branca: Se o React não montar em 5 segundos, forçar reload burlando o cache
+      // Fallback: Se o root estiver vazio após 8 segundos, tenta uma limpeza de emergência
       window.addEventListener('load', function() {
         setTimeout(function() {
+          var root = document.getElementById('root');
           var loader = document.querySelector('.initial-loader');
-          // Se o loader ainda estiver presente após 5 segundos, significa que o React (main.tsx) falhou em iniciar
-          if (loader) {
-            if (!sessionStorage.getItem('reloaded-fallback') || sessionStorage.getItem('reloaded-fallback') === '1') {
-              var attempts = parseInt(sessionStorage.getItem('reloaded-fallback') || '0');
-              sessionStorage.setItem('reloaded-fallback', (attempts + 1).toString());
-              
-              console.warn('React não iniciou (Loader não foi substituído). Provável problema de cache severo. Forçando limpeza e recarregamento...');
-              
-              // Tenta forçar limpeza total via Service Worker
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(regs) {
-                  regs.forEach(function(reg) { reg.unregister(); });
-                });
-              }
-              
-              window.location.href = window.location.pathname + '?clear_cache_hard=' + new Date().getTime() + window.location.hash;
-            } else {
-               // Falhou duplamente. Mostrar botão manual.
-               var root = document.getElementById('root');
-               if(root) {
-                 root.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a1628;color:white;font-family:sans-serif;padding:20px;text-align:center;"><h2>Falha Crítica de Carregamento</h2><p>O sistema não conseguiu carregar a nova versão.</p><button onclick="localStorage.clear(); sessionStorage.clear(); window.location.href=\'/\';" style="padding:10px 20px; background:#3b82f6; border:none; border-radius:6px; color:white; cursor:pointer; margin-top:20px;">Forçar Limpeza e Restaurar</button></div>';
-               }
+          if (loader && root && root.contains(loader)) {
+            console.error('Falha crítica de inicialização. Executando limpeza de emergência...');
+            if (!sessionStorage.getItem('emergency_reload')) {
+              sessionStorage.setItem('emergency_reload', 'true');
+              localStorage.clear();
+              window.location.reload();
             }
-          } else {
-            sessionStorage.removeItem('reloaded-fallback'); // Sucesso
           }
-        }, 5000);
+        }, 8000);
       });
-    </script>
-
-    <!-- Script automático definitivo para aniquilar Service Workers antigos -->
-    <script>
-      (function() {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(regs) {
-            if (regs.length > 0) {
-              console.log('Unregistering stuck Service Workers...', regs);
-              var unregPromises = regs.map(function(reg) { return reg.unregister(); });
-              Promise.all(unregPromises)
-                .then(function() { return caches.keys(); })
-                .then(function(keys) { return Promise.all(keys.map(function(k) { return caches.delete(k); })); })
-                .then(function() { 
-                  console.log('Caches cleared. Reloading...');
-                  window.location.reload(true); 
-                });
-            }
-          });
-        }
-      })();
     </script>
     <title>P-CON Assinaturas | Sistema de Gestão de Clientes e Cobranças</title>
     <meta name="description" content="Sistema interno de gestão de clientes, assinaturas e cobranças da P-CON CONSTRUNET">
