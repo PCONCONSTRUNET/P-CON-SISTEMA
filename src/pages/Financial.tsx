@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   DollarSign,
   TrendingUp,
@@ -17,6 +17,14 @@ import {
   CreditCard,
   Users,
   CalendarDays,
+  Banknote,
+  Percent,
+  Hash,
+  Save,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Info,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -44,6 +52,9 @@ import { Input } from '@/components/ui/input';
 import { exportToCSV, formatCurrencyForExport, formatDateForExport } from '@/utils/exportUtils';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import { Label } from '@/components/ui/label';
+
+const PRO_LABORE_KEY = 'pcon_pro_labore_config';
 
 const CHART_COLORS = {
   primary: 'hsl(216, 68%, 45%)',
@@ -71,6 +82,29 @@ const Financial = () => {
   const [period, setPeriod] = useState('month');
   const [tab, setTab] = useState('overview');
   const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>({});
+
+  // ─── Pro Labore State ─────────────────────────────
+  const [plMode, setPlMode] = useState<'percent' | 'fixed'>('percent');
+  const [plPercent, setPlPercent] = useState(30);
+  const [plFixed, setPlFixed] = useState(0);
+
+  // Load Pro Labore config from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PRO_LABORE_KEY);
+      if (saved) {
+        const cfg = JSON.parse(saved);
+        if (cfg.mode) setPlMode(cfg.mode);
+        if (cfg.percent !== undefined) setPlPercent(cfg.percent);
+        if (cfg.fixed !== undefined) setPlFixed(cfg.fixed);
+      }
+    } catch {}
+  }, []);
+
+  const savePlConfig = () => {
+    localStorage.setItem(PRO_LABORE_KEY, JSON.stringify({ mode: plMode, percent: plPercent, fixed: plFixed }));
+    toast.success('Configuração de Pro Labore salva!');
+  };
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -676,7 +710,7 @@ const Financial = () => {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-        <TabsList className="glass-card border border-border/50 p-1">
+        <TabsList className="glass-card border border-border/50 p-1 flex-wrap h-auto gap-1">
           <TabsTrigger value="overview" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
             Visão Geral
           </TabsTrigger>
@@ -691,6 +725,10 @@ const Financial = () => {
           </TabsTrigger>
           <TabsTrigger value="methods" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
             Métodos
+          </TabsTrigger>
+          <TabsTrigger value="prolabore" className="data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 gap-1.5">
+            <Banknote className="w-4 h-4" />
+            Pro Labore
           </TabsTrigger>
         </TabsList>
 
@@ -1015,6 +1053,341 @@ const Financial = () => {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        {/* ─── Pro Labore Tab ─────────────────────────────────── */}
+        <TabsContent value="prolabore" className="space-y-6">
+          {(() => {
+            const now = new Date();
+            // Current month revenue
+            const currentMonthStart = startOfMonth(now);
+            const currentMonthEnd = endOfMonth(now);
+            const currentMonthRevenue = payments
+              .filter(p => p.status === 'paid' && isWithinInterval(new Date(p.paid_at || p.created_at), { start: currentMonthStart, end: currentMonthEnd }))
+              .reduce((s, p) => s + Number(p.amount), 0);
+            const currentMonthExpenses = expenses
+              .filter(e => e.status !== 'cancelled' && isWithinInterval(new Date(e.paid_at || e.due_date || e.created_at), { start: currentMonthStart, end: currentMonthEnd }))
+              .reduce((s, e) => s + Number(e.amount), 0);
+            const currentMonthProfit = currentMonthRevenue - currentMonthExpenses;
+
+            // Calculated Pro Labore value
+            const plValue = plMode === 'percent'
+              ? (currentMonthRevenue * plPercent) / 100
+              : plFixed;
+
+            const marginAfter = currentMonthProfit - plValue;
+            const healthPct = currentMonthProfit > 0 ? (plValue / currentMonthProfit) * 100 : 0;
+
+            let healthStatus: 'safe' | 'warn' | 'danger' = 'safe';
+            if (plValue > currentMonthProfit) healthStatus = 'danger';
+            else if (healthPct >= 80) healthStatus = 'warn';
+
+            // 6-month history
+            const history = Array.from({ length: 6 }, (_, i) => {
+              const monthDate = subMonths(now, 5 - i);
+              const mStart = startOfMonth(monthDate);
+              const mEnd = endOfMonth(monthDate);
+              const rev = payments
+                .filter(p => p.status === 'paid' && isWithinInterval(new Date(p.paid_at || p.created_at), { start: mStart, end: mEnd }))
+                .reduce((s, p) => s + Number(p.amount), 0);
+              const exp = expenses
+                .filter(e => e.status !== 'cancelled' && isWithinInterval(new Date(e.paid_at || e.due_date || e.created_at), { start: mStart, end: mEnd }))
+                .reduce((s, e) => s + Number(e.amount), 0);
+              const profit = rev - exp;
+              const pl = plMode === 'percent' ? (rev * plPercent) / 100 : plFixed;
+              return {
+                month: format(monthDate, 'MMM/yy', { locale: ptBR }),
+                fullMonth: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR }),
+                receita: rev,
+                lucro: profit,
+                prolabore: pl,
+                margem: Math.max(0, profit - pl),
+              };
+            });
+
+            return (
+              <>
+                {/* Config Panel */}
+                <div className="glass-card p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2.5 rounded-xl bg-amber-500/15">
+                      <Banknote className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-heading text-lg font-semibold text-foreground">Calculadora de Pro Labore</h3>
+                      <p className="text-sm text-muted-foreground">Configure quanto retirar todo mês</p>
+                    </div>
+                  </div>
+
+                  {/* Mode Toggle */}
+                  <div className="flex gap-2 mb-6">
+                    <button
+                      onClick={() => setPlMode('percent')}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border',
+                        plMode === 'percent'
+                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                          : 'glass-card border-border/50 text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <Percent className="w-4 h-4" />
+                      Percentual da Receita
+                    </button>
+                    <button
+                      onClick={() => setPlMode('fixed')}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border',
+                        plMode === 'fixed'
+                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                          : 'glass-card border-border/50 text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <Hash className="w-4 h-4" />
+                      Valor Fixo Mensal
+                    </button>
+                  </div>
+
+                  {/* Input */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    {plMode === 'percent' ? (
+                      <div>
+                        <Label className="text-sm font-medium text-foreground mb-2 block">
+                          Percentual desejado (%)
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="pl-percent"
+                            type="number"
+                            min={1}
+                            max={100}
+                            step={0.5}
+                            value={plPercent}
+                            onChange={e => setPlPercent(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                            className="glass-card border-border/50 pr-10"
+                          />
+                          <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Recomendado: 10–30% para sócios de serviços
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <Label className="text-sm font-medium text-foreground mb-2 block">
+                          Valor Fixo Mensal (R$)
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="pl-fixed"
+                            type="number"
+                            min={0}
+                            step={100}
+                            value={plFixed || ''}
+                            onChange={e => setPlFixed(parseFloat(e.target.value) || 0)}
+                            placeholder="Ex: 3000"
+                            className="glass-card border-border/50 pl-10"
+                          />
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-end">
+                      <Button onClick={savePlConfig} className="gap-2 bg-amber-500 hover:bg-amber-600 text-white w-full sm:w-auto">
+                        <Save className="w-4 h-4" />
+                        Salvar Configuração
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Result Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Pro Labore Value */}
+                    <div className={cn(
+                      'p-4 rounded-2xl border-2 transition-all',
+                      healthStatus === 'safe' ? 'bg-success/10 border-success/30' :
+                      healthStatus === 'warn' ? 'bg-warning/10 border-warning/30' :
+                      'bg-destructive/10 border-destructive/30'
+                    )}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {
+                          healthStatus === 'safe' ? <CheckCircle2 className="w-5 h-5 text-success" /> :
+                          healthStatus === 'warn' ? <AlertTriangle className="w-5 h-5 text-warning" /> :
+                          <XCircle className="w-5 h-5 text-destructive" />
+                        }
+                        <span className={cn(
+                          'text-xs font-semibold uppercase tracking-wide',
+                          healthStatus === 'safe' ? 'text-success' :
+                          healthStatus === 'warn' ? 'text-warning' : 'text-destructive'
+                        )}>
+                          {healthStatus === 'safe' ? 'Seguro' : healthStatus === 'warn' ? 'Atenção' : 'Risco'}
+                        </span>
+                      </div>
+                      <p className="text-2xl font-bold font-heading text-foreground">{formatCurrency(plValue)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Pro Labore — {format(now, "MMMM 'de' yyyy", { locale: ptBR })}
+                      </p>
+                      {plMode === 'percent' && (
+                        <p className="text-xs font-medium mt-1" style={{ color: healthStatus === 'safe' ? '#22c55e' : healthStatus === 'warn' ? '#eab308' : '#ef4444' }}>
+                          {plPercent}% de {formatCurrency(currentMonthRevenue)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Lucro do Mês */}
+                    <div className="glass-card p-4 rounded-2xl border border-border/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <TrendingUp className="w-5 h-5 text-primary" />
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lucro Real do Mês</span>
+                      </div>
+                      <p className="text-2xl font-bold font-heading text-foreground">{formatCurrency(currentMonthProfit)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Receita − Gastos</p>
+                      <div className="mt-2 w-full h-1.5 bg-secondary/50 rounded-full overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', healthStatus === 'safe' ? 'bg-success' : healthStatus === 'warn' ? 'bg-warning' : 'bg-destructive')}
+                          style={{ width: `${Math.min(100, healthPct)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{healthPct.toFixed(0)}% do lucro comprometido</p>
+                    </div>
+
+                    {/* Margem Disponível */}
+                    <div className="glass-card p-4 rounded-2xl border border-border/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Wallet className="w-5 h-5 text-cyan-400" />
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Margem após Pro Labore</span>
+                      </div>
+                      <p className={cn('text-2xl font-bold font-heading', marginAfter >= 0 ? 'text-success' : 'text-destructive')}>
+                        {formatCurrency(marginAfter)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Restante para o negócio</p>
+                      {marginAfter < 0 && (
+                        <p className="text-xs text-destructive mt-2 font-medium flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          Pro Labore excede o lucro!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Health Message */}
+                <div className={cn(
+                  'flex items-start gap-3 p-4 rounded-2xl border text-sm',
+                  healthStatus === 'safe' ? 'bg-success/10 border-success/30 text-success' :
+                  healthStatus === 'warn' ? 'bg-warning/10 border-warning/30 text-warning' :
+                  'bg-destructive/10 border-destructive/30 text-destructive'
+                )}>
+                  {
+                    healthStatus === 'safe' ? <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" /> :
+                    healthStatus === 'warn' ? <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" /> :
+                    <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  }
+                  <div>
+                    <p className="font-semibold">
+                      {healthStatus === 'safe'
+                        ? '✅ Retirada saudável — o negócio tem margem confortável.'
+                        : healthStatus === 'warn'
+                        ? '⚠️ Atenção — o Pro Labore compromete mais de 80% do lucro deste mês.'
+                        : '🚨 Risco — o Pro Labore configurado supera o lucro real do mês!'}
+                    </p>
+                    <p className="opacity-80 mt-1">
+                      {healthStatus === 'safe'
+                        ? `Sua retirada representa ${healthPct.toFixed(0)}% do lucro. Sobram ${formatCurrency(marginAfter)} para reserva e reinvestimento.`
+                        : healthStatus === 'warn'
+                        ? `Considere reduzir o Pro Labore ou aumentar a receita para garantir saúde financeira.`
+                        : `Reduzir a retirada é essencial. O lucro atual é de apenas ${formatCurrency(currentMonthProfit)}.`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 6-month History Chart */}
+                <div className="glass-card p-4 sm:p-6">
+                  <h3 className="font-heading text-lg font-semibold text-foreground mb-1">Histórico — Últimos 6 Meses</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Receita, lucro real e Pro Labore calculado mês a mês</p>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={history} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="plRevGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                        <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                        <YAxis tickFormatter={formatCurrencyShort} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} width={70} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} iconType="circle" iconSize={8} />
+                        <Area type="monotone" dataKey="receita" name="Receita" stroke="#22c55e" fill="url(#plRevGrad)" strokeWidth={2} dot={{ r: 3 }} />
+                        <Bar dataKey="lucro" name="Lucro Real" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} maxBarSize={24} opacity={0.8} />
+                        <Line type="monotone" dataKey="prolabore" name="Pro Labore" stroke="#f59e0b" strokeWidth={2.5} strokeDasharray="6 3" dot={{ r: 4, fill: '#f59e0b' }} />
+                        <Line type="monotone" dataKey="margem" name="Margem Restante" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3, fill: '#06b6d4' }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Month-by-month table */}
+                <div className="glass-card p-4 sm:p-6">
+                  <h3 className="font-heading text-lg font-semibold text-foreground mb-4">Detalhamento Mensal</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/30">
+                          <th className="text-left py-2 px-3 text-muted-foreground font-medium">Mês</th>
+                          <th className="text-right py-2 px-3 text-muted-foreground font-medium">Receita</th>
+                          <th className="text-right py-2 px-3 text-muted-foreground font-medium">Lucro Real</th>
+                          <th className="text-right py-2 px-3 text-muted-foreground font-medium">Pro Labore</th>
+                          <th className="text-right py-2 px-3 text-muted-foreground font-medium">Margem</th>
+                          <th className="text-center py-2 px-3 text-muted-foreground font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/20">
+                        {history.map((row, i) => {
+                          const rowHealth = row.prolabore > row.lucro ? 'danger' : row.lucro > 0 && (row.prolabore / row.lucro) >= 0.8 ? 'warn' : 'safe';
+                          return (
+                            <tr key={i} className={cn('hover:bg-secondary/20 transition-colors', i === 5 && 'bg-primary/5 font-medium')}>
+                              <td className="py-3 px-3 text-foreground capitalize">
+                                {row.fullMonth}
+                                {i === 5 && <span className="ml-2 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">atual</span>}
+                              </td>
+                              <td className="py-3 px-3 text-right text-success font-medium">{formatCurrency(row.receita)}</td>
+                              <td className="py-3 px-3 text-right">
+                                <span className={row.lucro >= 0 ? 'text-foreground' : 'text-destructive'}>{formatCurrency(row.lucro)}</span>
+                              </td>
+                              <td className="py-3 px-3 text-right text-amber-400 font-medium">{formatCurrency(row.prolabore)}</td>
+                              <td className="py-3 px-3 text-right">
+                                <span className={row.margem >= 0 ? 'text-foreground' : 'text-destructive'}>{formatCurrency(row.margem)}</span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                {rowHealth === 'safe' ? (
+                                  <span className="inline-flex items-center gap-1 text-xs bg-success/15 text-success px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3" /> OK</span>
+                                ) : rowHealth === 'warn' ? (
+                                  <span className="inline-flex items-center gap-1 text-xs bg-warning/15 text-warning px-2 py-0.5 rounded-full"><AlertTriangle className="w-3 h-3" /> Atenção</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs bg-destructive/15 text-destructive px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3" /> Risco</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mt-4 flex items-start gap-2 text-xs text-muted-foreground bg-secondary/30 p-3 rounded-xl">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                    <p>
+                      O Pro Labore é a remuneração do sócio-administrador. Recomenda-se manter entre
+                      <strong className="text-foreground"> 10% e 30%</strong> da receita bruta ou definir um valor fixo viável.
+                      Sempre garanta que o negócio tenha capital de giro após a retirada.
+                    </p>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </TabsContent>
       </Tabs>
     </DashboardLayout>

@@ -1,16 +1,25 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Users, 
   DollarSign, 
   AlertTriangle,
   TrendingUp,
+  TrendingDown,
   Calendar,
   CheckCircle,
   XCircle,
   RotateCcw,
   Loader2,
+  Banknote,
+  ArrowUpRight,
+  ArrowDownRight,
+  Percent,
 } from 'lucide-react';
-import { startOfMonth, endOfMonth, isWithinInterval, isPast, startOfDay } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, isPast, startOfDay, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { format } from 'date-fns';
+
+const PRO_LABORE_KEY = 'pcon_pro_labore_config';
 import DashboardLayout from '@/components/DashboardLayout';
 import MetricCard from '@/components/MetricCard';
 import DataTable from '@/components/DataTable';
@@ -35,6 +44,7 @@ import { toast } from 'sonner';
 
 const Dashboard = () => {
   const [isResetting, setIsResetting] = useState(false);
+  const [proLaboreConfig, setProLaboreConfig] = useState<{ mode: 'percent' | 'fixed'; percent: number; fixed: number } | null>(null);
   const { 
     clients, 
     subscriptions, 
@@ -44,6 +54,16 @@ const Dashboard = () => {
     loadingPayments,
     refetchAll 
   } = useGlobalData();
+
+  // Load Pro Labore config from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PRO_LABORE_KEY);
+      if (saved) {
+        setProLaboreConfig(JSON.parse(saved));
+      }
+    } catch {}
+  }, []);
 
   const handleResetAllData = async () => {
     setIsResetting(true);
@@ -134,6 +154,21 @@ const Dashboard = () => {
       })
       .reduce((acc, p) => acc + Number(p.amount), 0);
 
+    // Previous month revenue for MoM comparison
+    const prevMonthStart = startOfMonth(subMonths(now, 1));
+    const prevMonthEnd = endOfMonth(subMonths(now, 1));
+    const prevMonthRevenue = payments
+      .filter(p => {
+        if (p.status !== 'paid') return false;
+        const paidDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
+        return isWithinInterval(paidDate, { start: prevMonthStart, end: prevMonthEnd });
+      })
+      .reduce((acc, p) => acc + Number(p.amount), 0);
+
+    const momGrowth = prevMonthRevenue > 0
+      ? ((monthlyRevenue - prevMonthRevenue) / prevMonthRevenue) * 100
+      : null;
+
     return {
       activeClients,
       inactiveClients,
@@ -144,6 +179,8 @@ const Dashboard = () => {
       pendingPayments,
       failedPayments,
       monthlyRevenue,
+      prevMonthRevenue,
+      momGrowth,
       // Combined vencidas = overdue subscriptions + overdue payments
       totalOverdue: overdueSubscriptions + overduePayments,
     };
@@ -286,11 +323,33 @@ const Dashboard = () => {
           icon={Users}
           variant="success"
         />
-        <MetricCard
-          title="Receita do Mês"
-          value={isLoading ? '...' : formatCurrency(metrics.monthlyRevenue)}
-          icon={DollarSign}
-        />
+        {/* Revenue card with MoM growth */}
+        <div className="glass-card p-4 sm:p-5">
+          <div className="flex items-start justify-between mb-3">
+            <div className="p-2.5 rounded-xl bg-primary/15">
+              <DollarSign className="w-5 h-5 text-primary" />
+            </div>
+            {!isLoading && metrics.momGrowth !== null && (
+              <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
+                metrics.momGrowth >= 0 ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive'
+              }`}>
+                {metrics.momGrowth >= 0
+                  ? <ArrowUpRight className="w-3 h-3" />
+                  : <ArrowDownRight className="w-3 h-3" />}
+                {Math.abs(metrics.momGrowth).toFixed(1)}%
+              </div>
+            )}
+          </div>
+          <p className="text-xl sm:text-2xl font-bold font-heading text-foreground">
+            {isLoading ? '...' : formatCurrency(metrics.monthlyRevenue)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">Receita do Mês</p>
+          {!isLoading && metrics.momGrowth !== null && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              vs {formatCurrency(metrics.prevMonthRevenue)} mês anterior
+            </p>
+          )}
+        </div>
         <MetricCard
           title="Renovadas"
           value={isLoading ? '...' : metrics.activeSubscriptions}
@@ -306,7 +365,7 @@ const Dashboard = () => {
       </div>
 
       {/* Secondary Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
         <MetricCard
           title="Total Clientes"
           value={isLoading ? '...' : metrics.totalClients}
@@ -330,6 +389,37 @@ const Dashboard = () => {
           icon={TrendingUp}
           variant="warning"
         />
+        {/* Pro Labore card */}
+        {(() => {
+          const plCfg = proLaboreConfig;
+          const plValue = plCfg
+            ? plCfg.mode === 'percent'
+              ? (metrics.monthlyRevenue * plCfg.percent) / 100
+              : plCfg.fixed
+            : null;
+          return (
+            <div className="glass-card p-4 sm:p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/15">
+                  <Banknote className="w-5 h-5 text-amber-400" />
+                </div>
+                {plCfg?.mode === 'percent' && (
+                  <div className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-amber-500/15 text-amber-400">
+                    <Percent className="w-3 h-3" />
+                    {plCfg.percent}%
+                  </div>
+                )}
+              </div>
+              <p className="text-xl sm:text-2xl font-bold font-heading text-foreground">
+                {isLoading ? '...' : plValue !== null ? formatCurrency(plValue) : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Pro Labore do Mês</p>
+              {!plCfg && !isLoading && (
+                <p className="text-xs text-amber-400/80 mt-0.5">Configure em Financeiro</p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Charts */}
