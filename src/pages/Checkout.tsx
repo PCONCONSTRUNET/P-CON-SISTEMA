@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useClientAuth } from '@/contexts/ClientAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useMercadoPago } from '@/hooks/useMercadoPago';
@@ -81,7 +81,7 @@ const Checkout = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'select' | 'processing' | 'pix' | 'success' | 'error'>('select');
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
-  const [isContractDialogOpen] = useState(false);
+  const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
 
 
   useEffect(() => {
@@ -427,6 +427,7 @@ const Checkout = () => {
                             className="w-full h-10 text-sm"
                             onClick={() => {
                               setSelectedContract(contract);
+                              setIsContractDialogOpen(true);
                             }}
                           >
                             <FileText className="h-4 w-4 mr-2" />
