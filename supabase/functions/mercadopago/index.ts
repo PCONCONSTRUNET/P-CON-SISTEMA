@@ -256,6 +256,88 @@ serve(async (req: Request) => {
       );
     }
 
+    // Create Ticket (Boleto/DDA) payment
+    if (action === "create-ticket") {
+      const body: CreatePixPaymentRequest = await req.json();
+
+      if (!body.clientId) {
+        throw new Error("clientId é obrigatório para emissão de DDA/Boleto");
+      }
+
+      console.log("Creating Ticket (Boleto) payment:", { 
+        amount: body.amount, 
+        description: body.description,
+        clientEmail: body.clientEmail,
+        clientDocument: body.clientDocument,
+      });
+
+      // Create payment via Mercado Pago API
+      const paymentData = {
+        transaction_amount: body.amount,
+        description: body.description,
+        payment_method_id: "bolbradesco", // Standard boleto in MP
+        payer: {
+          email: body.clientEmail,
+          first_name: body.clientName?.split(" ")[0] || "Cliente",
+          last_name: body.clientName?.split(" ").slice(1).join(" ") || "",
+          identification: body.clientDocument ? {
+            type: body.clientDocument.length <= 11 ? "CPF" : "CNPJ",
+            number: body.clientDocument.replace(/[^\d]/g, ""),
+          } : undefined,
+        },
+        external_reference: body.description,
+        notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
+      };
+
+      const response = await fetch(`${MERCADOPAGO_API_URL}/v1/payments`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify(paymentData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("Mercado Pago error:", result);
+        throw new Error(result.message || "Erro ao criar pagamento via Boleto/Ticket");
+      }
+
+      console.log("Ticket payment created:", result.id);
+
+      // Save to local database
+      const supabase = getSupabaseAdmin();
+      
+      const { error: dbError } = await supabase.from("payments").insert({
+        client_id: body.clientId || null,
+        subscription_id: body.subscriptionId || null,
+        amount: body.amount,
+        status: "pending",
+        payment_method: "BOLETO",
+        description: body.description,
+        transaction_id: result.id?.toString(),
+        // ticket_url could be saved in a metadata column if we had one, but we return it
+      });
+
+      if (dbError) {
+        console.error("Error saving ticket payment to DB:", dbError);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          paymentId: result.id,
+          ticketUrl: result.transaction_details?.external_resource_url || result.point_of_interaction?.transaction_data?.ticket_url,
+          barcode: result.barcode?.content,
+          status: result.status,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (action === "create-card-payment") {
       const body: CreateCardPaymentRequest = await req.json();
 

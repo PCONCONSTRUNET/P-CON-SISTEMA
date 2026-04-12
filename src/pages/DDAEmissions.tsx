@@ -1,38 +1,40 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { FileText, Plus, Search, Trash2, XCircle } from "lucide-react";
+import { FileText, Plus, Search, Trash2, XCircle, ExternalLink } from "lucide-react";
 import { formatBrazilDate } from "@/utils/dateUtils";
 import AnimatedBackground from "@/components/AnimatedBackground";
+import { useMercadoPago } from "@/hooks/useMercadoPago";
 
-// Placeholder for the page
 const DDAEmissions = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
+  
+  const queryClient = useQueryClient();
+  const { createTicketPayment, loading: isCreating } = useMercadoPago();
 
   const { data: clients } = useQuery({
     queryKey: ["clients-dda"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("id, name, document").order("name");
+      const { data, error } = await supabase.from("clients").select("id, name, document, email").order("name");
       if (error) throw error;
       return data;
     },
   });
 
-  const { data: ddaList, refetch: refetchDdas, isLoading } = useQuery({
+  const { data: ddaList, isLoading } = useQuery({
     queryKey: ["dda-list"],
     queryFn: async () => {
-      // Filtrando DDAs via payments onde method = 'BOLETO' (ou criaremos uma flag especifica)
       const { data, error } = await supabase
         .from("payments")
         .select("*, clients(name, document)")
@@ -45,38 +47,38 @@ const DDAEmissions = () => {
 
   const handleCreateDDA = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedClient || !amount || !dueDate) {
-      toast.error("Preencha os campos obrigatórios");
+    if (!selectedClient || !amount || !dueDate || !description) {
+      toast.error("Preencha todos os campos obrigatórios");
       return;
     }
 
+    const client = clients?.find(c => c.id === selectedClient);
+    if (!client) return;
+
     try {
-      // Por enquanto, apenas um mock inserindo no banco.
-      // Em breve vai chamar a API do Mercado Pago para gerar o Boleto Registrado
-      const { error } = await supabase.from("payments").insert({
-        client_id: selectedClient,
+      // Create ticket via Mercado Pago (this function will automatically save to DB too)
+      const result = await createTicketPayment({
         amount: parseFloat(amount),
-        description: description || "Emissão DDA Avulsa",
-        status: "pending",
-        payment_method: "BOLETO", // Importante para diferenciar
-        created_at: new Date().toISOString(),
-        // ideal seria salvar o dueDate também se a tabela permitir
+        description: description,
+        clientId: client.id,
+        clientName: client.name,
+        clientEmail: client.email || "contato@pcon.com.br", // MP requires email
+        clientDocument: client.document || undefined,
+        // dueDate could be passed to MP if we update the hook/edge function to support expiration_date
       });
 
-      if (error) throw error;
-
-      toast.success("DDA emitido com sucesso!");
-      setIsModalOpen(false);
-      refetchDdas();
-      
-      // Limpar form
-      setAmount("");
-      setDueDate("");
-      setDescription("");
-      setSelectedClient("");
+      if (result?.success) {
+        setIsModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: ["dda-list"] });
+        
+        // Reset form
+        setAmount("");
+        setDueDate("");
+        setDescription("");
+        setSelectedClient("");
+      }
     } catch (error) {
       console.error(error);
-      toast.error("Erro ao emitir DDA");
     }
   };
 
@@ -86,7 +88,7 @@ const DDAEmissions = () => {
       const { error } = await supabase.from("payments").update({ status: "cancelled" }).eq("id", id);
       if (error) throw error;
       toast.success("Emissão cancelada!");
-      refetchDdas();
+      queryClient.invalidateQueries({ queryKey: ["dda-list"] });
     } catch (e) {
       toast.error("Erro ao cancelar");
     }
@@ -98,7 +100,7 @@ const DDAEmissions = () => {
       const { error } = await supabase.from("payments").delete().eq("id", id);
       if (error) throw error;
       toast.success("Registro excluído!");
-      refetchDdas();
+      queryClient.invalidateQueries({ queryKey: ["dda-list"] });
     } catch (e) {
       toast.error("Erro ao excluir");
     }
@@ -178,8 +180,8 @@ const DDAEmissions = () => {
                   />
                 </div>
 
-                <Button type="submit" className="w-full btn-blue h-12 mt-4">
-                  Gerar e Registrar Cobrança
+                <Button type="submit" disabled={isCreating} className="w-full btn-blue h-12 mt-4">
+                  {isCreating ? "Registrando Boleto..." : "Gerar e Registrar Cobrança"}
                 </Button>
               </form>
             </DialogContent>
