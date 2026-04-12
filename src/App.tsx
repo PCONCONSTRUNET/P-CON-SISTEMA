@@ -30,6 +30,7 @@ import Budgets from "./pages/Budgets";
 import BudgetForm from "./pages/BudgetForm";
 import BudgetSettings from "./pages/BudgetSettings";
 import BudgetPublic from "./pages/BudgetPublic";
+import ContractPublic from "./pages/ContractPublic";
 
 import ClientLogin from "./pages/ClientLogin";
 import ClientRegister from "./pages/ClientRegister";
@@ -79,6 +80,7 @@ const App = () => (
                 <Route path="/indicar" element={<ReferralForm />} />
                 <Route path="/r/:slug" element={<ReferralForm />} />
                  <Route path="/proposta/:slug" element={<BudgetPublic />} />
+                 <Route path="/contrato/:id" element={<ContractPublic />} />
                 
                 {/* Client Routes */}
                 <Route path="/cliente" element={<ClientLogin />} />

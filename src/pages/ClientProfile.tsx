@@ -916,7 +916,7 @@ const ClientProfile = () => {
                             size="sm"
                             variant="outline"
                             className="h-9 w-9 p-0 sm:w-auto sm:px-3 gap-2"
-                            onClick={() => window.open(contract.file_path!, '_blank')}
+                            onClick={() => window.open(`/contrato/${contract.id}`, '_blank')}
                           >
                             <ExternalLink className="w-4 h-4" />
                             <span className="hidden sm:inline text-xs sm:text-sm">Ver Doc</span>

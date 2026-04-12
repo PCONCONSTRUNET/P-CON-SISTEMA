@@ -461,10 +461,10 @@ const Checkout = () => {
                           <Button
                             size="default"
                             className="w-full h-10 btn-blue text-sm"
-                            onClick={() => window.open(contract.file_path!, '_blank')}
+                            onClick={() => window.open(`/contrato/${contract.id}`, '_blank')}
                           >
                             <Download className="h-4 w-4 mr-2" />
-                            Baixar PDF
+                            Ver Contrato
                           </Button>
                         </motion.div>
                       )}
@@ -1153,10 +1153,10 @@ const Checkout = () => {
                 <div className="pt-4 border-t border-border/30 mt-4">
                   <Button
                     className="w-full btn-blue"
-                    onClick={() => window.open(selectedContract.file_path!, '_blank')}
+                    onClick={() => window.open(`/contrato/${selectedContract.id}`, '_blank')}
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    Baixar Documento
+                    Ver Contrato Completo
                   </Button>
                 </div>
               )}

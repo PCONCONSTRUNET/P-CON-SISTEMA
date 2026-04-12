@@ -423,10 +423,10 @@ const Contracts = () => {
                     size="sm"
                     variant="outline"
                     className="gap-2"
-                    onClick={() => window.open(contract.file_path!, '_blank')}
+                    onClick={() => window.open(`/contrato/${contract.id}`, '_blank')}
                   >
                     <ExternalLink className="w-4 h-4" />
-                    Documento
+                    Ver Contrato
                   </Button>
                 )}
                 <Button
