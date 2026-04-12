@@ -251,22 +251,18 @@ const Checkout = () => {
       const clientName = client?.name || 'Cliente';
       
       const invoiceData = {
-        invoiceNumber: `FAT-${subscription.id.split('-')[0].toUpperCase()}`,
-        date: new Date().toLocaleDateString('pt-BR'),
+        clientName: clientName,
+        clientDocument: client?.document || null,
+        clientEmail: client?.email || '',
+        clientPhone: client?.phone || null,
+        planName: subscription.plan_name,
+        value: Number(subscription.value),
         dueDate: formatBrazilDate(subscription.next_payment),
-        customerName: clientName,
-        customerDocument: client?.document || '',
-        customerEmail: client?.email || '',
-        items: [
-          {
-            description: `Mensalidade - ${subscription.plan_name}`,
-            quantity: 1,
-            price: Number(subscription.value)
-          }
-        ],
-        total: Number(subscription.value),
-        observations: 'Referente ao contrato de prestação de serviços.'
+        qrCodeBase64: '', // QR code vazio por padrão se não gerado
+        pixCopyPaste: 'Gere o PIX no botão "Pagar Agora"',
+        subscriptionId: subscription.id
       };
+
       
       generateInvoicePDF(invoiceData);
       toast.success('Fatura gerada com sucesso!');
