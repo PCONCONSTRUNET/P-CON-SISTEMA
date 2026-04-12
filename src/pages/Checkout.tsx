@@ -828,20 +828,21 @@ const Checkout = () => {
                     className="space-y-6"
                   >
                     <div className="text-center">
-                      <h2 className="text-xl font-heading font-semibold text-foreground mb-2">
+                      <h2 className="text-lg font-heading font-semibold text-foreground mb-1">
                         {selectedSubscription ? selectedSubscription.plan_name : (selectedCharge?.description || 'Cobrança única')}
                       </h2>
-                      <p className="text-2xl font-bold text-foreground mb-1">
+                      <p className="text-xl font-bold text-foreground mb-0.5">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                           selectedSubscription ? Number(selectedSubscription.value) : Number(selectedCharge?.amount || 0)
                         )}
                       </p>
-                      <p className="text-gray-neutral text-sm">
+                      <p className="text-gray-neutral text-xs">
                         Selecione a forma de pagamento
                       </p>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
+
                       <motion.button
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
@@ -876,40 +877,43 @@ const Checkout = () => {
                     className="space-y-4"
                   >
                     {/* Logo maior + título */}
-                    <div className="flex flex-col items-center gap-2">
+                    <div className="flex flex-col items-center gap-1.5">
                       <img
                         src="/images/logo-pcon-white.png"
                         alt="P-CON CONSTRUNET"
-                        className="h-14 object-contain"
+                        className="h-10 object-contain"
                       />
-                      <div className="flex items-center gap-2 mt-1">
-                        <img src={pixIcon} alt="PIX" className="h-5 w-5" />
-                        <h2 className="text-lg font-heading font-semibold text-foreground">
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <img src={pixIcon} alt="PIX" className="h-4 w-4" />
+                        <h2 className="text-base font-heading font-semibold text-foreground">
                           Pague com PIX
                         </h2>
                       </div>
                     </div>
 
+
                     {/* Valor em destaque */}
                     {selectedCharge && (
                       <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Valor a pagar</p>
-                        <p className="text-2xl font-bold text-foreground">
+                        <p className="text-[10px] text-muted-foreground">Valor a pagar</p>
+                        <p className="text-xl font-bold text-foreground">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedCharge.amount)}
                         </p>
                       </div>
+
                     )}
 
                     {/* QR Code com fundo branco para escaneabilidade */}
                     <div className="flex justify-center">
-                      <div className="bg-white p-2.5 rounded-xl">
+                      <div className="bg-white p-2 rounded-xl">
                         <img 
                           src={`data:image/png;base64,${pixData.qrCode}`} 
                           alt="QR Code PIX" 
-                          className="w-36 h-36"
+                          className="w-32 h-32"
                         />
                       </div>
                     </div>
+
 
                     <div className="space-y-2">
                       <p className="text-xs text-gray-neutral text-center">Ou copie o código:</p>
