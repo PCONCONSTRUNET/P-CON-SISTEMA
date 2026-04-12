@@ -24,6 +24,7 @@ import {
   FolderPlus,
   Settings2,
   Send,
+  Barcode,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,6 +41,7 @@ const navItems = [
   { icon: Users, label: 'Clientes', path: '/clients' },
   { icon: CreditCard, label: 'Assinaturas', path: '/subscriptions' },
   { icon: Receipt, label: 'Pagamentos', path: '/payments' },
+  { icon: Barcode, label: 'Emissão DDA', path: '/dda-emissions' },
   { icon: FileSignature, label: 'Contratos', path: '/contracts' },
   { icon: FileText, label: 'Notas Fiscais', path: '/invoices' },
   { icon: WhatsAppIcon, label: 'WhatsApp', path: '/whatsapp' },
