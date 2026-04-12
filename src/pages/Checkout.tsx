@@ -399,11 +399,14 @@ const Checkout = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15 + index * 0.05, duration: 0.5 }}
-                    className="glass-card p-5 sm:p-6"
+                    className="glass-card p-4"
                   >
-                    {/* Contract Header with Status Badge */}
-                    <div className="flex items-start justify-between mb-4">
-                      <Badge className={`px-3 py-1 border rounded-full text-xs font-medium ${
+                    {/* Contract Header with Title and Status Badge */}
+                    <div className="flex items-start sm:items-center justify-between gap-2 mb-3">
+                      <h3 className="text-base sm:text-lg font-heading font-bold text-foreground leading-tight flex-1">
+                        {contract.title}
+                      </h3>
+                      <Badge className={`px-2 py-0.5 border rounded-full text-[10px] font-medium flex-shrink-0 ${
                         contract.status === 'active' 
                           ? 'bg-green-500/20 text-green-400 border-green-500/30' 
                           : 'bg-primary/20 text-primary border-primary/30'
@@ -412,40 +415,32 @@ const Checkout = () => {
                       </Badge>
                     </div>
 
-                    {/* Contract Title */}
-                    <h3 className="text-xl font-heading font-bold text-foreground mb-4">
-                      {contract.title}
-                    </h3>
-
                     {/* Contract Info */}
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(30, 79, 163, 0.2)' }}>
-                          <FileText className="h-4 w-4" style={{ color: '#1E4FA3' }} />
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(30, 79, 163, 0.2)' }}>
+                          <FileText className="h-3.5 w-3.5" style={{ color: '#1E4FA3' }} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-neutral">Contrato</p>
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="text-[10px] text-gray-neutral">Contrato</p>
+                          <p className="text-xs font-medium text-foreground">
                             {contract.id.split('-')[0].toUpperCase()}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(42, 63, 134, 0.2)' }}>
-                          <Calendar className="h-4 w-4" style={{ color: '#2A3F86' }} />
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(42, 63, 134, 0.2)' }}>
+                          <Calendar className="h-3.5 w-3.5" style={{ color: '#2A3F86' }} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-neutral">Data do Contrato</p>
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="text-[10px] text-gray-neutral">Data do Contrato</p>
+                          <p className="text-xs font-medium text-foreground">
                             {formatBrazilDate(contract.created_at)}
                           </p>
                         </div>
                       </div>
                     </div>
-
-                    {/* Divider */}
-                    <div className="h-px bg-border/30 mb-4" />
 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
