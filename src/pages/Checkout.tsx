@@ -619,7 +619,8 @@ const Checkout = () => {
                 {(() => {
                   const activeSub = subscriptions.find(s => s.status === 'active') || subscriptions[0];
                   const activeContract = contracts[0];
-
+                  // Using 'as any' since 'address' is not yet in the generated Database typescript for clients table
+                  const address = (client as any)?.address || 'Endereço não cadastrado';
                   
                   return (
                     <>
@@ -640,7 +641,12 @@ const Checkout = () => {
                       )}
                       
                       <div className="space-y-4">
-
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground mb-1">Endereço</h4>
+                          <p className="text-xs sm:text-sm text-gray-neutral uppercase leading-relaxed">
+                            {address}
+                          </p>
+                        </div>
                         
                         <div>
                           <h4 className="text-sm font-bold text-foreground mb-1">Contrato</h4>
@@ -811,8 +817,7 @@ const Checkout = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="p-2 sm:p-3"
-
+                className="p-5 sm:p-6"
               >
 
                 {/* Select Payment Method */}
@@ -820,24 +825,23 @@ const Checkout = () => {
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-4"
+                    className="space-y-6"
                   >
                     <div className="text-center">
-                      <h2 className="text-lg font-heading font-semibold text-foreground mb-1">
+                      <h2 className="text-xl font-heading font-semibold text-foreground mb-2">
                         {selectedSubscription ? selectedSubscription.plan_name : (selectedCharge?.description || 'Cobrança única')}
                       </h2>
-                      <p className="text-xl font-bold text-foreground mb-0.5">
+                      <p className="text-2xl font-bold text-foreground mb-1">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                           selectedSubscription ? Number(selectedSubscription.value) : Number(selectedCharge?.amount || 0)
                         )}
                       </p>
-                      <p className="text-gray-neutral text-xs">
+                      <p className="text-gray-neutral text-sm">
                         Selecione a forma de pagamento
                       </p>
                     </div>
 
-                    <div className="space-y-2">
-
+                    <div className="space-y-3">
                       <motion.button
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
@@ -871,41 +875,41 @@ const Checkout = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-4"
                   >
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <img src={pixIcon} alt="PIX" className="h-4 w-4" />
-                        <h2 className="text-base font-heading font-semibold text-foreground">
+                    {/* Logo maior + título */}
+                    <div className="flex flex-col items-center gap-2">
+                      <img
+                        src="/images/logo-pcon-white.png"
+                        alt="P-CON CONSTRUNET"
+                        className="h-14 object-contain"
+                      />
+                      <div className="flex items-center gap-2 mt-1">
+                        <img src={pixIcon} alt="PIX" className="h-5 w-5" />
+                        <h2 className="text-lg font-heading font-semibold text-foreground">
                           Pague com PIX
                         </h2>
                       </div>
                     </div>
 
-
-
-
                     {/* Valor em destaque */}
                     {selectedCharge && (
                       <div className="text-center">
-                        <p className="text-[10px] text-muted-foreground">Valor a pagar</p>
-                        <p className="text-xl font-bold text-foreground">
+                        <p className="text-xs text-muted-foreground">Valor a pagar</p>
+                        <p className="text-2xl font-bold text-foreground">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedCharge.amount)}
                         </p>
                       </div>
-
                     )}
 
                     {/* QR Code com fundo branco para escaneabilidade */}
                     <div className="flex justify-center">
-                      <div className="bg-white p-2 rounded-lg">
+                      <div className="bg-white p-2.5 rounded-xl">
                         <img 
                           src={`data:image/png;base64,${pixData.qrCode}`} 
                           alt="QR Code PIX" 
-                          className="w-24 h-24"
+                          className="w-36 h-36"
                         />
                       </div>
                     </div>
-
-
 
                     <div className="space-y-2">
                       <p className="text-xs text-gray-neutral text-center">Ou copie o código:</p>
@@ -925,13 +929,12 @@ const Checkout = () => {
                       </div>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 flex-shrink-0" style={{ color: '#1E4FA3' }} />
-                      <p className="text-[10px] text-foreground/80">
-                        Confirmação automática após o pagamento.
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-3">
+                      <CheckCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#1E4FA3' }} />
+                      <p className="text-xs text-foreground/80">
+                        A confirmação será automática após o pagamento.
                       </p>
                     </div>
-
                   </motion.div>
                 )}
 
@@ -1079,8 +1082,9 @@ const Checkout = () => {
         {/* Contract Content Dialog */}
         {selectedContract && (
           <Dialog open={isContractDialogOpen} onOpenChange={setIsContractDialogOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border/30 pb-4 mb-4">
+            <DialogContent className="max-w-2xl max-h-[70vh] overflow-hidden p-4 sm:p-5">
+              <div className="flex items-center justify-between border-b border-border/30 pb-3 mb-3">
+
                 <div>
                   <h3 className="text-xl font-heading font-bold text-foreground">
                     {selectedContract.title}
@@ -1099,7 +1103,8 @@ const Checkout = () => {
                 </Button>
               </div>
               
-              <div className="overflow-y-auto max-h-[60vh] pr-2">
+              <div className="overflow-y-auto max-h-[45vh] pr-2">
+
                 <div className="prose prose-sm max-w-none text-foreground">
                   <pre className="whitespace-pre-wrap font-sans text-sm text-foreground bg-secondary/20 p-4 rounded-xl border border-border/30">
                     {selectedContract.content}
