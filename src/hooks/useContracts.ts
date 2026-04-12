@@ -125,9 +125,60 @@ export const useContracts = (clientId?: string) => {
     }
   };
 
+  const updateContract = async (
+    id: string,
+    updates: { title?: string; content?: string; file?: File | null }
+  ) => {
+    try {
+      let filePath: string | null = undefined;
+
+      const existingContract = contracts.find(c => c.id === id);
+      if (!existingContract) return null;
+
+      // Handle file update
+      if (updates.file !== undefined) {
+        // If there's an old file, remove it
+        if (existingContract.file_path) {
+          const urlParts = existingContract.file_path.split('/contracts/');
+          if (urlParts[1]) {
+            await supabase.storage.from('contracts').remove([urlParts[1]]);
+          }
+        }
+
+        // Upload new file if provided
+        if (updates.file) {
+          filePath = await uploadFile(updates.file, existingContract.client_id);
+        } else {
+          filePath = null; // Removed file
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('contracts')
+        .update({
+          title: updates.title,
+          content: updates.content,
+          file_path: filePath === undefined ? existingContract.file_path : filePath,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      setContracts(prev => prev.map(c => c.id === id ? data : c));
+      toast.success('Contrato atualizado com sucesso!');
+      return data;
+    } catch (error) {
+      console.error('Error updating contract:', error);
+      toast.error('Erro ao atualizar contrato');
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchContracts();
   }, [clientId]);
 
-  return { contracts, loading, addContract, deleteContract, refetch: fetchContracts };
+  return { contracts, loading, addContract, updateContract, deleteContract, refetch: fetchContracts };
 };

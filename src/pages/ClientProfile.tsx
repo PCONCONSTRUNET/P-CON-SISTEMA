@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
@@ -94,14 +94,80 @@ const ClientProfile = () => {
   const [showPixModal, setShowPixModal] = useState(false);
   
   // Contracts
-  const { contracts, loading: contractsLoading, addContract, deleteContract } = useContracts(id);
+  const { contracts, loading: contractsLoading, addContract, updateContract, deleteContract } = useContracts(id);
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
   const [newContract, setNewContract] = useState({ title: '', content: '' });
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [isCreatingContract, setIsCreatingContract] = useState(false);
+  const [isEditingContract, setIsEditingContract] = useState(false);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAddContract = async () => {
+  // Edit Client State
+  const [isEditClientDialogOpen, setIsEditClientDialogOpen] = useState(false);
+  const [editClientData, setEditClientData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    document: '',
+    status: '',
+  });
+  const [isUpdatingClient, setIsUpdatingClient] = useState(false);
+
+  const openEditClientDialog = () => {
+    if (!client) return;
+    setEditClientData({
+      name: client.name,
+      email: client.email,
+      phone: client.phone || '',
+      document: client.document || '',
+      status: client.status,
+    });
+    setIsEditClientDialogOpen(true);
+  };
+
+  const handleUpdateClient = async () => {
+    if (!id) return;
+    setIsUpdatingClient(true);
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .update({
+          name: editClientData.name,
+          email: editClientData.email,
+          phone: editClientData.phone || null,
+          document: editClientData.document || null,
+          status: editClientData.status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      setClient(data);
+      setIsEditClientDialogOpen(false);
+      toast.success('Informações do cliente atualizadas!');
+    } catch (error) {
+      console.error('Error updating client:', error);
+      toast.error('Erro ao atualizar cliente');
+    } finally {
+      setIsUpdatingClient(false);
+    }
+  };
+
+  const openEditContractDialog = (contract: any) => {
+    setEditingContractId(contract.id);
+    setNewContract({
+      title: contract.title,
+      content: contract.content || '',
+    });
+    setContractFile(null);
+    setIsEditingContract(true);
+    setIsContractDialogOpen(true);
+  };
+
+  const handleSaveContract = async () => {
     if (!newContract.title) {
       toast.error('Por favor, preencha o título do contrato');
       return;
@@ -109,17 +175,25 @@ const ClientProfile = () => {
 
     setIsCreatingContract(true);
     try {
-      const result = await addContract({
-        title: newContract.title,
-        content: newContract.content || undefined,
-        file: contractFile || undefined,
-      });
-
-      if (result) {
-        setNewContract({ title: '', content: '' });
-        setContractFile(null);
-        setIsContractDialogOpen(false);
+      if (isEditingContract && editingContractId) {
+        await updateContract(editingContractId, {
+          title: newContract.title,
+          content: newContract.content || undefined,
+          file: contractFile,
+        });
+      } else {
+        await addContract({
+          title: newContract.title,
+          content: newContract.content || undefined,
+          file: contractFile || undefined,
+        });
       }
+
+      setNewContract({ title: '', content: '' });
+      setContractFile(null);
+      setIsContractDialogOpen(false);
+      setIsEditingContract(false);
+      setEditingContractId(null);
     } finally {
       setIsCreatingContract(false);
     }
@@ -398,8 +472,19 @@ const ClientProfile = () => {
               <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                 <User className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
               </div>
-              <div className="min-w-0">
-                <h2 className="text-lg sm:text-xl font-semibold text-foreground truncate">{client.name}</h2>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-4">
+                  <h2 className="text-lg sm:text-xl font-semibold text-foreground truncate">{client.name}</h2>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 gap-2"
+                    onClick={openEditClientDialog}
+                  >
+                    <Pencil className="w-4 h-4" />
+                    <span className="hidden sm:inline text-xs">Editar Cliente</span>
+                  </Button>
+                </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <StatusBadge status={client.status} />
                   {hasAccess && (
@@ -777,7 +862,15 @@ const ClientProfile = () => {
           <Card className="glass-card border-border/50">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Contratos ({contracts.length})</CardTitle>
-              <Dialog open={isContractDialogOpen} onOpenChange={setIsContractDialogOpen}>
+              <Dialog open={isContractDialogOpen} onOpenChange={(open) => {
+                setIsContractDialogOpen(open);
+                if (!open) {
+                  setIsEditingContract(false);
+                  setEditingContractId(null);
+                  setNewContract({ title: '', content: '' });
+                  setContractFile(null);
+                }
+              }}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gap-2">
                     <Plus className="w-4 h-4" />
@@ -786,9 +879,14 @@ const ClientProfile = () => {
                 </DialogTrigger>
                 <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle className="font-heading text-xl">Novo Contrato</DialogTitle>
+                    <DialogTitle className="font-heading text-xl">
+                      {isEditingContract ? 'Editar Contrato' : 'Novo Contrato'}
+                    </DialogTitle>
                     <DialogDescription>
-                      Adicionar contrato para {client?.name}
+                      {isEditingContract 
+                        ? `Atualizar informações do contrato de ${client?.name}`
+                        : `Adicionar contrato para ${client?.name}`
+                      }
                     </DialogDescription>
                   </DialogHeader>
                   
@@ -849,6 +947,8 @@ const ClientProfile = () => {
                         className="flex-1 border-border/50"
                         onClick={() => {
                           setIsContractDialogOpen(false);
+                          setIsEditingContract(false);
+                          setEditingContractId(null);
                           setNewContract({ title: '', content: '' });
                           setContractFile(null);
                         }}
@@ -858,7 +958,7 @@ const ClientProfile = () => {
                       </Button>
                       <Button 
                         className="flex-1" 
-                        onClick={handleAddContract}
+                        onClick={handleSaveContract}
                         disabled={isCreatingContract}
                       >
                         {isCreatingContract ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Contrato'}
@@ -895,21 +995,30 @@ const ClientProfile = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={contract.status} />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 w-9 p-0 sm:w-auto sm:px-3 gap-2"
+                          onClick={() => openEditContractDialog(contract)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          <span className="hidden sm:inline">Editar</span>
+                        </Button>
                         {contract.file_path && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-2"
+                            className="h-9 w-9 p-0 sm:w-auto sm:px-3 gap-2"
                             onClick={() => window.open(contract.file_path!, '_blank')}
                           >
                             <ExternalLink className="w-4 h-4" />
-                            Ver Documento
+                            <span className="hidden sm:inline text-xs sm:text-sm">Ver Doc</span>
                           </Button>
                         )}
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-destructive hover:text-destructive"
+                          className="h-9 w-9 p-0 text-destructive hover:text-destructive"
                           onClick={() => deleteContract(contract.id)}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1030,24 +1139,94 @@ const ClientProfile = () => {
       </Tabs>
 
       {/* PIX QR Code Modal */}
-      <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
-        <DialogContent className="sm:max-w-md border-primary/20 bg-background/95 backdrop-blur-xl">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Pagamento PIX</DialogTitle>
-            <DialogDescription>Escaneie o QR Code ou copie o código para pagar</DialogDescription>
+      </Dialog>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}>
+        <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Editar Cliente</DialogTitle>
+            <DialogDescription>
+              Atualize os dados básicos do cliente.
+            </DialogDescription>
           </DialogHeader>
-          {pixData && (
-            <PixQRCode
-              qrCode={pixData.qrCode}
-              qrCodeBase64={pixData.qrCodeBase64}
-              ticketUrl={pixData.ticketUrl}
-              expirationDate={pixData.expirationDate}
-              paymentId={pixData.paymentId}
-              amount={pixData.amount}
-              onCheckStatus={handleCheckPixStatus}
-              onPaymentConfirmed={handlePixPaymentConfirmed}
-            />
-          )}
+          
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nome / Razão Social *</label>
+              <Input
+                placeholder="Nome do cliente"
+                value={editClientData.name}
+                onChange={(e) => setEditClientData({ ...editClientData, name: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">E-mail *</label>
+              <Input
+                type="email"
+                placeholder="email@exemplo.com"
+                value={editClientData.email}
+                onChange={(e) => setEditClientData({ ...editClientData, email: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">WhatsApp</label>
+              <Input
+                placeholder="(00) 00000-0000"
+                value={editClientData.phone}
+                onChange={(e) => setEditClientData({ ...editClientData, phone: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">CPF / CNPJ</label>
+              <Input
+                placeholder="000.000.000-00"
+                value={editClientData.document}
+                onChange={(e) => setEditClientData({ ...editClientData, document: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <Select 
+                value={editClientData.status} 
+                onValueChange={(val) => setEditClientData({ ...editClientData, status: val })}
+              >
+                <SelectTrigger className="bg-secondary/50 border-border/50">
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent className="glass-card border-border/50">
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                className="flex-1 border-border/50"
+                onClick={() => setIsEditClientDialogOpen(false)}
+                disabled={isUpdatingClient}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1" 
+                onClick={handleUpdateClient}
+                disabled={isUpdatingClient}
+              >
+                {isUpdatingClient ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Alterações'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
