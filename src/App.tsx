@@ -15,7 +15,6 @@ import Subscriptions from "./pages/Subscriptions";
 import Payments from "./pages/Payments";
 import Invoices from "./pages/Invoices";
 import Notifications from "./pages/Notifications";
-import DDAEmissions from "./pages/DDAEmissions";
 import Contracts from "./pages/Contracts";
 import Referrals from "./pages/Referrals";
 import Implementations from "./pages/Implementations";
@@ -61,7 +60,6 @@ const App = () => (
                 <Route path="/subscriptions" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
                 <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                 <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-                <Route path="/dda-emissions" element={<ProtectedRoute><DDAEmissions /></ProtectedRoute>} />
                  <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                  <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppMessages /></ProtectedRoute>} />
                  <Route path="/whatsapp/lembretes" element={<ProtectedRoute><WhatsAppReminders /></ProtectedRoute>} />

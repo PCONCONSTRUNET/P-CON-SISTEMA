@@ -209,46 +209,9 @@ export function useMercadoPago() {
     }
   };
 
-  const createTicketPayment = async (params: CreatePixPaymentParams): Promise<PixPaymentResult | null> => {
-    setLoading(true);
-    try {
-      console.log('Creating Ticket payment via Mercado Pago:', params);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago?action=create-ticket`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify(params),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        console.error('Error creating Boleto payment:', result.error);
-        toast.error(result.error || 'Erro ao gerar o Boleto');
-        return null;
-      }
-
-      toast.success('Boleto (DDA) gerado com sucesso!');
-      return result;
-    } catch (error: any) {
-      console.error('Error in createTicketPayment:', error);
-      toast.error('Erro ao gerar o Boleto');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return {
     loading,
     createPixPayment,
-    createTicketPayment,
     checkPaymentStatus,
     createPreference,
     createCardPayment,
