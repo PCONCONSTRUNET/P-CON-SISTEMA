@@ -819,6 +819,14 @@ const Checkout = () => {
                 transition={{ duration: 0.2 }}
                 className="p-5 sm:p-6"
               >
+                <div className="flex justify-center mb-6">
+                  <img
+                    src={logo}
+                    alt="Logo"
+                    className="h-10 object-contain brightness-0 invert opacity-90"
+                  />
+                </div>
+
 
                 {/* Select Payment Method */}
                 {paymentStep === 'select' && (
@@ -875,13 +883,7 @@ const Checkout = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-4"
                   >
-                    {/* Logo maior + título */}
                     <div className="flex flex-col items-center gap-2">
-                      <img
-                        src="/images/logo-pcon-white.png"
-                        alt="P-CON CONSTRUNET"
-                        className="h-14 object-contain"
-                      />
                       <div className="flex items-center gap-2 mt-1">
                         <img src={pixIcon} alt="PIX" className="h-5 w-5" />
                         <h2 className="text-lg font-heading font-semibold text-foreground">
