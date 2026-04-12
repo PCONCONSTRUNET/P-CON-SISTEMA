@@ -510,6 +510,13 @@ const Financial = () => {
     const activeSubsValue = subscriptions.filter(s => s.status === 'active').reduce((s, sub) => s + Number(sub.value), 0);
     const avgTicket = paidFiltered.length > 0 ? totalRevenue / paidFiltered.length : 0;
 
+    const revenueSubscriptions = paidFiltered
+      .filter(p => p.subscription_id)
+      .reduce((s, p) => s + Number(p.amount), 0);
+    const revenueSinglePayments = paidFiltered
+      .filter(p => !p.subscription_id)
+      .reduce((s, p) => s + Number(p.amount), 0);
+
     return {
       totalRevenue,
       totalPending,
@@ -520,6 +527,8 @@ const Financial = () => {
       netProfit,
       activeSubsValue,
       avgTicket,
+      revenueSubscriptions,
+      revenueSinglePayments,
       invoicesCount: invoices.length,
       paidCount: paidFiltered.length,
     };
@@ -959,6 +968,22 @@ const Financial = () => {
           value={String(clients.filter(c => c.status === 'active').length)}
           icon={Users}
           color="success"
+        />
+      </div>
+
+      {/* Tertiary KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4 mb-8">
+        <KPICard
+          title="Receita de Assinaturas"
+          value={formatCurrency(kpis.revenueSubscriptions)}
+          icon={CreditCard}
+          color="primary"
+        />
+        <KPICard
+          title="Cobranças Únicas"
+          value={formatCurrency(kpis.revenueSinglePayments)}
+          icon={Package}
+          color="cyan"
         />
       </div>
 
