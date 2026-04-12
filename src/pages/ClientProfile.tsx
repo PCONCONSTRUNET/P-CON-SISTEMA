@@ -156,6 +156,14 @@ const ClientProfile = () => {
     }
   };
 
+  const openNewContractDialog = () => {
+    setIsEditingContract(false);
+    setEditingContractId(null);
+    setNewContract({ title: '', content: '' });
+    setContractFile(null);
+    setIsContractDialogOpen(true);
+  };
+
   const openEditContractDialog = (contract: any) => {
     setEditingContractId(contract.id);
     setNewContract({
@@ -862,111 +870,10 @@ const ClientProfile = () => {
           <Card className="glass-card border-border/50">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Contratos ({contracts.length})</CardTitle>
-              <Dialog open={isContractDialogOpen} onOpenChange={(open) => {
-                setIsContractDialogOpen(open);
-                if (!open) {
-                  setIsEditingContract(false);
-                  setEditingContractId(null);
-                  setNewContract({ title: '', content: '' });
-                  setContractFile(null);
-                }
-              }}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Novo Contrato
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle className="font-heading text-xl">
-                      {isEditingContract ? 'Editar Contrato' : 'Novo Contrato'}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {isEditingContract 
-                        ? `Atualizar informações do contrato de ${client?.name}`
-                        : `Adicionar contrato para ${client?.name}`
-                      }
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="space-y-4 mt-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Título do Contrato *</label>
-                      <Input
-                        placeholder="Ex: Contrato de Prestação de Serviços"
-                        value={newContract.title}
-                        onChange={(e) => setNewContract({ ...newContract, title: e.target.value })}
-                        className="bg-secondary/50 border-border/50"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Documento Assinado (PDF)</label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                          ref={fileInputRef}
-                          onChange={(e) => setContractFile(e.target.files?.[0] || null)}
-                          className="bg-secondary/50 border-border/50"
-                        />
-                        {contractFile && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => {
-                              setContractFile(null);
-                              if (fileInputRef.current) fileInputRef.current.value = '';
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                      {contractFile && (
-                        <p className="text-xs text-muted-foreground">
-                          Arquivo selecionado: {contractFile.name}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Texto do Contrato</label>
-                      <Textarea
-                        placeholder="Digite o conteúdo do contrato aqui..."
-                        value={newContract.content}
-                        onChange={(e) => setNewContract({ ...newContract, content: e.target.value })}
-                        className="bg-secondary/50 border-border/50 min-h-[200px]"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-3 pt-4">
-                      <Button 
-                        variant="outline" 
-                        className="flex-1 border-border/50"
-                        onClick={() => {
-                          setIsContractDialogOpen(false);
-                          setIsEditingContract(false);
-                          setEditingContractId(null);
-                          setNewContract({ title: '', content: '' });
-                          setContractFile(null);
-                        }}
-                        disabled={isCreatingContract}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button 
-                        className="flex-1" 
-                        onClick={handleSaveContract}
-                        disabled={isCreatingContract}
-                      >
-                        {isCreatingContract ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Contrato'}
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button size="sm" className="gap-2" onClick={openNewContractDialog}>
+                <Plus className="w-4 h-4" />
+                Novo Contrato
+              </Button>
             </CardHeader>
             <CardContent>
               {contractsLoading ? (
@@ -1139,6 +1046,107 @@ const ClientProfile = () => {
       </Tabs>
 
       {/* PIX QR Code Modal */}
+      </Dialog>
+
+      {/* Contract Dialog (Moved here for better control) */}
+      <Dialog open={isContractDialogOpen} onOpenChange={(open) => {
+        setIsContractDialogOpen(open);
+        if (!open) {
+          setIsEditingContract(false);
+          setEditingContractId(null);
+          setNewContract({ title: '', content: '' });
+          setContractFile(null);
+        }
+      }}>
+        <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">
+              {isEditingContract ? 'Editar Contrato' : 'Novo Contrato'}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditingContract 
+                ? `Atualizar informações do contrato de ${client?.name}`
+                : `Adicionar contrato para ${client?.name}`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Título do Contrato *</label>
+              <Input
+                placeholder="Ex: Contrato de Prestação de Serviços"
+                value={newContract.title}
+                onChange={(e) => setNewContract({ ...newContract, title: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Documento Assinado (PDF)</label>
+              <div className="flex gap-2">
+                <Input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  ref={fileInputRef}
+                  onChange={(e) => setContractFile(e.target.files?.[0] || null)}
+                  className="bg-secondary/50 border-border/50"
+                />
+                {contractFile && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => {
+                      setContractFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+              {contractFile && (
+                <p className="text-xs text-muted-foreground">
+                  Arquivo selecionado: {contractFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Texto do Contrato</label>
+              <Textarea
+                placeholder="Digite o conteúdo do contrato aqui..."
+                value={newContract.content}
+                onChange={(e) => setNewContract({ ...newContract, content: e.target.value })}
+                className="bg-secondary/50 border-border/50 min-h-[200px]"
+              />
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                className="flex-1 border-border/50"
+                onClick={() => {
+                  setIsContractDialogOpen(false);
+                  setIsEditingContract(false);
+                  setEditingContractId(null);
+                  setNewContract({ title: '', content: '' });
+                  setContractFile(null);
+                }}
+                disabled={isCreatingContract}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1" 
+                onClick={handleSaveContract}
+                disabled={isCreatingContract}
+              >
+                {isCreatingContract ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Contrato'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
       </Dialog>
 
       {/* Edit Client Dialog */}
