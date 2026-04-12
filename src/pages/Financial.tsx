@@ -933,7 +933,7 @@ const Financial = () => {
       </div>
 
       {/* KPI Cards - Row 2 (Metrics & Clients) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         <KPICard
           title="Receita Recorrente (MRR)"
           value={formatCurrency(kpis.activeSubsValue)}
@@ -956,34 +956,6 @@ const Financial = () => {
           value={formatCurrency(kpis.totalPending)}
           icon={Wallet}
           color="warning"
-        />
-      </div>
-
-      {/* KPI Cards - Row 3 (Expenses & Losses) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-        <KPICard
-          title="Gastos no Período"
-          value={formatCurrency(kpis.totalExpenses)}
-          icon={Wallet}
-          color="danger"
-        />
-        <KPICard
-          title="Gastos Pagos"
-          value={formatCurrency(kpis.totalExpensesPaid)}
-          icon={Receipt}
-          color="danger"
-        />
-        <KPICard
-          title="Gastos Pendentes"
-          value={formatCurrency(kpis.totalExpensesPending)}
-          icon={Receipt}
-          color="warning"
-        />
-        <KPICard
-          title="Prejuízo no Período"
-          value={formatCurrency(kpis.totalLost)}
-          icon={TrendingDown}
-          color="danger"
         />
       </div>
 
