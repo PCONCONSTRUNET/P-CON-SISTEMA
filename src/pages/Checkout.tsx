@@ -246,6 +246,36 @@ const Checkout = () => {
     }
   };
 
+  const handleGenerateInvoice = async (subscription: Subscription) => {
+    try {
+      const clientName = client?.name || 'Cliente';
+      
+      const invoiceData = {
+        invoiceNumber: `FAT-${subscription.id.split('-')[0].toUpperCase()}`,
+        date: new Date().toLocaleDateString('pt-BR'),
+        dueDate: formatBrazilDate(subscription.next_payment),
+        customerName: clientName,
+        customerDocument: client?.document || '',
+        customerEmail: client?.email || '',
+        items: [
+          {
+            description: `Mensalidade - ${subscription.plan_name}`,
+            quantity: 1,
+            price: Number(subscription.value)
+          }
+        ],
+        total: Number(subscription.value),
+        observations: 'Referente ao contrato de prestação de serviços.'
+      };
+      
+      generateInvoicePDF(invoiceData);
+      toast.success('Fatura gerada com sucesso!');
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      toast.error('Erro ao gerar fatura');
+    }
+  };
+
   const getStatusConfig = (status: string) => {
     const configs: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
       active: { 
@@ -517,18 +547,32 @@ const Checkout = () => {
                           </div>
                         </div>
 
-                        {/* Pagar agora button */}
-                        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-                          <Button
-                            className="w-full mt-2 h-11 btn-blue text-sm font-bold gap-2"
-                            onClick={() => openPaymentModal(subscription)}
-                            disabled={isProcessing || mpLoading}
-                          >
-                            Pagar Agora
-                            <ArrowRight className="h-4 w-4" />
-                          </Button>
-                        </motion.div>
+                        {/* Action buttons */}
+                        <div className="flex gap-2 mt-2">
+                          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="flex-[2]">
+                            <Button
+                              className="w-full h-11 btn-blue text-sm font-bold gap-2"
+                              onClick={() => openPaymentModal(subscription)}
+                              disabled={isProcessing || mpLoading}
+                            >
+                              Pagar Agora
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </motion.div>
+                          
+                          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="flex-1">
+                            <Button
+                              variant="outline"
+                              className="w-full h-11 border-border/50 bg-secondary/30 hover:bg-secondary/50 text-foreground text-sm font-bold gap-2 px-3"
+                              onClick={() => handleGenerateInvoice(subscription)}
+                            >
+                              <Download className="h-4 w-4" />
+                              <span className="hidden sm:inline">Fatura</span>
+                            </Button>
+                          </motion.div>
+                        </div>
                       </div>
+
                     </motion.div>
                   );
                 })}
