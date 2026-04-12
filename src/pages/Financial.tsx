@@ -946,10 +946,10 @@ const Financial = () => {
           icon={CreditCard}
         />
         <KPICard
-          title="Clientes Ativos"
-          value={String(clients.filter(c => c.status === 'active').length)}
-          icon={Users}
-          color="success"
+          title="Prejuízo no Período"
+          value={formatCurrency(kpis.totalLost)}
+          icon={TrendingDown}
+          color="danger"
         />
         <KPICard
           title="Pendente no Período"
