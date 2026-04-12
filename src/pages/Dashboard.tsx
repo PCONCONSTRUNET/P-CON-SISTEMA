@@ -186,6 +186,14 @@ const Dashboard = () => {
       })
       .reduce((acc, p) => acc + Number(p.amount), 0);
 
+    const totalLost = payments
+      .filter(p => {
+        if (p.status !== 'failed' && p.status !== 'overdue') return false;
+        const subDate = p.due_date ? new Date(p.due_date) : new Date(p.created_at);
+        return isWithinInterval(subDate, { start: monthStart, end: monthEnd });
+      })
+      .reduce((acc, p) => acc + Number(p.amount), 0);
+
     return {
       activeClients,
       inactiveClients,
@@ -200,6 +208,7 @@ const Dashboard = () => {
       momGrowth,
       revenueSubscriptions,
       revenueSinglePayments,
+      totalLost,
       // Combined vencidas = overdue subscriptions + overdue payments
       totalOverdue: overdueSubscriptions + overduePayments,
     };
@@ -337,10 +346,10 @@ const Dashboard = () => {
       {/* Primary Metrics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
         <MetricCard
-          title="Clientes Ativos"
-          value={isLoading ? '...' : metrics.activeClients}
-          icon={Users}
-          variant="success"
+          title="Prejuízo do Mês"
+          value={isLoading ? '...' : formatCurrency(metrics.totalLost)}
+          icon={TrendingDown}
+          variant="danger"
         />
         {/* Revenue card with MoM growth */}
         <div className="glass-card p-4 sm:p-5">
