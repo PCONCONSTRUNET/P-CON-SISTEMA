@@ -619,8 +619,7 @@ const Checkout = () => {
                 {(() => {
                   const activeSub = subscriptions.find(s => s.status === 'active') || subscriptions[0];
                   const activeContract = contracts[0];
-                  // Using 'as any' since 'address' is not yet in the generated Database typescript for clients table
-                  const address = (client as any)?.address || 'Endereço não cadastrado';
+
                   
                   return (
                     <>
@@ -641,12 +640,7 @@ const Checkout = () => {
                       )}
                       
                       <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground mb-1">Endereço</h4>
-                          <p className="text-xs sm:text-sm text-gray-neutral uppercase leading-relaxed">
-                            {address}
-                          </p>
-                        </div>
+
                         
                         <div>
                           <h4 className="text-sm font-bold text-foreground mb-1">Contrato</h4>
