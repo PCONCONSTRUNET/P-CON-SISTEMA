@@ -6,16 +6,18 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  error?: Error;
 }
 
 export class GlobalErrorBoundary extends Component<Props, State> {
   public state: State = {
-    hasError: false
+    hasError: false,
+    error: undefined
   };
 
-  public static getDerivedStateFromError(_: Error): State {
+  public static getDerivedStateFromError(error: Error): State {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true };
+    return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -76,6 +78,25 @@ export class GlobalErrorBoundary extends Component<Props, State> {
           justifyContent: "center"
         }}>
           <h2>Ocorreu um erro no sistema.</h2>
+          <div style={{ 
+            marginTop: "20px", 
+            marginBottom: "20px",
+            padding: "15px", 
+            background: "#1e293b", 
+            borderRadius: "8px",
+            textAlign: "left",
+            fontSize: "12px",
+            color: "#ef4444",
+            maxWidth: "800px",
+            width: "100%",
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all"
+          }}>
+            <strong>{this.state.error?.name}: {this.state.error?.message}</strong>
+            <br/><br/>
+            {this.state.error?.stack}
+          </div>
           <p>Tente limpar o histórico/cache do seu navegador ou clique no botão abaixo.</p>
           <button 
             onClick={() => {
