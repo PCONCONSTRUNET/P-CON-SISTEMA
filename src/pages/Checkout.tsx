@@ -811,7 +811,8 @@ const Checkout = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="p-5 sm:p-6"
+                className="p-2 sm:p-3"
+
               >
 
                 {/* Select Payment Method */}
@@ -819,7 +820,7 @@ const Checkout = () => {
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-6"
+                    className="space-y-4"
                   >
                     <div className="text-center">
                       <h2 className="text-lg font-heading font-semibold text-foreground mb-1">
@@ -870,20 +871,16 @@ const Checkout = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-4"
                   >
-                    {/* Logo maior + título */}
-                    <div className="flex flex-col items-center gap-1.5">
-                      <img
-                        src="/images/logo-pcon-white.png"
-                        alt="P-CON CONSTRUNET"
-                        className="h-10 object-contain"
-                      />
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-1.5 mt-1">
                         <img src={pixIcon} alt="PIX" className="h-4 w-4" />
                         <h2 className="text-base font-heading font-semibold text-foreground">
                           Pague com PIX
                         </h2>
                       </div>
                     </div>
+
+
 
 
                     {/* Valor em destaque */}
@@ -899,14 +896,15 @@ const Checkout = () => {
 
                     {/* QR Code com fundo branco para escaneabilidade */}
                     <div className="flex justify-center">
-                      <div className="bg-white p-2 rounded-xl">
+                      <div className="bg-white p-2 rounded-lg">
                         <img 
                           src={`data:image/png;base64,${pixData.qrCode}`} 
                           alt="QR Code PIX" 
-                          className="w-32 h-32"
+                          className="w-24 h-24"
                         />
                       </div>
                     </div>
+
 
 
                     <div className="space-y-2">
@@ -927,12 +925,13 @@ const Checkout = () => {
                       </div>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-3">
-                      <CheckCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#1E4FA3' }} />
-                      <p className="text-xs text-foreground/80">
-                        A confirmação será automática após o pagamento.
+                    <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 flex-shrink-0" style={{ color: '#1E4FA3' }} />
+                      <p className="text-[10px] text-foreground/80">
+                        Confirmação automática após o pagamento.
                       </p>
                     </div>
+
                   </motion.div>
                 )}
 
