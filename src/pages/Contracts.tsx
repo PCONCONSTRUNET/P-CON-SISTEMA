@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Search, Plus, FileSignature, ExternalLink, Trash2, Loader2, Download, Eye } from 'lucide-react';
+import { Search, Plus, FileSignature, ExternalLink, Trash2, Loader2, Download, Eye, Pencil } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +52,8 @@ const Contracts = () => {
   const [newContract, setNewContract] = useState({ title: '', content: '', clientId: '' });
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { clients } = useClients();
@@ -103,7 +105,19 @@ const Contracts = () => {
     }
   };
 
-  const handleAddContract = async () => {
+  const openEditContractDialog = (contract: Contract) => {
+    setIsEditing(true);
+    setEditingContractId(contract.id);
+    setNewContract({
+      title: contract.title,
+      content: contract.content || '',
+      clientId: contract.client_id
+    });
+    setContractFile(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleSaveContract = async () => {
     if (!newContract.title || !newContract.clientId) {
       toast.error('Preencha o título e selecione um cliente');
       return;
@@ -117,26 +131,49 @@ const Contracts = () => {
         filePath = await uploadFile(contractFile, newContract.clientId);
       }
 
-      const { error } = await supabase
-        .from('contracts')
-        .insert([{
+      if (isEditing && editingContractId) {
+        const updates: any = {
           client_id: newContract.clientId,
           title: newContract.title,
           content: newContract.content || null,
-          file_path: filePath,
-          status: 'active'
-        }]);
+          updated_at: new Date().toISOString()
+        };
 
-      if (error) throw error;
+        if (filePath) {
+          updates.file_path = filePath;
+        }
+
+        const { error } = await supabase
+          .from('contracts')
+          .update(updates)
+          .eq('id', editingContractId);
+
+        if (error) throw error;
+        toast.success('Contrato atualizado com sucesso!');
+      } else {
+        const { error } = await supabase
+          .from('contracts')
+          .insert([{
+            client_id: newContract.clientId,
+            title: newContract.title,
+            content: newContract.content || null,
+            file_path: filePath,
+            status: 'active'
+          }]);
+
+        if (error) throw error;
+        toast.success('Contrato cadastrado com sucesso!');
+      }
       
-      toast.success('Contrato cadastrado com sucesso!');
       setNewContract({ title: '', content: '', clientId: '' });
       setContractFile(null);
       setIsDialogOpen(false);
+      setIsEditing(false);
+      setEditingContractId(null);
       fetchContracts();
     } catch (error) {
-      console.error('Error adding contract:', error);
-      toast.error('Erro ao cadastrar contrato');
+      console.error('Error saving contract:', error);
+      toast.error('Erro ao salvar contrato');
     } finally {
       setIsCreating(false);
     }
@@ -189,18 +226,28 @@ const Contracts = () => {
           />
         </div>
         
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            setIsEditing(false);
+            setEditingContractId(null);
+            setNewContract({ title: '', content: '', clientId: '' });
+            setContractFile(null);
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button size="sm" className="h-10 sm:h-11 gap-2">
+            <Button size="sm" className="h-10 sm:h-11 gap-2" onClick={() => setIsEditing(false)}>
               <Plus className="w-4 h-4" />
               <span>Novo Contrato</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-heading text-xl">Novo Contrato</DialogTitle>
+              <DialogTitle className="font-heading text-xl">
+                {isEditing ? 'Editar Contrato' : 'Novo Contrato'}
+              </DialogTitle>
               <DialogDescription>
-                Adicione um novo contrato para um cliente
+                {isEditing ? 'Atualize as informações do contrato' : 'Adicione um novo contrato para um cliente'}
               </DialogDescription>
             </DialogHeader>
             
@@ -289,7 +336,7 @@ const Contracts = () => {
                 </Button>
                 <Button 
                   className="flex-1" 
-                  onClick={handleAddContract}
+                  onClick={handleSaveContract}
                   disabled={isCreating}
                 >
                   {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}
@@ -382,6 +429,15 @@ const Contracts = () => {
                     Documento
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => openEditContractDialog(contract)}
+                >
+                  <Pencil className="w-4 h-4" />
+                  Editar
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
