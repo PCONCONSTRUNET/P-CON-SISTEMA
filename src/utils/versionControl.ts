@@ -31,7 +31,10 @@ export const initVersionControl = async () => {
         `;
       }
 
-      // 4. Executar limpeza completa
+      // 4. Salvar dados críticos antes da limpeza
+      const adminAuth = localStorage.getItem("pcon_auth");
+
+      // 5. Executar limpeza completa
       console.log("[VersionControl] Iniciando limpeza total...");
       
       localStorage.clear();
@@ -53,10 +56,13 @@ export const initVersionControl = async () => {
         } catch (e) { console.error("Erro SW:", e); }
       }
 
-      // 5. Salvar a nova versão no localStorage
+      // 6. Salvar a nova versão e restaurar dados críticos
       localStorage.setItem(VERSION_KEY, APP_VERSION);
+      if (adminAuth !== null) {
+        localStorage.setItem("pcon_auth", adminAuth);
+      }
 
-      // 6. Forçar reload da página com cache bypass
+      // 7. Forçar reload da página com cache bypass
       console.log("[VersionControl] Limpeza concluída. Forçando recarregamento seguro.");
       
       // Pequeno delay para o usuário ver a mensagem
