@@ -1046,6 +1046,25 @@ const ClientProfile = () => {
       </Tabs>
 
       {/* PIX QR Code Modal */}
+      <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
+        <DialogContent className="sm:max-w-md border-primary/20 bg-background/95 backdrop-blur-xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Pagamento PIX</DialogTitle>
+            <DialogDescription>Escaneie o QR Code ou copie o código para pagar</DialogDescription>
+          </DialogHeader>
+          {pixData && (
+            <PixQRCode
+              qrCode={pixData.qrCode}
+              qrCodeBase64={pixData.qrCodeBase64}
+              ticketUrl={pixData.ticketUrl}
+              expirationDate={pixData.expirationDate}
+              paymentId={pixData.paymentId}
+              amount={pixData.amount}
+              onCheckStatus={handleCheckPixStatus}
+              onPaymentConfirmed={handlePixPaymentConfirmed}
+            />
+          )}
+        </DialogContent>
       </Dialog>
 
       {/* Contract Dialog (Moved here for better control) */}
