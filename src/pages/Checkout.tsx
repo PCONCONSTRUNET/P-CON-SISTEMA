@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useClientAuth } from '@/contexts/ClientAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useMercadoPago } from '@/hooks/useMercadoPago';
@@ -9,31 +9,24 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { formatBrazilDate } from '@/utils/dateUtils';
 import { 
-  Loader2, 
+  ChevronDown, 
+  Rocket, 
   LogOut, 
-  CreditCard, 
-  QrCode, 
+  CheckCircle, 
+  AlertCircle, 
+  Clock, 
+  DollarSign, 
+  ArrowRight, 
   Calendar, 
-  DollarSign,
-  CheckCircle,
-  AlertCircle,
-  Copy,
-  Shield,
-  ArrowRight,
-  X,
-  Clock,
   Receipt,
   FileText,
   Download,
-  MapPin,
+  QrCode,
+  CreditCard,
+  X,
   FileCheck,
-  Rocket,
-  Eye,
-  ChevronDown,
-  ChevronUp
+  Copy
 } from 'lucide-react';
 import logo from '@/assets/logo-pcon-pwa-large.png';
 import pixIcon from '@/assets/pix-icon.svg';
@@ -41,7 +34,7 @@ import mercadoPagoIcon from '@/assets/mercado-pago-icon.png';
 import BlueBackground from '@/components/BlueBackground';
 
 import { generateInvoicePDF } from '@/utils/invoicePdfGenerator';
-import { formatBrazilDate as formatDateBR } from '@/utils/dateUtils';
+import { formatBrazilDate } from '@/utils/dateUtils';
 
 interface Subscription {
   id: string;
@@ -88,10 +81,8 @@ const Checkout = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'select' | 'processing' | 'pix' | 'success' | 'error'>('select');
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
-  const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
-  const [expandedSubscription, setExpandedSubscription] = useState<string | null>(null);
-  const [generatingInvoice, setGeneratingInvoice] = useState<string | null>(null);
-  const [invoiceModalSub, setInvoiceModalSub] = useState<Subscription | null>(null);
+  const [isContractDialogOpen] = useState(false);
+
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -358,313 +349,12 @@ const Checkout = () => {
             </p>
           </motion.div>
 
-          {/* Seu Plano Section */}
-          {(subscriptions.length > 0 || contracts.length > 0) && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12, duration: 0.5 }}
-            >
-              <h2 className="text-xl font-heading font-bold text-foreground mb-4">
-                Seu plano
-              </h2>
-              
-              <div className="glass-card p-5 sm:p-6 rounded-2xl border border-border/50">
-                {(() => {
-                  const activeSub = subscriptions.find(s => s.status === 'active') || subscriptions[0];
-                  const activeContract = contracts[0];
-                  // Using 'as any' since 'address' is not yet in the generated Database typescript for clients table
-                  const address = (client as any)?.address || 'Endereço não cadastrado';
-                  
-                  return (
-                    <>
-                      {activeSub ? (
-                        <>
-                          <div className="inline-block px-3 py-1 mb-3 rounded-full bg-success/20 text-success text-xs font-bold leading-none">
-                            {activeSub.status === 'active' ? 'Normal' : 'Inativo'}
-                          </div>
-                          
-                          <h3 className="text-lg sm:text-lg font-bold text-foreground uppercase mb-5">
-                            {activeSub.plan_name}
-                          </h3>
-                        </>
-                      ) : (
-                         <div className="mb-5">
-                           <p className="text-sm text-muted-foreground">Nenhum plano ativo encontrado.</p>
-                         </div>
-                      )}
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground mb-1">Endereço</h4>
-                          <p className="text-xs sm:text-sm text-gray-neutral uppercase leading-relaxed">
-                            {address}
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground mb-1">Contrato</h4>
-                          <p className="text-xs sm:text-sm text-gray-neutral">
-                            {activeContract 
-                              ? (activeContract.title.match(/\d+/) ? activeContract.title.match(/\d+/)?.[0] : activeContract.title) 
-                              : 'Sem contrato associado'
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Pending Single Charges */}
-          {pendingCharges.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.5 }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Receipt className="h-5 w-5 text-warning" />
-                <h2 className="text-lg font-heading font-semibold text-foreground">
-                  Cobranças Pendentes
-                </h2>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {pendingCharges.map((charge, index) => (
-                  <motion.div
-                    key={charge.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 + index * 0.05, duration: 0.5 }}
-                    className="glass-card p-5 flex flex-col border-l-4 border-warning"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-heading font-semibold text-foreground truncate">
-                          {charge.description || 'Cobrança única'}
-                        </h3>
-                        <p className="text-gray-neutral text-xs mt-0.5">Aguardando pagamento</p>
-                      </div>
-                      <Badge className="bg-warning/20 text-warning border-warning/30 flex items-center gap-1 px-2 py-0.5 border rounded-full text-[10px] flex-shrink-0">
-                        <Clock className="h-3 w-3" />
-                        Pendente
-                      </Badge>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-secondary/30 border border-border/30 mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(30, 79, 163, 0.2)' }}>
-                          <DollarSign className="h-4 w-4" style={{ color: '#1E4FA3' }} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] text-gray-neutral">Valor</p>
-                          <p className="text-lg font-semibold text-foreground">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(charge.amount))}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        size="default"
-                        className="w-full h-10 btn-blue text-sm"
-                        onClick={() => openChargePaymentModal(charge)}
-                        disabled={isProcessing || mpLoading}
-                      >
-                        <span className="flex items-center justify-center gap-2">
-                          Pagar Agora
-                          <ArrowRight className="h-4 w-4" />
-                        </span>
-                      </Button>
-                    </motion.div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Subscriptions Section */}
-          {subscriptions.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-heading font-semibold text-foreground">
-                  Detalhes da fatura
-                </h2>
-              </div>
-              <div className="space-y-4">
-                {subscriptions.map((subscription, index) => {
-                  const isExpanded = expandedSubscription === subscription.id;
-                  const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(subscription.value));
-                  
-                  return (
-                    <motion.div
-                      key={subscription.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + index * 0.06, duration: 0.4 }}
-                      className="glass-card rounded-2xl overflow-hidden"
-                    >
-                      {/* Header bar */}
-                      <div className="bg-primary px-4 py-3 flex items-center justify-between">
-                        <h3 className="text-sm font-heading font-semibold text-primary-foreground">
-                          Detalhes da fatura - {subscription.plan_name}
-                        </h3>
-                      </div>
-
-                      {/* Content */}
-                      <div className="p-4">
-                        {/* Info row: Vencimento | Valor | Status */}
-                        <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 mb-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex-1">
-                              <p className="text-[10px] text-gray-neutral mb-0.5">Vencimento</p>
-                              <p className="text-sm font-bold text-foreground">
-                                {formatBrazilDate(subscription.next_payment)}
-                              </p>
-                            </div>
-                            <div className="w-px h-8 bg-border/30" />
-                            <div className="flex-1 text-center">
-                              <p className="text-[10px] text-gray-neutral mb-0.5">Valor</p>
-                              <p className="text-sm font-bold text-foreground">
-                                {formattedValue}
-                              </p>
-                            </div>
-                            <div className="w-px h-8 bg-border/30" />
-                            <div className="flex-1 text-right">
-                              <p className="text-[10px] text-gray-neutral mb-0.5">Status</p>
-                              <Badge 
-                                className={`${getStatusConfig(subscription.status).className} inline-flex items-center gap-0.5 px-2 py-0.5 border rounded-full text-[10px]`}
-                              >
-                                {getStatusConfig(subscription.status).icon}
-                                {getStatusConfig(subscription.status).label}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Expandable section */}
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.25 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="pt-2 pb-3 space-y-3">
-                                <h4 className="text-sm font-heading font-semibold text-foreground">Lançamentos</h4>
-                                <div className="flex items-center justify-between py-1.5 border-b border-border/20">
-                                  <span className="text-xs text-gray-neutral">Valor original</span>
-                                  <span className="text-xs text-foreground">{formattedValue}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-1.5">
-                                  <span className="text-sm font-bold text-foreground">Total</span>
-                                  <span className="text-sm font-bold text-foreground">{formattedValue}</span>
-                                </div>
-
-                                {/* Ver fatura (gera PDF direto) */}
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (!client || generatingInvoice === subscription.id) return;
-                                    setGeneratingInvoice(subscription.id);
-                                    toast.info('Gerando fatura em PDF...');
-                                    try {
-                                      const pixResult = await createPixPayment({
-                                        amount: Number(subscription.value),
-                                        description: `Pagamento - ${subscription.plan_name}`,
-                                        clientId: client.id,
-                                        clientEmail: client.email,
-                                        clientName: client.name,
-                                        clientDocument: client.document || undefined,
-                                        subscriptionId: subscription.id,
-                                      });
-                                      if (pixResult?.success && pixResult.qrCode) {
-                                        generateInvoicePDF({
-                                          clientName: client.name,
-                                          clientDocument: client.document,
-                                          clientEmail: client.email,
-                                          clientPhone: client.phone,
-                                          planName: subscription.plan_name,
-                                          value: Number(subscription.value),
-                                          dueDate: formatBrazilDate(subscription.next_payment),
-                                          qrCodeBase64: pixResult.qrCodeBase64 || '',
-                                          pixCopyPaste: pixResult.qrCode,
-                                          subscriptionId: subscription.id,
-                                        });
-                                        toast.success('Fatura PDF gerada com sucesso!');
-                                      } else {
-                                        toast.error('Erro ao gerar QR Code para a fatura');
-                                      }
-                                    } catch (err) {
-                                      console.error('Error generating invoice PDF:', err);
-                                      toast.error('Erro ao gerar fatura PDF');
-                                    } finally {
-                                      setGeneratingInvoice(null);
-                                    }
-                                  }}
-                                  disabled={generatingInvoice === subscription.id}
-                                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary/30 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                                >
-                                  {generatingInvoice === subscription.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Download className="h-4 w-4" />
-                                  )}
-                                  {generatingInvoice === subscription.id ? 'Gerando...' : 'Ver fatura'}
-                                </button>
-
-                                {/* Pagar com Pix */}
-                                <motion.button
-                                  whileHover={{ scale: 1.02, y: -2 }}
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={() => openPaymentModal(subscription)}
-                                  disabled={isProcessing || mpLoading}
-                                  className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <img src={pixIcon} alt="Pix" className="w-5 h-5" />
-                                  Pagar com Pix
-                                </motion.button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {/* Toggle button */}
-                        <button
-                          onClick={() => setExpandedSubscription(isExpanded ? null : subscription.id)}
-                          className="w-full mt-1 py-2 rounded-lg border border-border/30 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border/50 transition-colors flex items-center justify-center gap-1"
-                        >
-                          {isExpanded ? (
-                            <>Ver menos <ChevronUp className="h-3.5 w-3.5" /></>
-                          ) : (
-                            <>Ver mais <ChevronDown className="h-3.5 w-3.5" /></>
-                          )}
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Contracts Section - Seu Plano */}
+          {/* Contracts Section */}
           {contracts.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25, duration: 0.5 }}
+              transition={{ delay: 0.12, duration: 0.5 }}
             >
               <div className="flex items-center gap-2 mb-4">
                 <FileCheck className="h-5 w-5 text-primary" />
@@ -678,7 +368,7 @@ const Checkout = () => {
                     key={contract.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05, duration: 0.5 }}
+                    transition={{ delay: 0.15 + index * 0.05, duration: 0.5 }}
                     className="glass-card p-5 sm:p-6"
                   >
                     {/* Contract Header with Status Badge */}
@@ -737,7 +427,6 @@ const Checkout = () => {
                             className="w-full h-10 text-sm"
                             onClick={() => {
                               setSelectedContract(contract);
-                              setIsContractDialogOpen(true);
                             }}
                           >
                             <FileText className="h-4 w-4 mr-2" />
@@ -764,12 +453,223 @@ const Checkout = () => {
             </motion.div>
           )}
 
+          {/* Subscriptions Section */}
+          {subscriptions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-heading font-semibold text-foreground">
+                  Detalhes da fatura
+                </h2>
+              </div>
+              <div className="space-y-4">
+                {subscriptions.map((subscription, index) => {
+                  const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(subscription.value));
+                  
+                  return (
+                    <motion.div
+                      key={subscription.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + index * 0.06, duration: 0.4 }}
+                      className="glass-card rounded-2xl overflow-hidden"
+                    >
+                      {/* Header bar */}
+                      <div className="bg-primary px-4 py-3 flex items-center justify-between">
+                        <h3 className="text-sm font-heading font-semibold text-primary-foreground">
+                          Detalhes da fatura - {subscription.plan_name}
+                        </h3>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-4">
+                        {/* Info row: Vencimento | Valor | Status */}
+                        <div className="rounded-xl border border-border/30 bg-secondary/20 p-3 mb-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="text-[10px] text-gray-neutral mb-0.5">Vencimento</p>
+                              <p className="text-sm font-bold text-foreground">
+                                {formatBrazilDate(subscription.next_payment)}
+                              </p>
+                            </div>
+                            <div className="w-px h-8 bg-border/30" />
+                            <div className="flex-1 text-center">
+                              <p className="text-[10px] text-gray-neutral mb-0.5">Valor</p>
+                              <p className="text-sm font-bold text-foreground">
+                                {formattedValue}
+                              </p>
+                            </div>
+                            <div className="w-px h-8 bg-border/30" />
+                            <div className="flex-1 text-right">
+                              <p className="text-[10px] text-gray-neutral mb-0.5">Status</p>
+                              <Badge 
+                                className={`${getStatusConfig(subscription.status).className} inline-flex items-center gap-0.5 px-2 py-0.5 border rounded-full text-[10px]`}
+                              >
+                                {getStatusConfig(subscription.status).icon}
+                                {getStatusConfig(subscription.status).label}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Pagar agora button */}
+                        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                          <Button
+                            className="w-full mt-2 h-11 btn-blue text-sm font-bold gap-2"
+                            onClick={() => openPaymentModal(subscription)}
+                            disabled={isProcessing || mpLoading}
+                          >
+                            Pagar Agora
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Pending Single Charges */}
+          {pendingCharges.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25, duration: 0.5 }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Receipt className="h-5 w-5 text-warning" />
+                <h2 className="text-lg font-heading font-semibold text-foreground">
+                  Cobranças Pendentes
+                </h2>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {pendingCharges.map((charge, index) => (
+                  <motion.div
+                    key={charge.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 + index * 0.05, duration: 0.5 }}
+                    className="glass-card p-5 flex flex-col border-l-4 border-warning"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-heading font-semibold text-foreground truncate">
+                          {charge.description || 'Cobrança única'}
+                        </h3>
+                        <p className="text-gray-neutral text-xs mt-0.5">Aguardando pagamento</p>
+                      </div>
+                      <Badge className="bg-warning/20 text-warning border-warning/30 flex items-center gap-1 px-2 py-0.5 border rounded-full text-[10px] flex-shrink-0">
+                        <Clock className="h-3 w-3" />
+                        Pendente
+                      </Badge>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-secondary/30 border border-border/30 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(30, 79, 163, 0.2)' }}>
+                          <DollarSign className="h-4 w-4" style={{ color: '#1E4FA3' }} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-gray-neutral">Valor</p>
+                          <p className="text-lg font-semibold text-foreground">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(charge.amount))}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        size="default"
+                        className="w-full h-10 btn-blue text-sm"
+                        onClick={() => openChargePaymentModal(charge)}
+                        disabled={isProcessing || mpLoading}
+                      >
+                        <span className="flex items-center justify-center gap-2">
+                          Pagar Agora
+                          <ArrowRight className="h-4 w-4" />
+                        </span>
+                      </Button>
+                    </motion.div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Seu Plano Section */}
+          {(subscriptions.length > 0 || contracts.length > 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35, duration: 0.5 }}
+            >
+              <h2 className="text-xl font-heading font-bold text-foreground mb-4">
+                Seu plano
+              </h2>
+              
+              <div className="glass-card p-5 sm:p-6 rounded-2xl border border-border/50">
+                {(() => {
+                  const activeSub = subscriptions.find(s => s.status === 'active') || subscriptions[0];
+                  const activeContract = contracts[0];
+                  // Using 'as any' since 'address' is not yet in the generated Database typescript for clients table
+                  const address = (client as any)?.address || 'Endereço não cadastrado';
+                  
+                  return (
+                    <>
+                      {activeSub ? (
+                        <>
+                          <div className="inline-block px-3 py-1 mb-3 rounded-full bg-success/20 text-success text-xs font-bold leading-none">
+                            {activeSub.status === 'active' ? 'Normal' : 'Inativo'}
+                          </div>
+                          
+                          <h3 className="text-lg sm:text-lg font-bold text-foreground uppercase mb-5">
+                            {activeSub.plan_name}
+                          </h3>
+                        </>
+                      ) : (
+                         <div className="mb-5">
+                           <p className="text-sm text-muted-foreground">Nenhum plano ativo encontrado.</p>
+                         </div>
+                      )}
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground mb-1">Endereço</h4>
+                          <p className="text-xs sm:text-sm text-gray-neutral uppercase leading-relaxed">
+                            {address}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground mb-1">Contrato</h4>
+                          <p className="text-xs sm:text-sm text-gray-neutral">
+                            {activeContract 
+                              ? (activeContract.title.match(/\d+/) ? activeContract.title.match(/\d+/)?.[0] : activeContract.title) 
+                              : 'Sem contrato associado'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          )}
+
           {/* Empty State */}
           {subscriptions.length === 0 && pendingCharges.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
               className="glass-card p-10 text-center"
             >
               <AlertCircle className="h-14 w-14 mx-auto text-muted-foreground mb-4" />
@@ -779,6 +679,7 @@ const Checkout = () => {
               </p>
             </motion.div>
           )}
+
         </div>
 
         {/* Payment History */}
