@@ -25,6 +25,15 @@ import {
   AlertTriangle,
   XCircle,
   Info,
+  List,
+  Search,
+  Tag,
+  Globe,
+  Code2,
+  Package,
+  ChevronDown,
+  Clock,
+  CheckCircle,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -76,7 +85,252 @@ const GRADIENT_ID = {
   profit: 'profitGradient',
 };
 
+// ─── Transações Tab Component ─────────────────────────────
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  paid:    { label: 'Pago',      className: 'bg-success/15 text-success border-success/30' },
+  pending: { label: 'Pendente',  className: 'bg-warning/15 text-warning border-warning/30' },
+  failed:  { label: 'Falhou',    className: 'bg-destructive/15 text-destructive border-destructive/30' },
+  overdue: { label: 'Atrasado',  className: 'bg-destructive/15 text-destructive border-destructive/30' },
+};
+
+const TransacoesTab = ({
+  payments,
+  clients,
+  formatCurrency,
+  formatDateForExport: _fmt,
+  periodLabel,
+}: {
+  payments: any[];
+  clients: any[];
+  formatCurrency: (v: number) => string;
+  formatDateForExport: (d: string) => string;
+  periodLabel: string;
+}) => {
+  const [filter, setFilter] = useState<'all' | 'subscription' | 'single'>('all');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'failed'>('all');
+  const [sortDesc, setSortDesc] = useState(true);
+
+  const getClientName = (clientId: string | null) => {
+    if (!clientId) return '—';
+    return clients.find((c: any) => c.id === clientId)?.name || '—';
+  };
+
+  const getPaymentDate = (p: any) =>
+    p.paid_at || p.due_date || p.created_at;
+
+  const processed = useMemo(() => {
+    let list = [...payments];
+
+    if (filter === 'subscription') list = list.filter(p => p.subscription_id);
+    if (filter === 'single')       list = list.filter(p => !p.subscription_id);
+    if (statusFilter !== 'all')    list = list.filter(p => p.status === statusFilter || (statusFilter === 'failed' && p.status === 'overdue'));
+
+    const q = search.toLowerCase().trim();
+    if (q) {
+      list = list.filter(p =>
+        getClientName(p.client_id).toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.payment_method || '').toLowerCase().includes(q)
+      );
+    }
+
+    list.sort((a, b) => {
+      const da = new Date(getPaymentDate(a)).getTime();
+      const db = new Date(getPaymentDate(b)).getTime();
+      return sortDesc ? db - da : da - db;
+    });
+
+    return list;
+  }, [payments, filter, search, statusFilter, sortDesc, clients]);
+
+  const totalRevenue  = processed.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount), 0);
+  const totalPending  = processed.filter(p => p.status === 'pending').reduce((s, p) => s + Number(p.amount), 0);
+  const totalSubs     = processed.filter(p => p.status === 'paid' && p.subscription_id).length;
+  const totalSingles  = processed.filter(p => p.status === 'paid' && !p.subscription_id).length;
+
+  const formatDate = (d: string) => {
+    try { return format(new Date(d), 'dd/MM/yyyy', { locale: ptBR }); }
+    catch { return '—'; }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground mb-1">Receita (período)</p>
+          <p className="text-xl font-bold text-success">{formatCurrency(totalRevenue)}</p>
+          <p className="text-xs text-muted-foreground mt-1">{processed.filter(p => p.status === 'paid').length} pagamentos</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground mb-1">Pendente</p>
+          <p className="text-xl font-bold text-warning">{formatCurrency(totalPending)}</p>
+          <p className="text-xs text-muted-foreground mt-1">{processed.filter(p => p.status === 'pending').length} pendentes</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground mb-1">Assinaturas pagas</p>
+          <p className="text-xl font-bold text-foreground">{totalSubs}</p>
+          <p className="text-xs text-muted-foreground mt-1">renovações no período</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground mb-1">Cobranças Únicas pagas</p>
+          <p className="text-xl font-bold text-foreground">{totalSingles}</p>
+          <p className="text-xs text-muted-foreground mt-1">domínios, sistemas, etc.</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="glass-card p-4 flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar cliente, descrição..."
+            className="pl-9 glass-card border-border/50"
+          />
+        </div>
+
+        {/* Type filter */}
+        <div className="flex items-center gap-1">
+          {([
+            { value: 'all',          label: 'Todos' },
+            { value: 'subscription', label: 'Assinaturas' },
+            { value: 'single',       label: 'Cobranças Únicas' },
+          ] as const).map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setFilter(opt.value)}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
+                filter === opt.value
+                  ? 'bg-primary/20 border-primary/40 text-primary'
+                  : 'glass-card border-border/50 text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Status filter */}
+        <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+          <SelectTrigger className="w-[130px] glass-card border-border/50 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="paid">Pago</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="failed">Falhou/Atrasado</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Sort */}
+        <button
+          onClick={() => setSortDesc(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium glass-card border border-border/50 text-muted-foreground hover:text-foreground transition-all"
+        >
+          <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', !sortDesc && 'rotate-180')} />
+          {sortDesc ? 'Mais recentes' : 'Mais antigos'}
+        </button>
+
+        <span className="ml-auto text-xs text-muted-foreground">{processed.length} transação(ões)</span>
+      </div>
+
+      {/* List */}
+      {processed.length === 0 ? (
+        <div className="glass-card p-12 text-center text-muted-foreground">
+          <List className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>Nenhuma transação encontrada para os filtros selecionados.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {processed.map((p: any) => {
+            const isSubscription = !!p.subscription_id;
+            const statusCfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.failed;
+            const clientName = getClientName(p.client_id);
+            const dateStr = formatDate(getPaymentDate(p));
+
+            return (
+              <div
+                key={p.id}
+                className="glass-card glass-card-hover p-4 flex flex-col sm:flex-row sm:items-center gap-3 group"
+              >
+                {/* Type icon */}
+                <div className={cn(
+                  'p-2 rounded-xl shrink-0',
+                  isSubscription ? 'bg-primary/15' : 'bg-cyan-500/15'
+                )}>
+                  {isSubscription
+                    ? <CreditCard className="w-4 h-4 text-primary" />
+                    : <Package className="w-4 h-4 text-cyan-400" />
+                  }
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                    <span className="font-semibold text-foreground text-sm truncate">{clientName}</span>
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded-full border font-medium',
+                      isSubscription ? 'bg-primary/10 text-primary border-primary/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                    )}>
+                      {isSubscription ? 'Assinatura' : 'Cobrança Única'}
+                    </span>
+                    <span className={cn('text-xs px-2 py-0.5 rounded-full border', statusCfg.className)}>
+                      {statusCfg.label}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {p.description || (isSubscription ? 'Renovação de assinatura' : 'Cobrança avulsa')}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {dateStr}
+                    </span>
+                    {p.payment_method && (
+                      <span className="flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
+                        {p.payment_method.toUpperCase() === 'PIX' ? 'PIX'
+                          : p.payment_method.toUpperCase() === 'CREDIT_CARD' ? 'Cartão de Crédito'
+                          : p.payment_method}
+                      </span>
+                    )}
+                    {p.status === 'paid' && p.paid_at && (
+                      <span className="flex items-center gap-1 text-success">
+                        <CheckCircle className="w-3 h-3" />
+                        Pago em {formatDate(p.paid_at)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="shrink-0 text-right">
+                  <p className={cn(
+                    'text-lg font-bold font-heading',
+                    p.status === 'paid' ? 'text-success' :
+                    p.status === 'pending' ? 'text-warning' :
+                    'text-destructive'
+                  )}>
+                    {formatCurrency(Number(p.amount))}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Financial = () => {
+
   const { clients, subscriptions, payments, invoices, loadingPayments } = useGlobalData();
   const { expenses } = useExpenses();
   const [period, setPeriod] = useState('month');
@@ -726,6 +980,10 @@ const Financial = () => {
           <TabsTrigger value="methods" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
             Métodos
           </TabsTrigger>
+          <TabsTrigger value="transacoes" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary gap-1.5">
+            <List className="w-4 h-4" />
+            Transações
+          </TabsTrigger>
           <TabsTrigger value="prolabore" className="data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 gap-1.5">
             <Banknote className="w-4 h-4" />
             Pro Labore
@@ -1053,6 +1311,17 @@ const Financial = () => {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        {/* ─── Transações Tab ─────────────────────────────────── */}
+        <TabsContent value="transacoes">
+          <TransacoesTab
+            payments={filteredPayments}
+            clients={clients}
+            formatCurrency={formatCurrency}
+            formatDateForExport={formatDateForExport}
+            periodLabel={periodLabel}
+          />
         </TabsContent>
 
         {/* ─── Pro Labore Tab ─────────────────────────────────── */}
