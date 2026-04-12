@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { safeStorage } from '../utils/storage';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  isLoading: boolean;
   user: { username: string } | null;
   login: (username: string, password: string) => boolean;
   logout: () => void;
@@ -17,26 +17,26 @@ const VALID_CREDENTIALS = {
 
 const AUTH_KEY = 'pcon_auth';
 
+const readAuthFromStorage = (): boolean => {
+  try {
+    const val = localStorage.getItem(AUTH_KEY);
+    return val === 'true' || val === JSON.stringify(true);
+  } catch {
+    return false;
+  }
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    // Validação simples: o valor deve ser exatamente booleano true se salvo como JSON
-    return safeStorage.getItem<boolean>(AUTH_KEY, (val) => typeof val === 'boolean') === true;
-  });
-
-  const [user, setUser] = useState<{ username: string } | null>(() => {
-    const isAuth = safeStorage.getItem<boolean>(AUTH_KEY, (val) => typeof val === 'boolean') === true;
-    return isAuth ? { username: 'admin' } : null;
-  });
-
-  useEffect(() => {
-    // Sync logic if needed
-  }, []);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => readAuthFromStorage());
+  const [user, setUser] = useState<{ username: string } | null>(() =>
+    readAuthFromStorage() ? { username: 'admin' } : null
+  );
 
   const login = (username: string, password: string): boolean => {
     if (username === VALID_CREDENTIALS.username && password === VALID_CREDENTIALS.password) {
       setIsAuthenticated(true);
       setUser({ username });
-      safeStorage.setItem(AUTH_KEY, true);
+      try { localStorage.setItem(AUTH_KEY, JSON.stringify(true)); } catch {}
       return true;
     }
     return false;
@@ -45,11 +45,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setIsAuthenticated(false);
     setUser(null);
-    safeStorage.removeItem(AUTH_KEY);
+    try { localStorage.removeItem(AUTH_KEY); } catch {}
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading: false, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -62,4 +62,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

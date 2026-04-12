@@ -9,14 +9,12 @@ const VERSION_KEY = "app_version";
 
 export const initVersionControl = async () => {
   try {
-    // 1. Verificar versão atual
     const savedVersion = localStorage.getItem(VERSION_KEY);
 
-    // 2. Comparar com a versão atual do app
     if (savedVersion !== APP_VERSION) {
       console.warn(`[VersionControl] Nova versão detectada: ${savedVersion || 'Nenhuma'} -> ${APP_VERSION}`);
 
-      // 3. UX: Exibir mensagem de atualização
+      // UX: Exibir mensagem de atualização
       const root = document.getElementById("root");
       if (root) {
         root.innerHTML = `
@@ -31,16 +29,13 @@ export const initVersionControl = async () => {
         `;
       }
 
-      // 4. Salvar dados críticos antes da limpeza
-      const adminAuth = localStorage.getItem("pcon_auth");
+      // Salvar TODOS os dados críticos antes da limpeza
+      const keysToPreserve: Record<string, string | null> = {
+        'pcon_auth': localStorage.getItem('pcon_auth'),
+        'pcon_client_auth': localStorage.getItem('pcon_client_auth'),
+      };
 
-      // 5. Executar limpeza completa
-      console.log("[VersionControl] Iniciando limpeza total...");
-      
-      localStorage.clear();
-      sessionStorage.clear();
-
-      // Limpar todos os caches do navegador
+      // Limpeza completa de cache e service workers
       if ("caches" in window) {
         try {
           const keys = await caches.keys();
@@ -48,24 +43,26 @@ export const initVersionControl = async () => {
         } catch (e) { console.error("Erro caches:", e); }
       }
 
-      // Desregistrar Service Workers (Garantia extra)
       if ("serviceWorker" in navigator) {
         try {
           const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map(registration => registration.unregister()));
+          await Promise.all(registrations.map(r => r.unregister()));
         } catch (e) { console.error("Erro SW:", e); }
       }
 
-      // 6. Salvar a nova versão e restaurar dados críticos
+      // Limpar localStorage (sem sessionStorage para preservar flags de reload)
+      localStorage.clear();
+
+      // Restaurar dados críticos + salvar nova versão
       localStorage.setItem(VERSION_KEY, APP_VERSION);
-      if (adminAuth !== null) {
-        localStorage.setItem("pcon_auth", adminAuth);
+      for (const [key, value] of Object.entries(keysToPreserve)) {
+        if (value !== null) {
+          localStorage.setItem(key, value);
+        }
       }
 
-      // 7. Forçar reload da página com cache bypass
       console.log("[VersionControl] Limpeza concluída. Forçando recarregamento seguro.");
-      
-      // Pequeno delay para o usuário ver a mensagem
+
       setTimeout(() => {
         const url = new URL(window.location.href);
         url.searchParams.set("v", Date.now().toString());
@@ -74,11 +71,11 @@ export const initVersionControl = async () => {
       }, 1000);
     }
   } catch (error) {
-    console.error("[VersionControl] Erro crítico no sistema de versão:", error);
-    // Em caso de erro, garantimos que a versão seja salva para evitar loops de erro caso seja possível
+    console.error("[VersionControl] Erro crítico:", error);
     try { localStorage.setItem(VERSION_KEY, APP_VERSION); } catch (e) {}
   }
 };
+
 
 /**
  * Proteção extra contra erros de carregamento de recursos (ChunkLoadError).
