@@ -562,7 +562,7 @@ const Checkout = () => {
                               onClick={() => handleGenerateInvoice(subscription)}
                             >
                               <Download className="h-4 w-4" />
-                              <span className="hidden sm:inline">Fatura</span>
+                              <span className="text-xs">Baixar PDF</span>
                             </Button>
                           </motion.div>
                         </div>
