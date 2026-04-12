@@ -902,8 +902,8 @@ const Financial = () => {
         </div>
       </div>
 
-      {/* KPI Cards - Main */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+      {/* KPI Cards - Row 1 (Revenue & Profit) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <KPICard
           title="Receita no Período"
           value={formatCurrency(kpis.totalRevenue)}
@@ -911,10 +911,16 @@ const Financial = () => {
           color="success"
         />
         <KPICard
-          title="Gastos no Período"
-          value={formatCurrency(kpis.totalExpenses)}
-          icon={Wallet}
-          color="danger"
+          title="Receita de Assinaturas"
+          value={formatCurrency(kpis.revenueSubscriptions)}
+          icon={CreditCard}
+          color="primary"
+        />
+        <KPICard
+          title="Cobranças Únicas"
+          value={formatCurrency(kpis.revenueSinglePayments)}
+          icon={Package}
+          color="cyan"
         />
         <KPICard
           title="Lucro Real"
@@ -924,27 +930,42 @@ const Financial = () => {
           trend={kpis.netProfit >= 0 ? 'up' : 'down'}
           trendValue={kpis.totalRevenue > 0 ? `${((kpis.netProfit / kpis.totalRevenue) * 100).toFixed(0)}%` : '0%'}
         />
+      </div>
+
+      {/* KPI Cards - Row 2 (Metrics & Clients) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <KPICard
+          title="Receita Recorrente (MRR)"
+          value={formatCurrency(kpis.activeSubsValue)}
+          icon={TrendingUp}
+          color="primary"
+        />
+        <KPICard
+          title="Ticket Médio"
+          value={formatCurrency(kpis.avgTicket)}
+          icon={CreditCard}
+        />
+        <KPICard
+          title="Clientes Ativos"
+          value={String(clients.filter(c => c.status === 'active').length)}
+          icon={Users}
+          color="success"
+        />
         <KPICard
           title="Pendente no Período"
           value={formatCurrency(kpis.totalPending)}
           icon={Wallet}
           color="warning"
         />
-        <KPICard
-          title="Prejuízo no Período"
-          value={formatCurrency(kpis.totalLost)}
-          icon={TrendingDown}
-          color="danger"
-        />
       </div>
 
-      {/* Secondary KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
+      {/* KPI Cards - Row 3 (Expenses & Losses) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         <KPICard
-          title="Receita Recorrente (MRR)"
-          value={formatCurrency(kpis.activeSubsValue)}
-          icon={TrendingUp}
-          color="primary"
+          title="Gastos no Período"
+          value={formatCurrency(kpis.totalExpenses)}
+          icon={Wallet}
+          color="danger"
         />
         <KPICard
           title="Gastos Pagos"
@@ -959,31 +980,10 @@ const Financial = () => {
           color="warning"
         />
         <KPICard
-          title="Ticket Médio"
-          value={formatCurrency(kpis.avgTicket)}
-          icon={CreditCard}
-        />
-        <KPICard
-          title="Clientes Ativos"
-          value={String(clients.filter(c => c.status === 'active').length)}
-          icon={Users}
-          color="success"
-        />
-      </div>
-
-      {/* Tertiary KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4 mb-8">
-        <KPICard
-          title="Receita de Assinaturas"
-          value={formatCurrency(kpis.revenueSubscriptions)}
-          icon={CreditCard}
-          color="primary"
-        />
-        <KPICard
-          title="Cobranças Únicas"
-          value={formatCurrency(kpis.revenueSinglePayments)}
-          icon={Package}
-          color="cyan"
+          title="Prejuízo no Período"
+          value={formatCurrency(kpis.totalLost)}
+          icon={TrendingDown}
+          color="danger"
         />
       </div>
 

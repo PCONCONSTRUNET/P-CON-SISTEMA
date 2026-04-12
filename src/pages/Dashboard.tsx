@@ -169,6 +169,23 @@ const Dashboard = () => {
       ? ((monthlyRevenue - prevMonthRevenue) / prevMonthRevenue) * 100
       : null;
 
+    // Split revenue by type
+    const revenueSubscriptions = payments
+      .filter(p => {
+        if (p.status !== 'paid' || !p.subscription_id) return false;
+        const paidDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
+        return isWithinInterval(paidDate, { start: monthStart, end: monthEnd });
+      })
+      .reduce((acc, p) => acc + Number(p.amount), 0);
+
+    const revenueSinglePayments = payments
+      .filter(p => {
+        if (p.status !== 'paid' || p.subscription_id) return false;
+        const paidDate = p.paid_at ? new Date(p.paid_at) : new Date(p.created_at);
+        return isWithinInterval(paidDate, { start: monthStart, end: monthEnd });
+      })
+      .reduce((acc, p) => acc + Number(p.amount), 0);
+
     return {
       activeClients,
       inactiveClients,
@@ -181,6 +198,8 @@ const Dashboard = () => {
       monthlyRevenue,
       prevMonthRevenue,
       momGrowth,
+      revenueSubscriptions,
+      revenueSinglePayments,
       // Combined vencidas = overdue subscriptions + overdue payments
       totalOverdue: overdueSubscriptions + overduePayments,
     };
@@ -365,7 +384,7 @@ const Dashboard = () => {
       </div>
 
       {/* Secondary Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
         <MetricCard
           title="Total Clientes"
           value={isLoading ? '...' : metrics.totalClients}
@@ -388,6 +407,22 @@ const Dashboard = () => {
           value={isLoading ? '...' : metrics.pendingPayments}
           icon={TrendingUp}
           variant="warning"
+        />
+      </div>
+
+      {/* Financial Split Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
+        <MetricCard
+          title="De Assinaturas"
+          value={isLoading ? '...' : formatCurrency(metrics.revenueSubscriptions)}
+          icon={CreditCard}
+          variant="primary"
+        />
+        <MetricCard
+          title="Cobranças Únicas"
+          value={isLoading ? '...' : formatCurrency(metrics.revenueSinglePayments)}
+          icon={Package}
+          variant="success"
         />
         {/* Pro Labore card */}
         {(() => {
