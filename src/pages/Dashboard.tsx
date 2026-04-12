@@ -14,6 +14,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Percent,
+  CreditCard,
+  Package,
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, isWithinInterval, isPast, startOfDay, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

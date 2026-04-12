@@ -31,12 +31,20 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     if (reloadCount < 2) {
       sessionStorage.setItem('react_crash_reload', (reloadCount + 1).toString());
       
+      // Preserve auth
+      const adminAuth = localStorage.getItem('pcon_auth');
+      const clientAuth = localStorage.getItem('pcon_client_auth');
+
       // THE CURE: The old database tokens/states are crashing the app.
       // We must completely wipe all client-side storage to act like a virgin browser.
       localStorage.clear();
       sessionStorage.clear(); // We cleared the crash count too, so we set it back.
       sessionStorage.setItem('react_crash_reload', (reloadCount + 1).toString());
       
+      // Restore auth
+      if (adminAuth) localStorage.setItem('pcon_auth', adminAuth);
+      if (clientAuth) localStorage.setItem('pcon_client_auth', clientAuth);
+
       if (isChunkError) {
          console.warn("ChunkLoadError Detectado. Matando SW e forcando recarregamento pela rede...");
          if ('serviceWorker' in navigator) {
