@@ -427,7 +427,7 @@ const Dashboard = () => {
           title="De Assinaturas"
           value={isLoading ? '...' : formatCurrency(metrics.revenueSubscriptions)}
           icon={CreditCard}
-          variant="primary"
+          variant="default"
         />
         <MetricCard
           title="Cobranças Únicas"
