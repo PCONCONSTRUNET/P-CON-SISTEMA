@@ -53,11 +53,7 @@ const handler = async (req: Request): Promise<Response> => {
        buttonUrl 
      }: SendMessageRequest = await req.json();
 
-    let apiToken = Deno.env.get("BTZAP_API_KEY");
-
-    if (type === 'broadcast') {
-      apiToken = "b3c88133-57e0-44cb-96e6-f3f3cadba40b";
-    }
+    const apiToken = Deno.env.get("BTZAP_API_KEY");
 
     if (!apiToken) {
       console.error("UAZAPI token not configured");
