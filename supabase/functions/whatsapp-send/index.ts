@@ -1,6 +1,10 @@
+// @ts-ignore - Ignorando erro do TS local (Deno vs Node)
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// @ts-ignore
+declare const Deno: any;
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -34,16 +38,6 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const apiToken = Deno.env.get("BTZAP_API_KEY");
-
-    if (!apiToken) {
-      console.error("UAZAPI token not configured");
-      return new Response(
-        JSON.stringify({ success: false, error: "UAZAPI não configurado" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
      const { 
        phone, 
        message, 
@@ -58,6 +52,20 @@ const handler = async (req: Request): Promise<Response> => {
        buttonText, 
        buttonUrl 
      }: SendMessageRequest = await req.json();
+
+    let apiToken = Deno.env.get("BTZAP_API_KEY");
+
+    if (type === 'broadcast') {
+      apiToken = "b3c88133-57e0-44cb-96e6-f3f3cadba40b";
+    }
+
+    if (!apiToken) {
+      console.error("UAZAPI token not configured");
+      return new Response(
+        JSON.stringify({ success: false, error: "UAZAPI não configurado" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     if (!phone || !message) {
       return new Response(
@@ -300,10 +308,11 @@ const handler = async (req: Request): Promise<Response> => {
       JSON.stringify({ success: messageStatus === "sent", data: result }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error("Error in whatsapp-send function:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error?.message || String(error) }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
