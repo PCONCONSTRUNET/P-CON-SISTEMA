@@ -18,9 +18,9 @@ interface CreatePixPaymentParams {
 interface PixPaymentResult {
   success: boolean;
   paymentId?: string;
-  qrCode?: string;       // copyPaste (código copia e cola)
-  qrCodeBase64?: string; // imagem base64 completa com prefixo data:image/png;base64,
-  qrcodeUrl?: string;    // URL da imagem do QR code (fallback)
+  qrCode?: string;        // copyPaste (código copia e cola PIX)
+  qrCodeBase64?: string;  // imagem base64 (já com prefixo data:image/png;base64,)
+  qrcodeUrl?: string;     // URL da imagem QR code (fallback)
   expirationDate?: string;
   error?: string;
 }
@@ -39,27 +39,34 @@ export function useMisticPay() {
   const createPixPayment = async (params: CreatePixPaymentParams): Promise<PixPaymentResult | null> => {
     setLoading(true);
     try {
-      console.log('Creating PIX payment via Mistic Pay:', params);
+      console.log('[useMisticPay] createPixPayment called with:', params);
 
-      // Usa supabase.functions.invoke para garantir autenticação correta
+      // Passa _action no body para evitar header customizado que causaria falha CORS
       const { data, error } = await supabase.functions.invoke('mistic-pay', {
-        body: params,
-        headers: { 'x-action': 'create-pix' },
+        body: { ...params, _action: 'create-pix' },
       });
 
       if (error) {
-        console.error('Error invoking mistic-pay function:', error);
-        toast.error(error.message || 'Erro ao criar pagamento PIX');
+        console.error('[useMisticPay] Function invoke error:', error);
+        // Tenta extrair mensagem do contexto do erro
+        let msg = 'Erro ao criar pagamento PIX';
+        try {
+          const ctx = await (error as any).context?.json?.();
+          msg = ctx?.error || error.message || msg;
+        } catch (_) {
+          msg = error.message || msg;
+        }
+        toast.error(msg);
         return null;
       }
 
       if (!data || data.error) {
-        console.error('Mistic Pay function returned error:', data?.error);
+        console.error('[useMisticPay] Data error:', data?.error);
         toast.error(data?.error || 'Erro ao criar pagamento PIX');
         return null;
       }
 
-      console.log('PIX payment created:', {
+      console.log('[useMisticPay] PIX created:', {
         paymentId: data.paymentId,
         hasQrCode: !!data.qrCode,
         hasBase64: !!data.qrCodeBase64,
@@ -68,8 +75,8 @@ export function useMisticPay() {
 
       toast.success('QR Code PIX gerado com sucesso!');
       return data as PixPaymentResult;
-    } catch (error: any) {
-      console.error('Error in createPixPayment:', error);
+    } catch (err: any) {
+      console.error('[useMisticPay] Unexpected error:', err);
       toast.error('Erro ao criar pagamento PIX');
       return null;
     } finally {
@@ -80,30 +87,20 @@ export function useMisticPay() {
   const checkPaymentStatus = async (paymentId: string): Promise<PaymentStatusResult | null> => {
     try {
       const { data, error } = await supabase.functions.invoke('mistic-pay', {
-        body: { paymentId },
-        headers: { 'x-action': 'check-status' },
+        body: { _action: 'check-status', paymentId },
       });
 
-      if (error) {
-        console.error('Error checking payment status:', error);
-        return null;
-      }
-
-      if (!data || data.error) {
-        console.error('Status check returned error:', data?.error);
+      if (error || !data || data.error) {
+        console.error('[useMisticPay] checkPaymentStatus error:', error || data?.error);
         return null;
       }
 
       return data as PaymentStatusResult;
-    } catch (error: any) {
-      console.error('Error in checkPaymentStatus:', error);
+    } catch (err: any) {
+      console.error('[useMisticPay] checkPaymentStatus unexpected error:', err);
       return null;
     }
   };
 
-  return {
-    loading,
-    createPixPayment,
-    checkPaymentStatus,
-  };
+  return { loading, createPixPayment, checkPaymentStatus };
 }
