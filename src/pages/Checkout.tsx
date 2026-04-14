@@ -78,7 +78,7 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'CREDIT_CARD' | null>(null);
-  const [pixData, setPixData] = useState<{ qrCode: string; copyPaste: string } | null>(null);
+  const [pixData, setPixData] = useState<{ qrCode: string; copyPaste: string; qrcodeUrl?: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'select' | 'processing' | 'pix' | 'success' | 'error'>('select');
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
@@ -223,9 +223,12 @@ const Checkout = () => {
       });
 
       if (pixResult?.success && pixResult.qrCode) {
+        // qrCodeBase64 já vem com prefixo 'data:image/png;base64,' da Mistic Pay
+        // qrCode = copyPaste (código copia e cola)
         setPixData({
-          qrCode: pixResult.qrCodeBase64 || '',
-          copyPaste: pixResult.qrCode,
+          qrCode: pixResult.qrCodeBase64 || '',   // base64 completo com prefixo
+          copyPaste: pixResult.qrCode,             // código copia e cola
+          qrcodeUrl: (pixResult as any).qrcodeUrl || undefined, // URL da imagem como fallback
         });
         setPaymentStep('pix');
       } else {
@@ -961,12 +964,19 @@ const Checkout = () => {
                     )}
 
                     {/* QR Code com fundo branco para escaneabilidade */}
+                    {/* qrCode já vem com prefixo data:image/png;base64, da Mistic Pay */}
                     <div className="flex justify-center">
                       <div className="bg-white p-2.5 rounded-xl">
                         <img 
-                          src={`data:image/png;base64,${pixData.qrCode}`} 
+                          src={pixData.qrCode || pixData.qrcodeUrl || ''} 
                           alt="QR Code PIX" 
                           className="w-36 h-36"
+                          onError={(e) => {
+                            // fallback para qrcodeUrl se base64 falhar
+                            if (pixData.qrcodeUrl && e.currentTarget.src !== pixData.qrcodeUrl) {
+                              e.currentTarget.src = pixData.qrcodeUrl;
+                            }
+                          }}
                         />
                       </div>
                     </div>
