@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useClientAuth } from '@/contexts/ClientAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useMercadoPago } from '@/hooks/useMercadoPago';
+import { useMisticPay } from '@/hooks/useMisticPay';
 import { useContracts, Contract } from '@/hooks/useContracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import logo from '@/assets/logo-pcon-pwa-large.png';
 import pixIcon from '@/assets/pix-icon.svg';
-import mercadoPagoIcon from '@/assets/mercado-pago-icon.png';
+
 import BlueBackground from '@/components/BlueBackground';
 
 import { generateInvoicePDF } from '@/utils/invoicePdfGenerator';
@@ -65,7 +65,7 @@ interface Payment {
 const Checkout = () => {
   const { client, isAuthenticated, isLoading: authLoading, logout } = useClientAuth();
   const navigate = useNavigate();
-  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useMercadoPago();
+  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useMisticPay();
   const { contracts, loading: contractsLoading } = useContracts(client?.id);
   
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -211,7 +211,7 @@ const Checkout = () => {
     setPixData(null);
 
     try {
-      // Criar pagamento PIX via Mercado Pago
+      // Criar pagamento PIX via Mistic Pay
       const pixResult = await createPixPayment({
         amount: paymentValue,
         description: paymentDescription,

@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.email-billing-reminder]
 verify_jwt = false
+
+[functions.mistic-pay]
+verify_jwt = false
+
+[functions.mistic-webhook]
+verify_jwt = false
