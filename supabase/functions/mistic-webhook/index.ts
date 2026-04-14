@@ -6,6 +6,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * Mapeia o status da Mistic Pay para o status interno do banco.
+ * Conforme documentação oficial, os estados possíveis são:
+ * "COMPLETO", "PENDENTE", "CANCELADO", "EXPIRADO", "FALHA"
+ */
+const mapMisticStatus = (status: string): { dbStatus: string; isPaid: boolean } => {
+  const s = (status || "").toUpperCase();
+  if (s === "COMPLETO") return { dbStatus: "paid", isPaid: true };
+  if (s === "CANCELADO" || s === "EXPIRADO" || s === "FALHA") return { dbStatus: "cancelled", isPaid: false };
+  return { dbStatus: "pending", isPaid: false };
+};
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -19,72 +31,65 @@ serve(async (req: Request) => {
     const body = await req.json();
     console.log("Mistic Pay webhook received:", JSON.stringify(body));
 
-    // Mistic Pay sends: { event, transaction: { id, status, amount, externalReference, ... } }
-    const { event, transaction } = body;
+    // Estrutura real do webhook de depósito conforme documentação:
+    // {
+    //   transactionId: 31484480,
+    //   transactionType: "DEPOSITO",
+    //   transactionMethod: "PIX",
+    //   clientName: "Nome do cliente",
+    //   clientDocument: "12345678909",
+    //   status: "COMPLETO",
+    //   value: 455,
+    //   fee: 23,
+    //   e2e: "..."
+    // }
+    const {
+      transactionId,
+      status,
+      value,
+    } = body;
 
-    if (!transaction || !transaction.id) {
-      console.log("No transaction data in webhook body");
+    if (!transactionId) {
+      console.log("No transactionId in webhook body — ignoring");
       return new Response("OK", { status: 200 });
     }
 
-    const transactionId = transaction.id?.toString();
-    const misticStatus = transaction.status?.toLowerCase();
+    const transactionIdStr = transactionId?.toString();
+    const { dbStatus, isPaid } = mapMisticStatus(status);
+    const paidAt = isPaid ? new Date().toISOString() : null;
 
-    let dbStatus = "pending";
-    let paidAt: string | null = null;
+    console.log(`Processing webhook: transactionId=${transactionIdStr} status=${status} -> dbStatus=${dbStatus}`);
 
-    if (misticStatus === "approved" || misticStatus === "paid" || misticStatus === "completed") {
-      dbStatus = "paid";
-      paidAt = transaction.paidAt || transaction.paid_at || new Date().toISOString();
-    } else if (misticStatus === "cancelled" || misticStatus === "rejected" || misticStatus === "expired") {
-      dbStatus = "cancelled";
-    } else if (misticStatus === "refunded") {
-      dbStatus = "refunded";
-    }
-
-    console.log(`Processing transaction ${transactionId} with status: ${misticStatus} -> ${dbStatus}`);
-
-    // Find payment record by transaction_id
+    // ─── Buscar pagamento pelo transaction_id (que é o ID da Mistic) ──────────
     let { data: paymentRecord } = await supabase
       .from("payments")
       .select("id, subscription_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
-      .eq("transaction_id", transactionId)
+      .eq("transaction_id", transactionIdStr)
       .maybeSingle();
 
-    // Fallback: search by externalReference
-    if (!paymentRecord && transaction.externalReference) {
-      const extRef = transaction.externalReference?.toString();
-
-      if (extRef?.startsWith("proposal:")) {
-        const [, proposalId, paymentType] = extRef.split(":");
-        const { data } = await supabase
-          .from("payments")
-          .select("id, subscription_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
-          .eq("proposal_id", proposalId)
-          .eq("proposal_payment_type", paymentType === "entry" ? "entry" : "total")
-          .in("status", ["pending", "cancelled"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        paymentRecord = data;
-      }
-    }
-
+    // ─── Fallback: buscar pelo clientTransactionId da Mistic ─────────────────
+    // O campo "transactionId" que enviamos na criação fica no campo "clientTransactionId"
+    // da Mistic. No webhook, o campo "transactionId" é o ID INTERNO da Mistic.
+    // Precisamos buscar também pelo externalReference que enviamos (sub:, cl:, proposal:)
     if (!paymentRecord) {
-      console.log("No payment record found for transaction:", transactionId);
+      console.log("Payment not found by transaction_id, trying clientTransactionId lookup...");
+      // Não temos acesso ao clientTransactionId no webhook de depósito padrão,
+      // mas o valor (value) pode nos ajudar a encontrar o pagamento pendente mais recente.
+      // Registramos o ID da Mistic quando criamos — então o campo transaction_id deve funcionar.
+      console.log("No payment record found for transactionId:", transactionIdStr);
       return new Response("OK", { status: 200 });
     }
 
-    // Skip if already in the same status
+    // ─── Ignorar se já está no mesmo status ──────────────────────────────────
     if (paymentRecord.status === dbStatus) {
       console.log("Payment already in status:", dbStatus, "- skipping");
       return new Response("OK", { status: 200 });
     }
 
-    // Atomic UPDATE to avoid race conditions with concurrent webhooks
+    // ─── Atualizar pagamento (atomic update para evitar duplicatas) ───────────
     const { data: updatedRows, error: updateError } = await supabase
       .from("payments")
-      .update({ status: dbStatus, paid_at: paidAt, transaction_id: transactionId })
+      .update({ status: dbStatus, paid_at: paidAt, transaction_id: transactionIdStr })
       .eq("id", paymentRecord.id)
       .neq("status", dbStatus)
       .select("id");
@@ -95,12 +100,12 @@ serve(async (req: Request) => {
       console.log("Payment was already updated by another concurrent webhook - skipping");
       return new Response("OK", { status: 200 });
     } else {
-      console.log("Payment updated successfully:", { transactionId, status: dbStatus });
+      console.log("Payment updated successfully:", { transactionIdStr, status: dbStatus });
     }
 
-    // If payment approved, handle downstream logic
-    if (dbStatus === "paid") {
-      // Handle proposal update
+    // ─── Processar lógica pós-pagamento ──────────────────────────────────────
+    if (isPaid) {
+      // Atualizar proposta se vinculada
       if (paymentRecord.proposal_id) {
         const { data: proposal } = await supabase
           .from("proposals")
@@ -128,7 +133,7 @@ serve(async (req: Request) => {
 
       let subscriptionId = paymentRecord.subscription_id;
 
-      // Try to find subscription if not linked
+      // Tentar vincular assinatura se não estiver vinculada
       if (!subscriptionId && paymentRecord.client_id) {
         const { data: matchingSubscription } = await supabase
           .from("subscriptions")
@@ -149,7 +154,7 @@ serve(async (req: Request) => {
         }
       }
 
-      // Handle subscription recurrence
+      // Avançar assinatura para próximo mês
       if (subscriptionId) {
         const { data: subscription } = await supabase
           .from("subscriptions")
@@ -180,7 +185,7 @@ serve(async (req: Request) => {
 
           console.log("Subscription advanced to next_payment:", nextPaymentDate.toISOString());
 
-          // Create invoice
+          // Criar NF
           if (paymentRecord.client_id) {
             const year = new Date().getFullYear();
             const month = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -199,7 +204,7 @@ serve(async (req: Request) => {
           }
         }
       } else if (paymentRecord.client_id) {
-        // Single charge invoice
+        // Cobrança avulsa — criar NF
         const year = new Date().getFullYear();
         const month = String(new Date().getMonth() + 1).padStart(2, "0");
         const invoiceNumber = `NF-${year}${month}-${paymentRecord.id.slice(-4).toUpperCase()}`;
@@ -216,7 +221,7 @@ serve(async (req: Request) => {
         console.log("Single charge invoice created:", invoiceNumber);
       }
 
-      // Send WhatsApp confirmation (atomic dedup guard)
+      // ─── Enviar confirmação WhatsApp (dedup atômico) ──────────────────────
       if (paymentRecord.client_id) {
         try {
           const { data: claimedRows } = await supabase

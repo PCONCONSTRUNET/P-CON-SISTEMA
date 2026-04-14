@@ -6,6 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// URL base confirmada pela documentação oficial
 const MISTIC_API_URL = "https://api.misticpay.com/api";
 
 interface CreatePixPaymentRequest {
@@ -76,26 +77,15 @@ const findExistingPendingPayment = async (
   return data;
 };
 
-/** Obtém um Bearer token do Mistic Pay via client_credentials */
-const getMisticToken = async (clientId: string, clientSecret: string): Promise<string> => {
-  const response = await fetch(`${MISTIC_API_URL}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    console.error("Mistic auth error:", err);
-    throw new Error("Falha na autenticação com Mistic Pay");
-  }
-
-  const data = await response.json();
-  return data.access_token;
+/**
+ * Mapeia o transactionState da Mistic Pay para o status do banco.
+ * Valores reais da API: "PENDENTE", "COMPLETO", "CANCELADO", "EXPIRADO", "FALHA"
+ */
+const mapMisticStatus = (transactionState: string): { dbStatus: string; isPaid: boolean } => {
+  const state = (transactionState || "").toUpperCase();
+  if (state === "COMPLETO") return { dbStatus: "paid", isPaid: true };
+  if (state === "CANCELADO" || state === "EXPIRADO" || state === "FALHA") return { dbStatus: "cancelled", isPaid: false };
+  return { dbStatus: "pending", isPaid: false };
 };
 
 serve(async (req: Request) => {
@@ -109,8 +99,15 @@ serve(async (req: Request) => {
 
     if (!clientId || !clientSecret) {
       console.error("MISTIC_CLIENT_ID ou MISTIC_CLIENT_SECRET não configurados");
-      throw new Error("Mistic Pay não configurado");
+      throw new Error("Mistic Pay não configurado. Configure as variáveis MISTIC_CLIENT_ID e MISTIC_CLIENT_SECRET no Supabase.");
     }
+
+    // Headers conforme documentação oficial: ci + cs
+    const misticHeaders = {
+      "ci": clientId,
+      "cs": clientSecret,
+      "Content-Type": "application/json",
+    };
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
@@ -128,50 +125,60 @@ serve(async (req: Request) => {
       console.log("Creating Mistic PIX payment:", {
         amount: body.amount,
         description: body.description,
-        clientEmail: body.clientEmail,
+        clientName: body.clientName,
       });
-
-      const accessToken = await getMisticToken(clientId, clientSecret);
 
       const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mistic-webhook`;
 
-      // Payload Mistic Pay PIX
+      // transactionId = referência nossa para identificar o pagamento no webhook
+      // Conforme docs: "id_da_sua_aplicacao_para_identificacao"
+      const externalReference = body.proposalId
+        ? `proposal:${body.proposalId}:${body.proposalPaymentType || "total"}`
+        : (body.subscriptionId ? `sub:${body.subscriptionId}` : `cl:${body.clientId}`);
+
+      // Payload conforme documentação oficial da Mistic Pay
       const pixPayload = {
-        amount: body.amount,              // valor em reais (float)
+        amount: body.amount,
+        payerName: body.clientName,
+        payerDocument: body.clientDocument?.replace(/[^\d]/g, "") || undefined,
         description: body.description,
-        paymentMethod: "pix",
-        customer: {
-          name: body.clientName,
-          email: body.clientEmail,
-          document: body.clientDocument?.replace(/[^\d]/g, "") || undefined,
-          phone: body.clientPhone?.replace(/\D/g, "") || undefined,
-        },
-        externalReference:
-          body.proposalId
-            ? `proposal:${body.proposalId}:${body.proposalPaymentType || "total"}`
-            : (body.subscriptionId || body.clientId || ""),
-        webhookUrl,
+        transactionId: externalReference, // nossa referência interna
+        projectWebhook: webhookUrl,
       };
 
-      const response = await fetch(`${MISTIC_API_URL}/v1/transactions`, {
+      console.log("Sending to Mistic API:", `${MISTIC_API_URL}/transactions/create`);
+      console.log("Payload:", JSON.stringify(pixPayload));
+
+      const response = await fetch(`${MISTIC_API_URL}/transactions/create`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: misticHeaders,
         body: JSON.stringify(pixPayload),
       });
 
       const result = await response.json();
 
+      console.log("Mistic API raw response status:", response.status);
+      console.log("Mistic API raw response:", JSON.stringify(result));
+
       if (!response.ok) {
-        console.error("Mistic Pay error:", result);
-        throw new Error(result.message || result.error || "Erro ao criar pagamento PIX");
+        console.error("Mistic Pay error response:", result);
+        throw new Error(result.message || result.error || `Erro ao criar pagamento PIX na Mistic Pay (HTTP ${response.status})`);
       }
 
-      console.log("Mistic PIX transaction created:", result.id);
+      // Resposta real da API:
+      // { message: "...", data: { transactionId, qrCodeBase64, qrcodeUrl, copyPaste, ... } }
+      const data = result.data;
+      if (!data) {
+        console.error("Mistic API returned no data:", result);
+        throw new Error("Mistic Pay não retornou dados da transação");
+      }
 
-      // ─── Save to Supabase ─────────────────────────────────────────────────
+      const misticId = data.transactionId?.toString();
+      console.log("Mistic PIX transaction created:", misticId);
+      console.log("copyPaste available:", !!data.copyPaste);
+      console.log("qrCodeBase64 available:", !!data.qrCodeBase64);
+
+      // ─── Salvar no Supabase ─────────────────────────────────────────────────
       const supabase = getSupabaseAdmin();
       const existingPayment = await findExistingPendingPayment(supabase, body);
 
@@ -184,8 +191,7 @@ serve(async (req: Request) => {
         status: "pending",
         payment_method: "PIX",
         description: body.description,
-        asaas_id: null,
-        transaction_id: result.id?.toString(),
+        transaction_id: misticId,
       };
 
       if (existingPayment) {
@@ -195,23 +201,24 @@ serve(async (req: Request) => {
           .eq("id", existingPayment.id);
 
         if (updateError) console.error("Error updating existing payment:", updateError);
-        else console.log("Updated existing payment:", existingPayment.id);
+        else console.log("Existing payment updated:", existingPayment.id);
       } else {
         const { error: dbError } = await supabase.from("payments").insert(paymentPayload);
         if (dbError) console.error("Error saving payment to DB:", dbError);
+        else console.log("New payment saved to DB");
       }
 
-      // ─── Return PIX data to frontend ──────────────────────────────────────
+      // ─── Retornar dados do PIX ao frontend ─────────────────────────────────
+      // Campos reais: data.copyPaste (copia e cola), data.qrCodeBase64 (imagem base64),
+      //               data.qrcodeUrl (URL do QR code como imagem)
       return new Response(
         JSON.stringify({
           success: true,
-          paymentId: result.id,
-          // Mistic Pay fields — ajuste os paths conforme a resposta real da API
-          qrCode: result.pix?.qrCode || result.qrCode || result.pix_key,
-          qrCodeBase64: result.pix?.qrCodeBase64 || result.qrCodeBase64 || null,
-          ticketUrl: result.pix?.ticketUrl || result.ticketUrl || null,
-          expirationDate: result.expiresAt || result.expiration_date || null,
-          status: result.status,
+          paymentId: misticId,
+          qrCode: data.copyPaste,              // código copia e cola PIX
+          qrCodeBase64: data.qrCodeBase64,     // imagem base64 do QR code
+          qrcodeUrl: data.qrcodeUrl || null,   // URL da imagem do QR code
+          expirationDate: data.expirationDate || null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -224,48 +231,43 @@ serve(async (req: Request) => {
 
       console.log("Checking Mistic payment status:", paymentId);
 
-      const accessToken = await getMisticToken(clientId, clientSecret);
-
-      const response = await fetch(`${MISTIC_API_URL}/v1/transactions/${paymentId}`, {
-        headers: { "Authorization": `Bearer ${accessToken}` },
+      // Conforme docs: POST /api/transactions/check com body { transactionId }
+      const response = await fetch(`${MISTIC_API_URL}/transactions/check`, {
+        method: "POST",
+        headers: misticHeaders,
+        body: JSON.stringify({ transactionId: paymentId }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
         console.error("Mistic status check error:", result);
-        throw new Error(result.message || "Erro ao verificar status");
+        throw new Error(result.message || "Erro ao verificar status na Mistic Pay");
       }
 
-      const misticStatus = result.status?.toLowerCase();
+      // Resposta real: { message, transaction: { transactionId, value, transactionState, ... } }
+      const transaction = result.transaction || result.data;
+      const transactionState = transaction?.transactionState || "";
 
-      let dbStatus = "pending";
-      let paidAt: string | null = null;
+      console.log("Mistic transaction state:", transactionState);
 
-      if (misticStatus === "approved" || misticStatus === "paid" || misticStatus === "completed") {
-        dbStatus = "paid";
-        paidAt = result.paidAt || result.paid_at || new Date().toISOString();
-      } else if (misticStatus === "cancelled" || misticStatus === "rejected" || misticStatus === "expired") {
-        dbStatus = "cancelled";
-      } else if (misticStatus === "refunded") {
-        dbStatus = "refunded";
-      }
+      const { dbStatus, isPaid } = mapMisticStatus(transactionState);
+      const paidAt = isPaid ? (transaction?.updatedAt || new Date().toISOString()) : null;
 
       const supabase = getSupabaseAdmin();
-
       const { data: paymentRecord } = await supabase
         .from("payments")
         .select("id, proposal_id, proposal_payment_type")
         .eq("transaction_id", paymentId)
         .maybeSingle();
 
-      if (paymentRecord) {
+      if (paymentRecord && dbStatus !== "pending") {
         await supabase
           .from("payments")
           .update({ status: dbStatus, paid_at: paidAt })
           .eq("id", paymentRecord.id);
 
-        if (dbStatus === "paid" && paymentRecord.proposal_id) {
+        if (isPaid && paymentRecord.proposal_id) {
           const { data: proposal } = await supabase
             .from("proposals")
             .select("status")
@@ -292,7 +294,7 @@ serve(async (req: Request) => {
         JSON.stringify({
           success: true,
           status: dbStatus,
-          misticStatus: result.status,
+          misticStatus: transactionState,
           paidAt,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
