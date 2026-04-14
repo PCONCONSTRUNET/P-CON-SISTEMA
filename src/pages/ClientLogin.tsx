@@ -128,6 +128,14 @@ const ClientLogin = () => {
                   disabled={isLoading}
                 />
               </div>
+              <div className="flex justify-end">
+                <Link 
+                  to="/cliente/recuperar-senha" 
+                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
             </div>
 
             <motion.div

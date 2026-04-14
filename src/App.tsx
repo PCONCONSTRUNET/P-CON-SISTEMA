@@ -35,6 +35,8 @@ import ContractPublic from "./pages/ContractPublic";
 import ClientLogin from "./pages/ClientLogin";
 import ClientRegister from "./pages/ClientRegister";
 import ClientImplementations from "./pages/ClientImplementations";
+import ClientForgotPassword from "./pages/ClientForgotPassword";
+import ClientResetPassword from "./pages/ClientResetPassword";
 import Checkout from "./pages/Checkout";
 
 import NotFound from "./pages/NotFound";
@@ -86,6 +88,8 @@ const App = () => (
                 <Route path="/cliente" element={<ClientLogin />} />
                 <Route path="/portal" element={<ClientLogin />} />
                 <Route path="/cliente/cadastro" element={<ClientRegister />} />
+                <Route path="/cliente/recuperar-senha" element={<ClientForgotPassword />} />
+                <Route path="/cliente/nova-senha" element={<ClientResetPassword />} />
                 <Route path="/cliente/implantacoes" element={<ClientImplementations />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/area-cliente" element={<Checkout />} />
