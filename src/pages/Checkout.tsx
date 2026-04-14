@@ -853,8 +853,7 @@ const Checkout = () => {
           <div className="flex flex-col items-center gap-4">
             <p className="text-xs text-gray-neutral">Pagamentos processados por</p>
             <div className="flex items-center gap-2">
-              <img src={mercadoPagoIcon} alt="Mercado Pago" className="h-8 w-8" />
-              <span className="text-lg font-bold text-primary">Mercado Pago</span>
+              <span className="text-lg font-bold text-primary">Mistic Pay</span>
             </div>
             <div className="flex items-center gap-3 mt-2 flex-wrap justify-center">
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary/30 border border-border/30">

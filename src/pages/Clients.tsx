@@ -32,7 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClients, Client } from '@/hooks/useClients';
 import { useReferrals } from '@/hooks/useReferrals';
 import { supabase } from '@/integrations/supabase/client';
-import { useMercadoPago } from '@/hooks/useMercadoPago';
+import { useMisticPay } from '@/hooks/useMisticPay';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -73,7 +73,7 @@ const Clients = () => {
 
   const { clients, loading, addClient, updateClient, deleteClient } = useClients();
   const { links, clicks, leads, rewards } = useReferrals();
-  const { createPixPayment, loading: mpLoading } = useMercadoPago();
+  const { createPixPayment, loading: mpLoading } = useMisticPay();
 
   const referralData = { links, clicks, leads, rewards };
 
