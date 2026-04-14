@@ -809,7 +809,7 @@ const Checkout = () => {
                           )}
                           {payment.status === 'paid' && payment.paid_at && (
                             <p className="text-[10px] text-success font-medium">
-                              Pago em: {formatBrazilDate(payment.paid_at, "dd/MM/yyyy 'às' HH:mm")}
+                              Pago em: {formatBrazilDate(payment.paid_at, "dd/MM/yyyy")}
                             </p>
                           )}
                         </div>
