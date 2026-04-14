@@ -125,9 +125,12 @@ serve(async (req: Request) => {
 
       const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mistic-webhook`;
 
+      // Sufixo único por chamada garante que a Mistic Pay não rejeite
+      // como transação duplicada quando o cliente gerar PIX mais de uma vez
+      const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const externalReference = proposalId
-        ? `proposal:${proposalId}:${proposalPaymentType || "total"}`
-        : (subscriptionId ? `sub:${subscriptionId}` : `cl:${bodyClientId}`);
+        ? `proposal:${proposalId}:${proposalPaymentType || "total"}:${uniqueSuffix}`
+        : (subscriptionId ? `sub:${subscriptionId}:${uniqueSuffix}` : `cl:${bodyClientId}:${uniqueSuffix}`);
 
       const pixPayload = {
         amount,
