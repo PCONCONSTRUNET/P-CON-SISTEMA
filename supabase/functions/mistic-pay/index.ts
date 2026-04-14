@@ -110,7 +110,8 @@ serve(async (req: Request) => {
     };
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action");
+    // Suporte a ambos: ?action= (fetch direto) e x-action header (supabase.functions.invoke)
+    const action = url.searchParams.get("action") || req.headers.get("x-action");
 
     console.log("Mistic Pay action:", action);
 
@@ -226,7 +227,14 @@ serve(async (req: Request) => {
 
     // ─── CHECK STATUS ───────────────────────────────────────────────────────
     if (action === "check-status") {
-      const paymentId = url.searchParams.get("paymentId");
+      // Suporte a paymentId via query param (fetch direto) ou via body (functions.invoke)
+      let paymentId = url.searchParams.get("paymentId");
+      if (!paymentId) {
+        try {
+          const checkBody = await req.json();
+          paymentId = checkBody?.paymentId;
+        } catch (_) { /* body vazio */ }
+      }
       if (!paymentId) throw new Error("paymentId é obrigatório");
 
       console.log("Checking Mistic payment status:", paymentId);
