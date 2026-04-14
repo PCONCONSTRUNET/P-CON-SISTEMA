@@ -123,7 +123,7 @@ serve(async (req: Request) => {
 
       console.log("Creating PIX:", { amount, clientName, description });
 
-      const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mistic-webhook`;
+      const webhookBase = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mistic-webhook`;
 
       // Sufixo único por chamada garante que a Mistic Pay não rejeite
       // como transação duplicada quando o cliente gerar PIX mais de uma vez
@@ -131,6 +131,10 @@ serve(async (req: Request) => {
       const externalReference = proposalId
         ? `proposal:${proposalId}:${proposalPaymentType || "total"}:${uniqueSuffix}`
         : (subscriptionId ? `sub:${subscriptionId}:${uniqueSuffix}` : `cl:${bodyClientId}:${uniqueSuffix}`);
+
+      // Embutimos nossa referência na URL do webhook: quando Mistic chamar,
+      // o ?ref= estará disponível mesmo que o body só traga o ID numérico deles.
+      const webhookUrl = `${webhookBase}?ref=${encodeURIComponent(externalReference)}`;
 
       const pixPayload = {
         amount,
