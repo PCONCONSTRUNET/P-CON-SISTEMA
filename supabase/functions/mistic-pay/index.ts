@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MISTIC_API_URL = "https://api.mysticpay.com.br"; // ajuste se o domínio mudar
+const MISTIC_API_URL = "https://api.misticpay.com/api";
 
 interface CreatePixPaymentRequest {
   amount: number;
