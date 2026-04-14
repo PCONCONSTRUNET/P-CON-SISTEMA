@@ -52,6 +52,7 @@ const Payments = () => {
     amount: '',
     due_date: '',
     created_at: '',
+    paid_at: '',
     description: '',
   });
 
@@ -61,6 +62,7 @@ const Payments = () => {
       amount: payment.amount.toString(),
       due_date: payment.due_date ? payment.due_date.split('T')[0] : '',
       created_at: payment.created_at ? payment.created_at.split('T')[0] : '',
+      paid_at: payment.paid_at ? payment.paid_at.split('T')[0] : '',
       description: payment.description || '',
     });
     setIsEditDialogOpen(true);
@@ -74,6 +76,7 @@ const Payments = () => {
         amount: parseFloat(editPaymentData.amount),
         due_date: editPaymentData.due_date ? inputDateToISO(editPaymentData.due_date) : null,
         created_at: editPaymentData.created_at ? inputDateToISO(editPaymentData.created_at) : selectedPayment.created_at,
+        paid_at: editPaymentData.paid_at ? inputDateToISO(editPaymentData.paid_at) : selectedPayment.paid_at,
         description: editPaymentData.description || null,
       });
       setIsEditDialogOpen(false);
@@ -670,6 +673,16 @@ const Payments = () => {
                 type="date"
                 value={editPaymentData.created_at}
                 onChange={(e) => setEditPaymentData({ ...editPaymentData, created_at: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Data de Pagamento (Pago em)</Label>
+              <Input
+                type="date"
+                value={editPaymentData.paid_at}
+                onChange={(e) => setEditPaymentData({ ...editPaymentData, paid_at: e.target.value })}
                 className="bg-secondary/50 border-border/50"
               />
             </div>
