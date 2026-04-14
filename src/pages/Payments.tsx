@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle } from 'lucide-react';
+import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle, Pencil } from 'lucide-react';
 import WhatsAppSendModal, { WhatsAppSendParams } from '@/components/WhatsAppSendModal';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useGlobalData, Payment } from '@/contexts/GlobalDataContext';
-import { formatBrazilDate } from '@/utils/dateUtils';
+import { formatBrazilDate, inputDateToISO } from '@/utils/dateUtils';
 import { toast } from 'sonner';
 import { exportToCSV, formatCurrencyForExport, formatDateForExport } from '@/utils/exportUtils';
 import { useWhatsAppReminder } from '@/hooks/useWhatsAppReminder';
@@ -35,8 +36,52 @@ const Payments = () => {
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [whatsappParams, setWhatsappParams] = useState<WhatsAppSendParams | null>(null);
   
-  const { payments, loadingPayments: loading, deletePayment, markPaymentAsPaid, addInvoice, invoices } = useGlobalData();
+  const { 
+    payments, 
+    loadingPayments: loading, 
+    deletePayment, 
+    markPaymentAsPaid, 
+    updatePayment,
+    addInvoice, 
+    invoices 
+  } = useGlobalData();
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
+
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editPaymentData, setEditPaymentData] = useState({
+    amount: '',
+    due_date: '',
+    created_at: '',
+    description: '',
+  });
+
+  const handleOpenEditDialog = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setEditPaymentData({
+      amount: payment.amount.toString(),
+      due_date: payment.due_date ? payment.due_date.split('T')[0] : '',
+      created_at: payment.created_at ? payment.created_at.split('T')[0] : '',
+      description: payment.description || '',
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdatePayment = async () => {
+    if (!selectedPayment) return;
+    
+    try {
+      await updatePayment(selectedPayment.id, {
+        amount: parseFloat(editPaymentData.amount),
+        due_date: editPaymentData.due_date ? inputDateToISO(editPaymentData.due_date) : null,
+        created_at: editPaymentData.created_at ? inputDateToISO(editPaymentData.created_at) : selectedPayment.created_at,
+        description: editPaymentData.description || null,
+      });
+      setIsEditDialogOpen(false);
+      setSelectedPayment(null);
+    } catch (error) {
+      console.error('Error updating payment:', error);
+    }
+  };
 
   const filteredPayments = payments.filter(payment =>
     (payment.subscriptions?.clients?.name || payment.clients?.name || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -222,6 +267,10 @@ const Payments = () => {
             <DropdownMenuItem onClick={() => openDetailsDialog(item)}>
               <Eye className="w-4 h-4 mr-2" />
               Ver detalhes
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleOpenEditDialog(item)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
             </DropdownMenuItem>
             {item.status !== 'paid' && (
               <DropdownMenuItem 
@@ -582,6 +631,80 @@ const Payments = () => {
         onSendViaApi={sendReminder}
         sendingId={sendingReminderId}
       />
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Editar Fatura</DialogTitle>
+            <DialogDescription>
+              Atualize os dados desta fatura/pagamento.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Valor (R$)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editPaymentData.amount}
+                onChange={(e) => setEditPaymentData({ ...editPaymentData, amount: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Data de Vencimento</Label>
+              <Input
+                type="date"
+                value={editPaymentData.due_date}
+                onChange={(e) => setEditPaymentData({ ...editPaymentData, due_date: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Data de Criação</Label>
+              <Input
+                type="date"
+                value={editPaymentData.created_at}
+                onChange={(e) => setEditPaymentData({ ...editPaymentData, created_at: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Input
+                placeholder="Descrição opcional"
+                value={editPaymentData.description}
+                onChange={(e) => setEditPaymentData({ ...editPaymentData, description: e.target.value })}
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                className="flex-1 border-border/50"
+                onClick={() => {
+                  setIsEditDialogOpen(false);
+                  setSelectedPayment(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1" 
+                onClick={handleUpdatePayment}
+              >
+                Salvar Alterações
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

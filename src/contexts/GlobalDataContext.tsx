@@ -128,6 +128,7 @@ interface GlobalDataContextType {
   
   // CRUD operations - Payments
   markPaymentAsPaid: (id: string) => Promise<boolean>;
+  updatePayment: (id: string, updates: Partial<Payment>) => Promise<Payment | null>;
   deletePayment: (id: string) => Promise<boolean>;
   
   // CRUD operations - Invoices
@@ -515,6 +516,26 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updatePayment = async (id: string, updates: Partial<Payment>): Promise<Payment | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      toast.success('Pagamento atualizado com sucesso!');
+      await fetchPayments();
+      return data;
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      toast.error('Erro ao atualizar pagamento');
+      return null;
+    }
+  };
+
   const deletePayment = async (id: string): Promise<boolean> => {
     try {
       const { error } = await supabase
@@ -673,6 +694,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         updateSubscription,
         deleteSubscription,
         markPaymentAsPaid,
+        updatePayment,
         deletePayment,
         addInvoice,
         deleteInvoice,

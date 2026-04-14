@@ -56,6 +56,7 @@ interface Payment {
   asaas_id: string | null;
   transaction_id: string | null;
   subscription_id: string | null;
+  due_date: string | null;
   subscriptions?: {
     plan_name: string;
   } | null;
@@ -618,6 +619,19 @@ const Checkout = () => {
                           </p>
                         </div>
                       </div>
+                      {charge.due_date && (
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)' }}>
+                            <Calendar className="h-4 w-4 text-warning" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-neutral">Vencimento</p>
+                            <p className="text-sm font-semibold text-foreground">
+                              {formatBrazilDate(charge.due_date)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -786,8 +800,18 @@ const Checkout = () => {
                             {payment.subscriptions?.plan_name || payment.description || 'Cobrança única'}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {formatBrazilDate(payment.created_at, "dd/MM/yyyy 'às' HH:mm")}
+                            Criado em {formatBrazilDate(payment.created_at, "dd/MM/yyyy 'às' HH:mm")}
                           </p>
+                          {payment.due_date && (
+                            <p className="text-[10px] text-warning font-medium">
+                              Vencimento: {formatBrazilDate(payment.due_date, "dd/MM/yyyy")}
+                            </p>
+                          )}
+                          {payment.status === 'paid' && payment.paid_at && (
+                            <p className="text-[10px] text-success font-medium">
+                              Pago em: {formatBrazilDate(payment.paid_at, "dd/MM/yyyy 'às' HH:mm")}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -1052,7 +1076,10 @@ const Checkout = () => {
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Vencimento</p>
                       <p className="text-sm font-semibold text-foreground">
-                        {formatBrazilDate(selectedPaidPayment.created_at, "dd/MM/yy")}
+                        {selectedPaidPayment.due_date 
+                          ? formatBrazilDate(selectedPaidPayment.due_date, "dd/MM/yy")
+                          : formatBrazilDate(selectedPaidPayment.created_at, "dd/MM/yy")
+                        }
                       </p>
                     </div>
                     <div>
@@ -1084,11 +1111,17 @@ const Checkout = () => {
                 <div className="bg-success/10 rounded-xl p-4 border border-success/20">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Data de criação</span>
+                      <span className="text-sm text-muted-foreground">
+                        {formatBrazilDate(selectedPaidPayment.created_at, "dd/MM/yy")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground">Data do pagamento</span>
                       <span className="text-sm text-muted-foreground">
                         {selectedPaidPayment.paid_at 
                           ? formatBrazilDate(selectedPaidPayment.paid_at, "dd/MM/yy")
-                          : formatBrazilDate(selectedPaidPayment.created_at, "dd/MM/yy")
+                          : 'Informação não disponível'
                         }
                       </span>
                     </div>
