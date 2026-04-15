@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +8,8 @@ import { toast } from 'sonner';
 import { Loader2, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import logo from '@/assets/logo-pcon-grande.png';
 import BlueBackground from '@/components/BlueBackground';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 const ClientForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -25,11 +26,23 @@ const ClientForgotPassword = () => {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/cliente/nova-senha`,
-      });
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/client-auth-new?action=request-reset`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim(),
+            origin: window.location.origin,
+          }),
+        }
+      );
 
-      if (error) throw error;
+      const data = await response.json();
+
+      if (!response.ok && data.error) {
+        throw new Error(data.error);
+      }
 
       setSent(true);
     } catch (error: any) {

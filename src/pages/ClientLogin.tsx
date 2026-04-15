@@ -128,12 +128,14 @@ const ClientLogin = () => {
                   disabled={isLoading}
                 />
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-center mt-3">
                 <Link 
                   to="/cliente/recuperar-senha" 
-                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                  className="group flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-primary bg-primary/10 border border-primary/25 hover:bg-primary/20 hover:border-primary/40 hover:shadow-[0_0_20px_hsl(var(--primary)/0.25)] transition-all duration-300"
                 >
-                  Esqueci minha senha
+                  <Lock className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
+                  Esqueci / Trocar minha senha
+                  <ArrowRight className="h-4 w-4 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all duration-200" />
                 </Link>
               </div>
             </div>
