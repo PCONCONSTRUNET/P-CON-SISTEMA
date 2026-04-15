@@ -774,52 +774,47 @@ const Clients = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Access Dialog */}
+      {/* Access Control Dialog */}
       <Dialog open={isAccessDialogOpen} onOpenChange={setIsAccessDialogOpen}>
         <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-md mx-auto">
           <DialogHeader>
-            <DialogTitle className="font-heading text-xl">
-              {hasExistingAccess ? 'Gerenciar Acesso' : 'Criar Acesso ao Checkout'}
-            </DialogTitle>
+            <DialogTitle className="font-heading text-xl">Configurar Acesso</DialogTitle>
             <DialogDescription>
-              {hasExistingAccess 
-                ? `O cliente ${selectedClient?.name} já possui acesso. Você pode reenviar o link ou redefinir a senha.`
-                : `Criar acesso para ${selectedClient?.name} acessar a página de checkout e pagar suas assinaturas.`
-              }
+              Gerencie o acesso do cliente ao portal de checkout.
             </DialogDescription>
           </DialogHeader>
-          
+
           {isCheckingAccess ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="space-y-4 mt-4">
-              <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                <p className="text-sm font-medium">Dados de acesso:</p>
-                <p className="text-sm text-muted-foreground">
-                  <strong>Email:</strong> {selectedClient?.email}
-                </p>
+            <div className="space-y-6 mt-4">
+              <div className="p-4 bg-secondary/30 rounded-lg space-y-2">
+                <p className="text-sm font-medium text-foreground">Cliente: {selectedClient?.name}</p>
+                <p className="text-sm text-muted-foreground">Email: {selectedClient?.email}</p>
                 {hasExistingAccess && (
-                  <p className="text-xs text-success">✓ Acesso já configurado</p>
+                  <p className="text-xs text-success flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Acesso já configurado
+                  </p>
                 )}
               </div>
 
               {hasExistingAccess ? (
-                <>
+                <div className="space-y-4">
                   <div className="flex items-center gap-2 p-3 bg-warning/10 rounded-lg">
                     <RefreshCw className="h-4 w-4 text-warning flex-shrink-0" />
                     <p className="text-xs text-warning">
-                      Para redefinir a senha, digite uma nova senha abaixo.
+                      O cliente já tem acesso. Você pode redefinir a senha ou reenviar o link.
                     </p>
                   </div>
-
+                  
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Nova Senha (opcional)</label>
                     <div className="relative">
                       <Input
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="Deixe vazio para apenas reenviar link"
+                        placeholder="Deixe vazio para manter a atual"
                         value={accessPassword}
                         onChange={(e) => setAccessPassword(e.target.value)}
                         className="bg-secondary/50 border-border/50 pr-10"
@@ -833,51 +828,30 @@ const Clients = () => {
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
-                <div className="flex gap-2 flex-wrap mb-4">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={copyCheckoutLink}
-                  className="gap-2"
-                >
-                  <Link2 className="w-4 h-4" />
-                  Copiar link
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleResendLink}
-                  className="gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  Reenviar Link
-                </Button>
-              </div>
+                    </div>
+                  </div>
 
-              {hasExistingAccess ? (
-                <div className="flex gap-3 pt-4">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1 border-border/50"
-                    onClick={() => setIsAccessDialogOpen(false)}
-                    disabled={isCreatingAccess}
-                  >
-                    Fechar
-                  </Button>
-                  <Button 
-                    className="flex-1" 
-                    onClick={handleResetPassword}
-                    disabled={isCreatingAccess || !accessPassword}
-                  >
-                    {isCreatingAccess ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Redefinindo...</>
-                    ) : (
-                      <><RefreshCw className="w-4 h-4 mr-2" /> Redefinir Senha</>
-                    )}
-                  </Button>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" onClick={copyCheckoutLink} className="gap-2 flex-1">
+                      <Link2 className="w-4 h-4" /> Copiar link
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleResendLink} className="gap-2 flex-1">
+                      <Send className="w-4 h-4" /> Reenviar no WhatsApp
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setIsAccessDialogOpen(false)}>
+                      Fechar
+                    </Button>
+                    <Button className="flex-1" onClick={handleResetPassword} disabled={isCreatingAccess || !accessPassword}>
+                      {isCreatingAccess ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                      Redefinir Senha
+                    </Button>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-4 mt-2">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Definir Senha Inicial *</label>
                     <div className="relative">
@@ -900,30 +874,17 @@ const Clients = () => {
                     </div>
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 border-border/50"
-                      onClick={() => setIsAccessDialogOpen(false)}
-                      disabled={isCreatingAccess}
-                    >
+                    <Button variant="outline" className="flex-1" onClick={() => setIsAccessDialogOpen(false)}>
                       Cancelar
                     </Button>
-                    <Button 
-                      className="flex-1" 
-                      onClick={handleCreateAccess}
-                      disabled={isCreatingAccess || !accessPassword}
-                    >
-                      {isCreatingAccess ? (
-                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Criando...</>
-                      ) : (
-                        'Criar Acesso'
-                      )}
+                    <Button className="flex-1" onClick={handleCreateAccess} disabled={isCreatingAccess || !accessPassword}>
+                      {isCreatingAccess ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Criar Acesso'}
                     </Button>
                   </div>
                 </div>
               )}
 
-              {/* TOKEN DO SISTEMA - SEMPRE VISIVEL */}
+              {/* TOKEN DO SISTEMA */}
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3 mt-6">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-primary">Token do Sistema (API)</p>
@@ -936,19 +897,15 @@ const Clients = () => {
                         navigator.clipboard.writeText(selectedClient.license_token);
                         toast.success('Token copiado!');
                       } else {
-                        toast.error('Token não disponível. Verifique o banco de dados.');
+                        toast.error('Token não disponível.');
                       }
                     }}
                   >
-                    <Copy className="h-3 w-3" />
-                    Copiar
+                    <Copy className="h-3 w-3" /> Copiar
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground break-all font-mono bg-background/50 p-2 rounded border border-border/50">
-                  {selectedClient?.license_token || 'Aguardando sincronização (Rode o SQL no Supabase)'}
-                </p>
-                <p className="text-[9px] text-muted-foreground italic">
-                  * Use este token no sistema do cliente para o bloqueio automático.
+                  {selectedClient?.license_token || 'Aguardando sincronização (Rode o SQL)'}
                 </p>
               </div>
             </div>
