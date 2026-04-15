@@ -9,6 +9,7 @@ export interface Client {
   phone: string | null;
   document: string | null;
   status: string;
+  license_token?: string;
   created_at: string;
   updated_at: string;
 }

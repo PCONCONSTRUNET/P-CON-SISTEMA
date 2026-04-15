@@ -70,6 +70,8 @@ const Clients = () => {
   const [accessPassword, setAccessPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isCreatingAccess, setIsCreatingAccess] = useState(false);
+  const [isLicenseDialogOpen, setIsLicenseDialogOpen] = useState(false);
+  const [licenseTokenToShow, setLicenseTokenToShow] = useState('');
 
   const { clients, loading, addClient, updateClient, deleteClient } = useClients();
   const { links, clicks, leads, rewards } = useReferrals();
@@ -127,6 +129,30 @@ const Clients = () => {
 
   const handleDeleteClient = async (clientId: string) => {
     await deleteClient(clientId);
+  };
+
+  const handleGenerateLicense = async (client: Client) => {
+    if (client.license_token) {
+      setLicenseTokenToShow(client.license_token);
+      setIsLicenseDialogOpen(true);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .update({ license_token: crypto.randomUUID() })
+      .eq('id', client.id)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error('Erro ao gerar licença');
+      return;
+    }
+
+    setLicenseTokenToShow(data.license_token);
+    setIsLicenseDialogOpen(true);
+    toast.success('Licença gerada com sucesso!');
   };
 
   const handleCreateCharge = async () => {
@@ -376,6 +402,12 @@ const Clients = () => {
               {item.phone}
             </div>
           )}
+          {item.license_token && (
+            <div className="flex items-center gap-2 text-[10px] text-primary/70 font-mono mt-1">
+              <Link2 className="w-3 h-3" />
+              <span className="truncate">Token: {item.license_token.substring(0, 8)}...</span>
+            </div>
+          )}
         </div>
       ),
     },
@@ -428,6 +460,10 @@ const Clients = () => {
             <DropdownMenuItem onClick={() => openAccessDialog(item)}>
               <Link2 className="w-4 h-4 mr-2" />
               Criar acesso checkout
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleGenerateLicense(item)}>
+              <Lock className="w-4 h-4 mr-2" />
+              {item.license_token ? 'Ver Licença API' : 'Gerar Licença Manual'}
             </DropdownMenuItem>
             <DropdownMenuItem 
               className="text-destructive"
@@ -797,62 +833,53 @@ const Clients = () => {
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
-                    </div>
-                  </div>
+                <div className="flex gap-2 flex-wrap mb-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={copyCheckoutLink}
+                  className="gap-2"
+                >
+                  <Link2 className="w-4 h-4" />
+                  Copiar link
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleResendLink}
+                  className="gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Reenviar Link
+                </Button>
+              </div>
 
-                  <div className="flex gap-2 flex-wrap">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={copyCheckoutLink}
-                      className="gap-2"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Copiar link
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleResendLink}
-                      className="gap-2"
-                    >
-                      <Send className="w-4 h-4" />
-                      Reenviar Link
-                    </Button>
-                  </div>
-                  
-                  <div className="flex gap-3 pt-4">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 border-border/50"
-                      onClick={() => setIsAccessDialogOpen(false)}
-                      disabled={isCreatingAccess}
-                    >
-                      Fechar
-                    </Button>
-                    <Button 
-                      className="flex-1" 
-                      onClick={handleResetPassword}
-                      disabled={isCreatingAccess || !accessPassword}
-                    >
-                      {isCreatingAccess ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Redefinindo...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Redefinir Senha
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </>
+              {hasExistingAccess ? (
+                <div className="flex gap-3 pt-4">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 border-border/50"
+                    onClick={() => setIsAccessDialogOpen(false)}
+                    disabled={isCreatingAccess}
+                  >
+                    Fechar
+                  </Button>
+                  <Button 
+                    className="flex-1" 
+                    onClick={handleResetPassword}
+                    disabled={isCreatingAccess || !accessPassword}
+                  >
+                    {isCreatingAccess ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Redefinindo...</>
+                    ) : (
+                      <><RefreshCw className="w-4 h-4 mr-2" /> Redefinir Senha</>
+                    )}
+                  </Button>
+                </div>
               ) : (
-                <>
+                <div className="space-y-4 mt-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Senha *</label>
+                    <label className="text-sm font-medium">Definir Senha Inicial *</label>
                     <div className="relative">
                       <Input
                         type={showPassword ? 'text' : 'password'}
@@ -872,27 +899,7 @@ const Clients = () => {
                       </Button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
-                    <Send className="h-4 w-4 text-primary flex-shrink-0" />
-                    <p className="text-xs text-primary">
-                      Após criar o acesso, será aberto o WhatsApp com o link e senha para enviar ao cliente.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={copyCheckoutLink}
-                      className="gap-2"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Copiar link
-                    </Button>
-                  </div>
-                  
-                  <div className="flex gap-3 pt-4">
+                  <div className="flex gap-3 pt-2">
                     <Button 
                       variant="outline" 
                       className="flex-1 border-border/50"
@@ -907,20 +914,43 @@ const Clients = () => {
                       disabled={isCreatingAccess || !accessPassword}
                     >
                       {isCreatingAccess ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Criando...
-                        </>
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Criando...</>
                       ) : (
-                        <>
-                          <Send className="w-4 h-4 mr-2" />
-                          Criar e Enviar
-                        </>
+                        'Criar Acesso'
                       )}
                     </Button>
                   </div>
-                </>
+                </div>
               )}
+
+              {/* TOKEN DO SISTEMA - SEMPRE VISIVEL */}
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3 mt-6">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-primary">Token do Sistema (API)</p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 gap-1 text-xs"
+                    onClick={() => {
+                      if (selectedClient?.license_token) {
+                        navigator.clipboard.writeText(selectedClient.license_token);
+                        toast.success('Token copiado!');
+                      } else {
+                        toast.error('Token não disponível. Verifique o banco de dados.');
+                      }
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                    Copiar
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground break-all font-mono bg-background/50 p-2 rounded border border-border/50">
+                  {selectedClient?.license_token || 'Aguardando sincronização (Rode o SQL no Supabase)'}
+                </p>
+                <p className="text-[9px] text-muted-foreground italic">
+                  * Use este token no sistema do cliente para o bloqueio automático.
+                </p>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -1012,6 +1042,51 @@ const Clients = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* License Token Dialog */}
+      <Dialog open={isLicenseDialogOpen} onOpenChange={setIsLicenseDialogOpen}>
+        <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl text-primary flex items-center gap-2">
+              <Lock className="w-5 h-5" />
+              Licença do Sistema
+            </DialogTitle>
+            <DialogDescription>
+              Use este token para integrar o sistema do cliente ao seu controle de faturamento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div className="p-4 bg-background/50 border border-border/50 rounded-lg space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Token de Acesso</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-secondary/50 p-2 rounded text-[10px] break-all font-mono border border-border/30">
+                  {licenseTokenToShow}
+                </code>
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="h-9 w-9"
+                  onClick={() => {
+                    navigator.clipboard.writeText(licenseTokenToShow);
+                    toast.success('Token copiado!');
+                  }}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-primary/10 p-3 rounded-md text-[10px] text-primary flex items-start gap-2 italic">
+              <Link2 className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              O sistema do cliente deve enviar este token para sua API de faturamento para verificar o status de acesso.
+            </div>
+
+            <Button className="w-full mt-2" onClick={() => setIsLicenseDialogOpen(false)}>
+              Fechar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
