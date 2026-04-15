@@ -1,3 +1,4 @@
+// supabase/functions/license-guard/index.ts
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -7,9 +8,8 @@ const corsHeaders = {
 };
 
 serve(async (req: Request) => {
-  // Handle CORS
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -17,15 +17,22 @@ serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get token from URL or Body
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
 
-    if (!token) {
-      throw new Error("Token de licença não fornecido.");
+    if (!token) throw new Error("Token não fornecido.");
+
+    // MODO DE TESTE: Se usar o token TEST_BLOCK, bloqueia na hora!
+    if (token === "TEST_BLOCK") {
+      console.log("Token de teste detectado. Bloqueando acesso.");
+      return new Response(
+        JSON.stringify({ blocked: true, reason: "test_mode", message: "BLOQUEIO DE TESTE ATIVADO" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 1. Encontrar o cliente pelo token
+    console.log(`Verificando licença para o token: ${token}`);
+
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select("id, name, status")
@@ -33,56 +40,47 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (clientError || !client) {
+      console.log(`Token inválido: ${token}`);
       return new Response(
-        JSON.stringify({ 
-          blocked: true, 
-          reason: "invalid_token",
-          message: "Licença inválida ou não encontrada." 
-        }),
+        JSON.stringify({ blocked: true, reason: "invalid_token" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Se o cliente estiver inativo manualmente no P-CON, bloqueia direto
     if (client.status === "inactive") {
       return new Response(
-        JSON.stringify({ 
-          blocked: true, 
-          reason: "client_inactive",
-          message: "Seu acesso foi desativado pelo administrador." 
-        }),
+        JSON.stringify({ blocked: true, reason: "client_inactive" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Verificar pagamentos atrasados há mais de 7 dias
-    // Buscamos qualquer pagamento 'pending' onde due_date < (hoje - 7 dias)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    // Régua de 7 dias - Garantindo comparação apenas por DATA (ignorando horas)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const toleranceDate = new Date(today);
+    toleranceDate.setDate(toleranceDate.getDate() - 7);
+    
+    const toleranceISO = toleranceDate.toISOString().split('T')[0]; // Pega apenas AAAA-MM-DD
+    
+    console.log(`Buscando faturas pendentes com vencimento anterior a: ${toleranceISO}`);
 
-    const { data: overduePayments, error: paymentError } = await supabase
+    const { data: overdue, error } = await supabase
       .from("payments")
-      .select("id, amount, due_date")
+      .select("id, due_date")
       .eq("client_id", client.id)
       .eq("status", "pending")
-      .lt("due_date", sevenDaysAgo.toISOString());
+      .lt("due_date", toleranceISO);
 
-    if (paymentError) {
-      console.error("Erro ao consultar pagamentos:", paymentError);
-      throw new Error("Erro interno ao verificar faturas.");
-    }
-
-    const isBlocked = overduePayments && overduePayments.length > 0;
+    const isBlocked = overdue && overdue.length > 0;
+    
+    console.log(`Cliente: ${client.name} | Bloqueado: ${isBlocked} | Faturas: ${overdue?.length}`);
 
     return new Response(
       JSON.stringify({
         blocked: isBlocked,
-        reason: isBlocked ? "overdue" : null,
         clientName: client.name,
-        overdueCount: overduePayments?.length || 0,
-        message: isBlocked 
-          ? "Sistema bloqueado por inadimplência superior a 7 dias." 
-          : "Acesso liberado."
+        reason: isBlocked ? "overdue" : null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
