@@ -54,33 +54,53 @@ serve(async (req: Request) => {
       );
     }
 
-    // Régua de 7 dias - Garantindo comparação apenas por DATA (ignorando horas)
+    // 2. Verificar se a ASSINATURA está vencida (next_billing_date)
+    const { data: subscription, error: subError } = await supabase
+      .from("subscriptions")
+      .select("next_billing_date, status")
+      .eq("client_id", client.id)
+      .maybeSingle();
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const toleranceDate = new Date(today);
-    toleranceDate.setDate(toleranceDate.getDate() - 7);
-    
-    const toleranceISO = toleranceDate.toISOString().split('T')[0]; // Pega apenas AAAA-MM-DD
-    
-    console.log(`Buscando faturas pendentes com vencimento anterior a: ${toleranceISO}`);
 
-    const { data: overdue, error } = await supabase
+    let blockedBySubscription = false;
+    if (subscription && subscription.next_billing_date) {
+      const nextBilling = new Date(subscription.next_billing_date);
+      const diffTime = today.getTime() - nextBilling.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      console.log(`Assinatura | Próximo vencimento: ${subscription.next_billing_date} | Dias de atraso: ${diffDays}`);
+      
+      // Bloqueia se a data de renovação passou há mais de 7 dias E não está cancelada
+      if (diffDays > 7 && subscription.status !== 'canceled') {
+        blockedBySubscription = true;
+      }
+    }
+
+    // 3. Verificar se existem PAGAMENTOS gerados e não pagos
+    const { data: allPending, error: paymentError } = await supabase
       .from("payments")
       .select("id, due_date")
       .eq("client_id", client.id)
-      .eq("status", "pending")
-      .lt("due_date", toleranceISO);
+      .neq("status", "paid");
 
-    const isBlocked = overdue && overdue.length > 0;
+    const blockedByPayment = allPending?.some(p => {
+      const dueDate = new Date(p.due_date);
+      const diffTime = today.getTime() - dueDate.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 7;
+    });
+
+    const isBlocked = blockedBySubscription || blockedByPayment;
     
-    console.log(`Cliente: ${client.name} | Bloqueado: ${isBlocked} | Faturas: ${overdue?.length}`);
+    console.log(`Cliente: ${client.name} | Bloqueado: ${isBlocked} (Sub: ${blockedBySubscription}, Pay: ${blockedByPayment})`);
 
     return new Response(
       JSON.stringify({
         blocked: isBlocked,
         clientName: client.name,
-        reason: isBlocked ? "overdue" : null,
+        reason: isBlocked ? (blockedBySubscription ? "subscription_overdue" : "payment_overdue") : null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
