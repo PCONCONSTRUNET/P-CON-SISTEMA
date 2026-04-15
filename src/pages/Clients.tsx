@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, MoreHorizontal, Mail, Phone, Trash2, RefreshCw, CreditCard, QrCode, FileText, Loader2, Link2, Send, Eye, EyeOff, Pencil, Download, User, Receipt, Calendar, Gift, Copy } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Mail, Phone, Trash2, RefreshCw, CreditCard, QrCode, FileText, Loader2, Link2, Send, Eye, EyeOff, Pencil, Download, User, Receipt, Calendar, Gift, Copy, Lock } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
