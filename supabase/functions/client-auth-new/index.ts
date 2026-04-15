@@ -266,7 +266,7 @@ serve(async (req) => {
           <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #0d1b3e 0%, #1E4FA3 100%);padding:32px 40px;text-align:center;">
-              <img src="https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/assets%2Flogo-pcon-white.png" alt="P-CON CONSTRUNET" width="180" style="display:block;margin:0 auto;" />
+              <img src="https://bevahgtmcdicyhjnrylk.supabase.co/storage/v1/object/public/contracts/assets/logo-pcon-white.png" alt="P-CON CONSTRUNET" width="180" style="display:block;margin:0 auto;" />
             </td>
           </tr>
 
@@ -292,7 +292,7 @@ serve(async (req) => {
                 Olá <strong>${clientName}</strong>,
               </p>
               <p style="font-size:15px;color:#4a4a5a;line-height:1.6;margin:0 0 24px;">
-                Recebemos uma solicitação para redefinir a senha da sua conta. Clique no botão abaixo para criar uma nova senha.
+                Recebemos uma solicitação para redefinir a senha da sua conta no portal P-CON CONSTRUNET. Clique no botão abaixo para criar sua nova senha de acesso.
               </p>
 
               <!-- CTA Button -->
@@ -300,21 +300,21 @@ serve(async (req) => {
                 <tr>
                   <td align="center" style="padding:8px 0 24px;">
                     <a href="${resetLink}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#1E4FA3 0%,#2A3F86 100%);color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;letter-spacing:0.3px;">
-                      Redefinir minha senha
+                      Redefinir minha senha agora
                     </a>
                   </td>
                 </tr>
               </table>
 
               <p style="font-size:13px;color:#94a3b8;text-align:center;margin:0 0 16px;">
-                Este link expira em <strong>1 hora</strong>.
+                Este link de segurança expira automaticamente em <strong>1 hora</strong>.
               </p>
 
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
                 <tr>
                   <td style="padding:12px 16px;">
                     <p style="margin:0;font-size:12px;color:#64748B;line-height:1.5;">
-                      Se você não solicitou a redefinição de senha, ignore este email. Sua senha permanecerá a mesma.
+                      Se você não solicitou esta alteração, pode ignorar este e-mail com segurança. Sua senha atual continuará funcionando normalmente.
                     </p>
                   </td>
                 </tr>
@@ -329,7 +329,7 @@ serve(async (req) => {
                 <tr>
                   <td align="center" style="padding-bottom:12px;">
                     <p style="margin:0;font-size:15px;color:#ffffff;font-weight:600;">P-CON CONSTRUNET</p>
-                    <p style="margin:4px 0 0;font-size:12px;color:#94a3b8;">Criação de Sistemas</p>
+                    <p style="margin:4px 0 0;font-size:12px;color:#94a3b8;">Tecnologia para Construção Civil</p>
                   </td>
                 </tr>
                 <tr>
@@ -357,7 +357,7 @@ serve(async (req) => {
           Authorization: `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'P-CON CONSTRUNET <noreply@pconassinantes.site>',
+          from: 'P-CON CONSTRUNET <ajuda@pconassinantes.site>',
           to: [clientUser.email],
           subject: '🔐 Redefinição de Senha | P-CON CONSTRUNET',
           html: emailHTML,
