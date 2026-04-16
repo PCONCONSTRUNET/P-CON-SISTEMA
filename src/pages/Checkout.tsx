@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import logo from '@/assets/logo-pcon-pwa-large.png';
 import pixIcon from '@/assets/pix-icon.svg';
+import bannerIndicacao from '@/assets/ChatGPT Image 16_04_2026, 13_32_29.png';
 
 import BlueBackground from '@/components/BlueBackground';
 
@@ -378,6 +379,27 @@ const Checkout = () => {
               Gerencie e realize pagamentos com segurança
             </p>
           </motion.div>
+
+          {/* Banner de Indicação */}
+          <motion.a
+            href="https://www.pconassinantes.site/indicar"
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.5 }}
+            whileHover={{ scale: 1.02, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
+            whileTap={{ scale: 0.98 }}
+            className="block w-full rounded-2xl overflow-hidden cursor-pointer"
+            style={{ display: 'block' }}
+          >
+            <img
+              src={bannerIndicacao}
+              alt="Indique e ganhe - Clique para indicar um amigo"
+              className="w-full h-auto object-cover rounded-2xl"
+              style={{ maxHeight: '300px', objectFit: 'cover', objectPosition: 'center' }}
+            />
+          </motion.a>
 
           {/* Contracts Section */}
           {contracts.length > 0 && (

@@ -13,9 +13,10 @@ serve(async (req: Request) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
 
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
@@ -31,8 +32,7 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log(`Verificando licença para o token: ${token}`);
-
+    // 1. Encontrar o cliente pelo token
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select("id, name, status")
@@ -47,17 +47,12 @@ serve(async (req: Request) => {
       );
     }
 
-    if (client.status === "inactive") {
-      return new Response(
-        JSON.stringify({ blocked: true, reason: "client_inactive" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log(`Verificando Cliente: ${client.name} (ID: ${client.id})`);
 
-    // 2. Verificar se a ASSINATURA está vencida (next_billing_date)
-    const { data: subscription, error: subError } = await supabase
+    // 2. Verificar se a ASSINATURA está vencida
+    const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("next_billing_date, status")
+      .select("next_payment, status")
       .eq("client_id", client.id)
       .maybeSingle();
 
@@ -65,12 +60,10 @@ serve(async (req: Request) => {
     today.setHours(0, 0, 0, 0);
 
     let blockedBySubscription = false;
-    if (subscription && subscription.next_billing_date) {
-      const nextBilling = new Date(subscription.next_billing_date);
-      const diffTime = today.getTime() - nextBilling.getTime();
+    if (subscription && (subscription as any).next_payment) {
+      const nextPayment = new Date((subscription as any).next_payment);
+      const diffTime = today.getTime() - nextPayment.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      console.log(`Assinatura | Próximo vencimento: ${subscription.next_billing_date} | Dias de atraso: ${diffDays}`);
       
       // Bloqueia se a data de renovação passou há mais de 7 dias E não está cancelada
       if (diffDays > 7 && subscription.status !== 'canceled') {
@@ -79,7 +72,7 @@ serve(async (req: Request) => {
     }
 
     // 3. Verificar se existem PAGAMENTOS gerados e não pagos
-    const { data: allPending, error: paymentError } = await supabase
+    const { data: allPending } = await supabase
       .from("payments")
       .select("id, due_date")
       .eq("client_id", client.id)
@@ -94,8 +87,6 @@ serve(async (req: Request) => {
 
     const isBlocked = blockedBySubscription || blockedByPayment;
     
-    console.log(`Cliente: ${client.name} | Bloqueado: ${isBlocked} (Sub: ${blockedBySubscription}, Pay: ${blockedByPayment})`);
-
     return new Response(
       JSON.stringify({
         blocked: isBlocked,
