@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
@@ -19,6 +19,7 @@ import { useMisticPay } from '@/hooks/useMisticPay';
 import { useContracts } from '@/hooks/useContracts';
 import PixQRCode from '@/components/PixQRCode';
 import ClientVault from '@/components/ClientVault';
+import ClientFlagsTab from '@/components/ClientFlagsTab';
 
 interface Client {
   id: string;
@@ -559,30 +560,30 @@ const ClientProfile = () => {
 
       {/* Tabs */}
       <Tabs defaultValue="subscriptions" className="w-full">
-        <TabsList className="w-full glass-card border-border/50 mb-4 grid grid-cols-4">
-          <TabsTrigger value="subscriptions" className="gap-1 px-2 text-xs sm:text-sm sm:px-3">
+        <TabsList className="w-full glass-card border-border/50 mb-4 grid grid-cols-5">
+          <TabsTrigger value="subscriptions" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
             <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Assinaturas</span>
             <span className="sm:hidden">Planos</span>
           </TabsTrigger>
-          <TabsTrigger value="payments" className="gap-1 px-2 text-xs sm:text-sm sm:px-3">
+          <TabsTrigger value="payments" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
             <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Pagamentos</span>
             <span className="sm:hidden">Pag.</span>
           </TabsTrigger>
-          <TabsTrigger value="contracts" className="gap-1 px-2 text-xs sm:text-sm sm:px-3">
+          <TabsTrigger value="contracts" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
             <FileSignature className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Contratos</span>
             <span className="sm:hidden">Docs</span>
           </TabsTrigger>
-          <TabsTrigger value="vault" className="gap-1 px-2 text-xs sm:text-sm sm:px-3">
+          <TabsTrigger value="vault" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
             <Lock className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>Cofre</span>
           </TabsTrigger>
-          <TabsTrigger value="rewards" className="flex-1 sm:flex-none gap-2">
-            <Gift className="w-4 h-4" />
-            <span className="hidden sm:inline">Recompensas</span>
-            <span className="sm:hidden">Bônus</span>
+          <TabsTrigger value="flags" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
+            <Flag className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Marcações</span>
+            <span className="sm:hidden">Flags</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1043,6 +1044,10 @@ const ClientProfile = () => {
         <TabsContent value="vault">
           <ClientVault clientId={id!} />
         </TabsContent>
+
+        <TabsContent value="flags">
+          <ClientFlagsTab clientId={id!} />
+        </TabsContent>
       </Tabs>
 
       {/* PIX QR Code Modal */}
@@ -1256,6 +1261,8 @@ const ClientProfile = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Flags Tab Content rendered outside tabs (appended before closing layout) */}
     </DashboardLayout>
   );
 };
