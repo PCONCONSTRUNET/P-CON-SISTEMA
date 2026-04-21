@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, MoreHorizontal, Mail, Phone, Trash2, RefreshCw, CreditCard, QrCode, FileText, Loader2, Link2, Send, Eye, EyeOff, Pencil, Download, User, Receipt, Calendar, Gift, Copy, Lock } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Mail, Phone, Trash2, RefreshCw, CreditCard, QrCode, FileText, Loader2, Link2, Send, Eye, EyeOff, Pencil, Download, User, Receipt, Calendar, Gift, Copy, Lock, Flag } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import ClientReferralStats from '@/components/ClientReferralStats';
+import { ClientFlagsDialog } from '@/components/ClientFlagsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -31,6 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClients, Client } from '@/hooks/useClients';
 import { useReferrals } from '@/hooks/useReferrals';
+import { useAllClientFlags, FLAG_COLOR_MAP } from '@/hooks/useClientFlags';
 import { supabase } from '@/integrations/supabase/client';
 import { useMisticPay } from '@/hooks/useMisticPay';
 import { format } from 'date-fns';
@@ -72,10 +74,13 @@ const Clients = () => {
   const [isCreatingAccess, setIsCreatingAccess] = useState(false);
   const [isLicenseDialogOpen, setIsLicenseDialogOpen] = useState(false);
   const [licenseTokenToShow, setLicenseTokenToShow] = useState('');
+  const [isFlagsDialogOpen, setIsFlagsDialogOpen] = useState(false);
+  const [flagsClient, setFlagsClient] = useState<Client | null>(null);
 
   const { clients, loading, addClient, updateClient, deleteClient } = useClients();
   const { links, clicks, leads, rewards } = useReferrals();
   const { createPixPayment, loading: mpLoading } = useMisticPay();
+  const { flagCounts } = useAllClientFlags();
 
   const referralData = { links, clicks, leads, rewards };
 
@@ -430,6 +435,24 @@ const Clients = () => {
       ),
     },
     {
+      key: 'flags',
+      header: 'Marcações',
+      hideOnMobile: true,
+      render: (item: Client) => {
+        const count = flagCounts[item.id] || 0;
+        if (count === 0) return <span className="text-muted-foreground/40 text-xs">—</span>;
+        return (
+          <button
+            onClick={() => { setFlagsClient(item); setIsFlagsDialogOpen(true); }}
+            className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            <Flag className="w-3.5 h-3.5" />
+            <span>{count}</span>
+          </button>
+        );
+      },
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (item: Client) => <StatusBadge status={item.status} />,
@@ -460,6 +483,10 @@ const Clients = () => {
             <DropdownMenuItem onClick={() => openAccessDialog(item)}>
               <Link2 className="w-4 h-4 mr-2" />
               Criar acesso checkout
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { setFlagsClient(item); setIsFlagsDialogOpen(true); }}>
+              <Flag className="w-4 h-4 mr-2" />
+              Marcações
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleGenerateLicense(item)}>
               <Lock className="w-4 h-4 mr-2" />
@@ -1046,6 +1073,13 @@ const Clients = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Client Flags Dialog */}
+      <ClientFlagsDialog
+        open={isFlagsDialogOpen}
+        onOpenChange={setIsFlagsDialogOpen}
+        client={flagsClient}
+      />
     </DashboardLayout>
   );
 };
