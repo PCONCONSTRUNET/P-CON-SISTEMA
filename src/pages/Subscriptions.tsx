@@ -71,6 +71,14 @@ const Subscriptions = () => {
     billingType: 'PIX' as 'PIX' | 'CREDIT_CARD',
   });
   const [isCreatingCharge, setIsCreatingCharge] = useState(false);
+  const [newManualPayment, setNewManualPayment] = useState({
+    clientId: '',
+    value: '',
+    description: '',
+    paidAt: formatDateForInput(new Date().toISOString()),
+    paymentMethod: 'PIX' as 'PIX' | 'DINHEIRO' | 'TRANSFERENCIA' | 'OUTRO',
+  });
+  const [isRegisteringPayment, setIsRegisteringPayment] = useState(false);
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [whatsappParams, setWhatsappParams] = useState<WhatsAppSendParams | null>(null);
 
@@ -163,6 +171,69 @@ const Subscriptions = () => {
       toast.error('Erro ao criar cobrança');
     } finally {
       setIsCreatingCharge(false);
+    }
+  };
+
+  const handleRegisterManualPayment = async () => {
+    if (!newManualPayment.clientId || !newManualPayment.value || !newManualPayment.paidAt) {
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    const selectedClient = clients.find(c => c.id === newManualPayment.clientId);
+    if (!selectedClient) {
+      toast.error('Cliente não encontrado');
+      return;
+    }
+
+    setIsRegisteringPayment(true);
+    try {
+      // 1. Inserir pagamento como pago
+      const { data: payment, error: pError } = await supabase
+        .from('payments')
+        .insert({
+          client_id: selectedClient.id,
+          amount: parseFloat(newManualPayment.value),
+          status: 'paid',
+          payment_method: newManualPayment.paymentMethod,
+          description: newManualPayment.description || `Pagamento manual de ${selectedClient.name}`,
+          paid_at: new Date(newManualPayment.paidAt + 'T12:00:00').toISOString(),
+        })
+        .select()
+        .single();
+
+      if (pError) throw pError;
+
+      // 2. Gerar fatura (Invoice)
+      const year = new Date().getFullYear();
+      const month = String(new Date().getMonth() + 1).padStart(2, '0');
+      const invoiceNumber = `MANUAL-${year}${month}-${payment.id.slice(-4).toUpperCase()}`;
+
+      await supabase
+        .from('invoices')
+        .insert({
+          payment_id: payment.id,
+          client_id: selectedClient.id,
+          number: invoiceNumber,
+          amount: payment.amount,
+          status: 'issued',
+          description: payment.description,
+        });
+
+      toast.success('Pagamento registrado com sucesso!');
+      setIsDialogOpen(false);
+      setNewManualPayment({
+        clientId: '',
+        value: '',
+        description: '',
+        paidAt: formatDateForInput(new Date().toISOString()),
+        paymentMethod: 'PIX',
+      });
+    } catch (error: any) {
+      console.error('Error registering manual payment:', error);
+      toast.error('Erro ao registrar pagamento: ' + (error.message || 'Erro desconhecido'));
+    } finally {
+      setIsRegisteringPayment(false);
     }
   };
 
@@ -632,6 +703,10 @@ const Subscriptions = () => {
                     <Receipt className="w-4 h-4" />
                     Única
                   </TabsTrigger>
+                  <TabsTrigger value="register" className="gap-2 text-[10px] sm:text-xs">
+                    <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                    Registrar Pagamento
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="recurring" className="space-y-4">
@@ -774,6 +849,95 @@ const Subscriptions = () => {
                       disabled={isCreatingCharge}
                     >
                       {isCreatingCharge ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Cobrança'}
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="register" className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Cliente *</label>
+                    <Select
+                      value={newManualPayment.clientId}
+                      onValueChange={(value) => setNewManualPayment({ ...newManualPayment, clientId: value })}
+                    >
+                      <SelectTrigger className="bg-secondary/50 border-border/50">
+                        <SelectValue placeholder="Selecione um cliente" />
+                      </SelectTrigger>
+                      <SelectContent className="glass-card border-border/50">
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Valor Pago (R$) *</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={newManualPayment.value}
+                      onChange={(e) => setNewManualPayment({ ...newManualPayment, value: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Data do Pagamento *</label>
+                    <Input
+                      type="date"
+                      value={newManualPayment.paidAt}
+                      onChange={(e) => setNewManualPayment({ ...newManualPayment, paidAt: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Forma de Pagamento *</label>
+                    <Select
+                      value={newManualPayment.paymentMethod}
+                      onValueChange={(value) => setNewManualPayment({ ...newManualPayment, paymentMethod: value as any })}
+                    >
+                      <SelectTrigger className="bg-secondary/50 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass-card border-border/50">
+                        <SelectItem value="PIX">PIX</SelectItem>
+                        <SelectItem value="DINHEIRO">Dinheiro</SelectItem>
+                        <SelectItem value="TRANSFERENCIA">Transferência</SelectItem>
+                        <SelectItem value="OUTRO">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Descrição / Referência</label>
+                    <Input
+                      placeholder="Ex: Ref. serviço extra ou mensalidade manual"
+                      value={newManualPayment.description}
+                      onChange={(e) => setNewManualPayment({ ...newManualPayment, description: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+                  
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 border-border/50"
+                      onClick={() => setIsDialogOpen(false)}
+                      disabled={isRegisteringPayment}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      className="flex-1" 
+                      onClick={handleRegisterManualPayment}
+                      disabled={isRegisteringPayment}
+                    >
+                      {isRegisteringPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registrar'}
                     </Button>
                   </div>
                 </TabsContent>
