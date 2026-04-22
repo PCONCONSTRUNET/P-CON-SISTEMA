@@ -28,6 +28,7 @@ interface CheckoutLinkData {
   max_installments: number;
   view_count: number;
   paid_at: string | null;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -187,7 +188,7 @@ const PaymentLinkPublic = () => {
             <Badge className={`border ${
               isPaid ? 'bg-success/20 text-success border-success/30' :
               isExpired || isInactive ? 'bg-destructive/20 text-destructive border-destructive/30' :
-              'bg-primary/15 text-primary border-primary/30'
+              'bg-orange-500/15 text-orange-500 border-orange-500/30'
             }`}>
               {isPaid ? 'Pago' : isExpired ? 'Expirado' : isInactive ? 'Inativo' : 'Aguardando pagamento'}
             </Badge>
@@ -195,23 +196,35 @@ const PaymentLinkPublic = () => {
         </header>
 
         {/* Main Content */}
-        <main className="container mx-auto px-4 py-6 sm:py-10 max-w-2xl">
-          <div className="space-y-6">
-            {/* Title */}
+        <main className="container mx-auto px-4 py-6 sm:py-10 max-w-fit flex flex-col items-center">
+          <div className="w-full max-w-lg sm:max-w-fit min-w-[320px] space-y-6">
+            
+            {/* Banner & Title Card */}
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="space-y-3"
+              className="glass-card overflow-hidden rounded-2xl flex flex-col"
             >
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/20 px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-glow)] backdrop-blur-md">
-                <ShieldCheck className="h-4 w-4" />
-                Pagamento seguro
-              </span>
-              <h1 className="text-3xl sm:text-4xl font-heading font-bold leading-tight">{linkData.title}</h1>
-              {linkData.description && (
-                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">{linkData.description}</p>
-              )}
+              {/* Banner Image (Adaptable) */}
+              <img 
+                src={linkData.image_url || "/images/assistente.jpeg"} 
+                alt="Banner Checkout" 
+                className="w-full h-auto object-contain bg-black/20"
+              />
+
+              <div className="p-6 space-y-4">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-500 shadow-[var(--shadow-glow)] backdrop-blur-md w-fit">
+                  <ShieldCheck className="h-4 w-4" />
+                  Pagamento seguro
+                </span>
+                <div>
+                  <h1 className="text-3xl sm:text-4xl font-heading font-bold leading-tight text-foreground">{linkData.title}</h1>
+                  {linkData.description && (
+                    <p className="text-base sm:text-lg text-muted-foreground leading-relaxed mt-2">{linkData.description}</p>
+                  )}
+                </div>
+              </div>
             </motion.div>
 
             {/* Amount Card */}

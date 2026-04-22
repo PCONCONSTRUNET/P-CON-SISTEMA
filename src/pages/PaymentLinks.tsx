@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Copy, Eye, Trash2, MoreHorizontal, Link2, ExternalLink, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Search, Plus, Copy, Eye, Trash2, MoreHorizontal, Link2, ExternalLink, Clock, CheckCircle, XCircle, Loader2, Upload, X } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
@@ -34,6 +34,7 @@ interface CheckoutLink {
   max_installments: number;
   view_count: number;
   paid_at: string | null;
+  image_url: string | null;
   notes: string | null;
   created_at: string;
 }
@@ -59,6 +60,8 @@ const PaymentLinks = () => {
     max_installments: 1,
     expires_at: '',
     notes: '',
+    image_file: null as File | null,
+    image_preview: '',
   });
 
   const fetchLinks = async () => {
@@ -83,6 +86,7 @@ const PaymentLinks = () => {
       title: '', description: '', amount: '', client_name: '',
       client_email: '', client_phone: '', allow_pix: true,
       allow_card: false, max_installments: 1, expires_at: '', notes: '',
+      image_file: null, image_preview: '',
     });
   };
 
@@ -93,6 +97,22 @@ const PaymentLinks = () => {
     }
 
     setSaving(true);
+    let uploadedImageUrl = null;
+
+    if (form.image_file) {
+      const ext = form.image_file.name.split('.').pop() || 'jpg';
+      const fileName = `checkout-banners/banner-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('contracts')
+        .upload(fileName, form.image_file, { cacheControl: '3600', upsert: true });
+
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from('contracts').getPublicUrl(fileName);
+        uploadedImageUrl = urlData.publicUrl;
+      }
+    }
+
     const { error } = await (supabase as any).from('checkout_links').insert({
       title: form.title,
       description: form.description || null,
@@ -104,6 +124,7 @@ const PaymentLinks = () => {
       allow_card: form.allow_card,
       max_installments: form.max_installments,
       expires_at: form.expires_at || null,
+      image_url: uploadedImageUrl,
       notes: form.notes || null,
     });
 
@@ -316,6 +337,42 @@ const PaymentLinks = () => {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
+            {/* Banner Upload */}
+            <div className="space-y-2">
+              <Label>Banner do Checkout (Opcional)</Label>
+              {form.image_preview ? (
+                <div className="relative rounded-lg overflow-hidden border border-border/50">
+                  <img src={form.image_preview} alt="Preview" className="w-full h-auto max-h-[150px] object-contain bg-secondary/30" />
+                  <Button 
+                    variant="destructive" 
+                    size="icon" 
+                    className="absolute top-2 right-2 h-7 w-7"
+                    onClick={() => setForm({ ...form, image_file: null, image_preview: '' })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 px-4 py-4 rounded-lg border-2 border-dashed border-border/50 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const preview = URL.createObjectURL(file);
+                        setForm({ ...form, image_file: file, image_preview: preview });
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                  <Upload className="w-5 h-5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Clique para adicionar um banner</span>
+                </label>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label>Título do Produto / Serviço *</Label>
               <Input
