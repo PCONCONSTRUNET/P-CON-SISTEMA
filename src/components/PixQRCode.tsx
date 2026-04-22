@@ -113,7 +113,7 @@ const PixQRCode = ({
         {qrCodeBase64 ? (
           <div className="bg-white p-2.5 rounded-xl">
             <img
-              src={`data:image/png;base64,${qrCodeBase64}`}
+              src={qrCodeBase64.startsWith('data:image') ? qrCodeBase64 : `data:image/png;base64,${qrCodeBase64}`}
               alt="QR Code PIX"
               className="w-36 h-36"
             />
