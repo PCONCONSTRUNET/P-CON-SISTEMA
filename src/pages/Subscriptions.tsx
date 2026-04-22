@@ -694,18 +694,18 @@ const Subscriptions = () => {
               </DialogHeader>
               
               <Tabs defaultValue="recurring" className="w-full mt-4">
-                <TabsList className="w-full grid grid-cols-2 mb-4">
-                  <TabsTrigger value="recurring" className="gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Recorrente
+                <TabsList className="w-full grid grid-cols-3 mb-4 h-auto p-1 bg-secondary/30">
+                  <TabsTrigger value="recurring" className="flex flex-col sm:flex-row gap-1 sm:gap-2 py-2 text-[10px] sm:text-xs">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Recorrente</span>
                   </TabsTrigger>
-                  <TabsTrigger value="single" className="gap-2">
-                    <Receipt className="w-4 h-4" />
-                    Única
+                  <TabsTrigger value="single" className="flex flex-col sm:flex-row gap-1 sm:gap-2 py-2 text-[10px] sm:text-xs">
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Única</span>
                   </TabsTrigger>
-                  <TabsTrigger value="register" className="gap-2 text-[10px] sm:text-xs">
-                    <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                    Registrar Pagamento
+                  <TabsTrigger value="register" className="flex flex-col sm:flex-row gap-1 sm:gap-2 py-2 text-[10px] sm:text-xs">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Registrar</span>
                   </TabsTrigger>
                 </TabsList>
 
