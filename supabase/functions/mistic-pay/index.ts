@@ -21,6 +21,7 @@ const findExistingPendingPayment = async (
     clientId?: string;
     subscriptionId?: string;
     proposalId?: string;
+    checkoutLinkId?: string;
     proposalPaymentType?: "entry" | "total";
     amount: number;
   },
@@ -115,10 +116,11 @@ serve(async (req: Request) => {
         subscriptionId,
         proposalId,
         proposalPaymentType,
+        checkoutLinkId,
       } = requestBody;
 
-      if (!bodyClientId && !proposalId) {
-        throw new Error("clientId ou proposalId é obrigatório");
+      if (!bodyClientId && !proposalId && !checkoutLinkId) {
+        throw new Error("clientId, proposalId ou checkoutLinkId é obrigatório");
       }
 
       console.log("Creating PIX:", { amount, clientName, description });
@@ -130,7 +132,7 @@ serve(async (req: Request) => {
       const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const externalReference = proposalId
         ? `proposal:${proposalId}:${proposalPaymentType || "total"}:${uniqueSuffix}`
-        : (subscriptionId ? `sub:${subscriptionId}:${uniqueSuffix}` : `cl:${bodyClientId}:${uniqueSuffix}`);
+        : (checkoutLinkId ? `chk:${checkoutLinkId}:${uniqueSuffix}` : (subscriptionId ? `sub:${subscriptionId}:${uniqueSuffix}` : `cl:${bodyClientId}:${uniqueSuffix}`));
 
       // Embutimos nossa referência na URL do webhook: quando Mistic chamar,
       // o ?ref= estará disponível mesmo que o body só traga o ID numérico deles.
@@ -172,6 +174,7 @@ serve(async (req: Request) => {
         clientId: bodyClientId,
         subscriptionId,
         proposalId,
+        checkoutLinkId,
         proposalPaymentType,
         amount,
       });

@@ -12,6 +12,7 @@ interface CreatePixPaymentParams {
   clientDocument?: string;
   subscriptionId?: string;
   proposalId?: string;
+  checkoutLinkId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }
 

@@ -104,6 +104,7 @@ const PaymentLinkPublic = () => {
         clientEmail: linkData.client_email || 'cliente@pconassinantes.site',
         clientName: linkData.client_name || 'Cliente',
         clientPhone: linkData.client_phone || undefined,
+        checkoutLinkId: linkData.id,
       });
 
       if (result?.success && result.paymentId && result.qrCode) {
