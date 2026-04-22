@@ -91,6 +91,7 @@ export interface WhatsAppSettings {
   id: string;
   send_hour: number;
   send_minute: number;
+  admin_phone?: string | null;
 }
 
 interface GlobalDataContextType {

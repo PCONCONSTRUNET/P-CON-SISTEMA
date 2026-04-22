@@ -258,10 +258,15 @@ const handler = async (req: Request): Promise<Response> => {
         const planName = sub.plan_name || "Assinatura";
         const formattedValue = `R$ ${sub.value.toFixed(2).replace(".", ",")}`;
 
+        // Format due date as DD/MM/YYYY
+        const dueDate = new Date(sub.next_payment);
+        const formattedDueDate = `${String(dueDate.getDate()).padStart(2, '0')}/${String(dueDate.getMonth() + 1).padStart(2, '0')}/${dueDate.getFullYear()}`;
+
         const message = template.message_template
           .replace(/\{\{client_name\}\}/g, client.name)
           .replace(/\{\{plan_name\}\}/g, planName)
-          .replace(/\{\{amount\}\}/g, formattedValue);
+          .replace(/\{\{amount\}\}/g, formattedValue)
+          .replace(/\{\{due_date\}\}/g, formattedDueDate);
 
         try {
           let phone = client.phone.replace(/\D/g, "");
@@ -306,6 +311,62 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (overdue1Template && overdue1Subs.length > 0) {
       await processSubs(overdue1Subs, overdue1Template, "auto_overdue_1_day");
+    }
+
+    // ──────────────────────────────────────────────
+    // ADMIN DDA NOTIFICATION — Envia resumo para o admin
+    // com todas as faturas que vencem em 5 dias
+    // ──────────────────────────────────────────────
+    const { data: settingsForAdmin } = await supabase
+      .from('whatsapp_settings')
+      .select('admin_phone')
+      .maybeSingle();
+
+    const adminPhone = settingsForAdmin?.admin_phone;
+
+    if (adminPhone && d5Subs.length > 0) {
+      try {
+        let phone = adminPhone.replace(/\D/g, "");
+        if (!phone.startsWith("55")) phone = "55" + phone;
+
+        // Build consolidated message with all D-5 subscriptions
+        const lines = d5Subs.map((sub: any) => {
+          const client = sub.client as any;
+          const planName = sub.plan_name || "Assinatura";
+          const formattedValue = `R$ ${sub.value.toFixed(2).replace(".", ",")}`;
+          const dueDate = new Date(sub.next_payment);
+          const formattedDueDate = `${String(dueDate.getDate()).padStart(2, '0')}/${String(dueDate.getMonth() + 1).padStart(2, '0')}/${dueDate.getFullYear()}`;
+          return `• *${client?.name || 'N/A'}*\n  Plano: ${planName}\n  Valor: ${formattedValue}\n  Vencimento: ${formattedDueDate}`;
+        });
+
+        const adminMessage =
+          `🔔 *LEMBRETE DDA — ${d5Subs.length} fatura(s) vencem em 5 dias*\n\n` +
+          `Gere o DDA de cobrança para os seguintes clientes:\n\n` +
+          lines.join("\n\n") +
+          `\n\n📅 Data de hoje: ${todayBrt.split('-').reverse().join('/')}`;
+
+        console.log(`Sending admin DDA notification to ${phone}`);
+
+        const adminResponse = await fetch(`${UAZAPI_BASE_URL}/send/text`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...uazapiAuthHeaders },
+          body: JSON.stringify({ number: phone, text: adminMessage }),
+        });
+
+        const adminResponseText = await adminResponse.text();
+        console.log(`Admin DDA notification response:`, adminResponseText);
+
+        (results as any).admin_dda_sent = adminResponse.status === 200;
+      } catch (adminErr: any) {
+        console.error("Error sending admin DDA notification:", adminErr.message);
+        (results as any).admin_dda_error = adminErr.message;
+      }
+    } else if (!adminPhone) {
+      console.log("Admin DDA notification skipped: admin_phone not configured in whatsapp_settings");
+      (results as any).admin_dda_sent = false;
+    } else {
+      console.log("Admin DDA notification skipped: no subscriptions due in 5 days");
+      (results as any).admin_dda_sent = false;
     }
 
     console.log("Auto reminders completed:", results);

@@ -38,6 +38,8 @@ import ClientImplementations from "./pages/ClientImplementations";
 import ClientForgotPassword from "./pages/ClientForgotPassword";
 import ClientResetPassword from "./pages/ClientResetPassword";
 import Checkout from "./pages/Checkout";
+import PaymentLinks from "./pages/PaymentLinks";
+import PaymentLinkPublic from "./pages/PaymentLinkPublic";
 
 import NotFound from "./pages/NotFound";
 import Receipt from "./pages/Receipt";
@@ -78,10 +80,12 @@ const App = () => (
                  <Route path="/budgets/new" element={<ProtectedRoute><BudgetForm /></ProtectedRoute>} />
                  <Route path="/budgets/:id" element={<ProtectedRoute><BudgetForm /></ProtectedRoute>} />
                  <Route path="/budgets/settings" element={<ProtectedRoute><BudgetSettings /></ProtectedRoute>} />
+                 <Route path="/payment-links" element={<ProtectedRoute><PaymentLinks /></ProtectedRoute>} />
                 {/* Referral Form (Public) */}
                 <Route path="/indicar" element={<ReferralForm />} />
                 <Route path="/r/:slug" element={<ReferralForm />} />
                  <Route path="/proposta/:slug" element={<BudgetPublic />} />
+                 <Route path="/pay/:slug" element={<PaymentLinkPublic />} />
                  <Route path="/contrato/:id" element={<ContractPublic />} />
                 
                 {/* Client Routes */}

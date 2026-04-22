@@ -12,6 +12,7 @@ import {
   Check,
   X,
   Send,
+  Phone,
   Clock,
 } from 'lucide-react';
 import { useGlobalData } from '@/contexts/GlobalDataContext';
@@ -45,10 +46,10 @@ interface WhatsAppTemplate {
 }
 
 const placeholderInfo: Record<string, string[]> = {
-  due_today: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
-  payment_confirmed: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
-  subscription_reminder: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
-  overdue_1_day: ['{{client_name}}', '{{plan_name}}', '{{amount}}'],
+  due_today: ['{{client_name}}', '{{plan_name}}', '{{amount}}', '{{due_date}}'],
+  payment_confirmed: ['{{client_name}}', '{{plan_name}}', '{{amount}}', '{{due_date}}'],
+  subscription_reminder: ['{{client_name}}', '{{plan_name}}', '{{amount}}', '{{due_date}}'],
+  overdue_1_day: ['{{client_name}}', '{{plan_name}}', '{{amount}}', '{{due_date}}'],
 };
 
 export default function WhatsAppReminders() {
@@ -65,6 +66,8 @@ export default function WhatsAppReminders() {
   const { whatsappSettings, updateWhatsAppSettings } = useGlobalData();
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [adminPhone, setAdminPhone] = useState('');
+  const [savingAdminPhone, setSavingAdminPhone] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
@@ -75,6 +78,7 @@ export default function WhatsAppReminders() {
       const h = whatsappSettings.send_hour.toString().padStart(2, '0');
       const m = whatsappSettings.send_minute.toString().padStart(2, '0');
       setScheduleTime(`${h}:${m}`);
+      setAdminPhone(whatsappSettings.admin_phone || '');
     }
   }, [whatsappSettings]);
 
@@ -179,6 +183,15 @@ export default function WhatsAppReminders() {
     }
   };
 
+  const handleSaveAdminPhone = async () => {
+    setSavingAdminPhone(true);
+    try {
+      await updateWhatsAppSettings({ admin_phone: adminPhone || null } as any);
+    } finally {
+      setSavingAdminPhone(false);
+    }
+  };
+
   const handleImageSelect = (templateId: string, file: File) => {
     if (!file.type.startsWith('image/')) {
       toast.error('Apenas imagens são permitidas');
@@ -245,7 +258,8 @@ export default function WhatsAppReminders() {
     msg = msg
       .replace(/\{\{client_name\}\}/g, 'João Silva')
       .replace(/\{\{plan_name\}\}/g, 'Plano Premium')
-      .replace(/\{\{amount\}\}/g, 'R$ 199,90');
+      .replace(/\{\{amount\}\}/g, 'R$ 199,90')
+      .replace(/\{\{due_date\}\}/g, '27/04/2026');
     return msg;
   };
 
@@ -291,6 +305,7 @@ export default function WhatsAppReminders() {
             <Badge variant="secondary" className="text-xs font-mono">{'{{client_name}}'} = Nome do cliente</Badge>
             <Badge variant="secondary" className="text-xs font-mono">{'{{plan_name}}'} = Nome do plano</Badge>
             <Badge variant="secondary" className="text-xs font-mono">{'{{amount}}'} = Valor formatado</Badge>
+            <Badge variant="secondary" className="text-xs font-mono">{'{{due_date}}'} = Data de vencimento</Badge>
           </div>
         </div>
       </div>
@@ -322,6 +337,38 @@ export default function WhatsAppReminders() {
           >
             {savingSchedule ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
             Salvar Horário
+          </Button>
+        </div>
+      </div>
+
+      {/* Admin DDA Notification Banner */}
+      <div className="glass-card p-4 sm:p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-border/50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 sm:p-2.5 bg-amber-500/10 rounded-lg text-amber-500 shrink-0">
+            <Phone className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">Notificação DDA (Admin)</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Receba no seu WhatsApp um resumo de todas as faturas que vencem em 5 dias para gerar o DDA.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Input 
+            type="tel"
+            placeholder="(48) 99691-5303"
+            value={adminPhone}
+            onChange={(e) => setAdminPhone(e.target.value)}
+            className="w-full sm:w-44 bg-secondary/50 border-border/50" 
+          />
+          <Button 
+            onClick={handleSaveAdminPhone} 
+            disabled={savingAdminPhone}
+            className="shrink-0"
+          >
+            {savingAdminPhone ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            Salvar
           </Button>
         </div>
       </div>
