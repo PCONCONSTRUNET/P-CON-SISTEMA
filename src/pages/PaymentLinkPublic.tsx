@@ -42,6 +42,7 @@ const PaymentLinkPublic = () => {
   const [creatingPix, setCreatingPix] = useState(false);
   const hasTrackedView = useRef(false);
   const { createPixPayment, checkPaymentStatus } = useMisticPay();
+  const [clientDocument, setClientDocument] = useState('');
 
   const [pixPayment, setPixPayment] = useState<{
     paymentId: string;
@@ -104,6 +105,7 @@ const PaymentLinkPublic = () => {
         clientEmail: linkData.client_email || 'cliente@pconassinantes.site',
         clientName: linkData.client_name || 'Cliente',
         clientPhone: linkData.client_phone || undefined,
+        clientDocument: clientDocument || undefined,
         checkoutLinkId: linkData.id,
       });
 
@@ -251,6 +253,18 @@ const PaymentLinkPublic = () => {
                       </div>
                     )}
 
+                    {!isPaid && !isExpired && !isInactive && !pixPayment && (
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground ml-1">CPF ou CNPJ (Obrigatório)</label>
+                        <Input
+                          placeholder="000.000.000-00"
+                          value={clientDocument}
+                          onChange={(e) => setClientDocument(e.target.value)}
+                          className="bg-secondary/20 border-border/60 h-11"
+                        />
+                      </div>
+                    )}
+
                     {linkData.expires_at && (
                       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm">
                         <span className="text-muted-foreground flex items-center gap-2">
@@ -289,7 +303,13 @@ const PaymentLinkPublic = () => {
                         {linkData.allow_pix && (
                           <Button
                             className="w-full h-12 text-base font-bold gap-3"
-                            onClick={handlePixPayment}
+                            onClick={() => {
+                              if (!clientDocument) {
+                                toast.error('CPF ou CNPJ é obrigatório para gerar o PIX');
+                                return;
+                              }
+                              handlePixPayment();
+                            }}
                             disabled={creatingPix}
                           >
                             {creatingPix ? (
