@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAdminNotifications, AdminNotification } from '@/hooks/useAdminNotifications';
 import { formatBrazilDate } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
+import { PushNotificationSetup } from '@/components/PushNotificationSetup';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,6 +168,11 @@ const Notifications = () => {
       title="Central de Notificações" 
       subtitle="Acompanhe todas as atividades do sistema"
     >
+      {/* Push Notification Setup */}
+      <div className="mb-4 sm:mb-6">
+        <PushNotificationSetup />
+      </div>
+
       {/* Header Actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 mb-4 sm:mb-6">
         <div className="relative flex-1">
