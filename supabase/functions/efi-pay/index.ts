@@ -355,6 +355,39 @@ serve(async (req: Request) => {
       );
     }
 
+    // ─── SETUP WEBHOOK ───────────────────────────────────────────────────────
+    if (action === "setup-webhook") {
+      console.log("[efi-pay] Setting up webhook for key:", settings.pixKey);
+      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, httpClient);
+      
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const webhookBase = `${supabaseUrl}/functions/v1/efi-webhook`;
+
+      console.log("[efi-pay] Registering webhookUrl:", webhookBase);
+
+      const response = await fetch(`${EFI_PIX_BASE}/v2/webhook/${settings.pixKey}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ webhookUrl: webhookBase }),
+        client: httpClient,
+      });
+
+      const result = await response.text();
+      console.log("[efi-pay] Webhook setup response:", response.status, result);
+
+      if (!response.ok) {
+        throw new Error(`Erro ao configurar webhook: HTTP ${response.status} - ${result}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Webhook configurado com sucesso!", webhookUrl: webhookBase }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // ─── CHECK STATUS ────────────────────────────────────────────────────────
     if (action === "check-status") {
       const paymentId = url.searchParams.get("paymentId") || requestBody?.paymentId;

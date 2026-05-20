@@ -31,7 +31,36 @@ const EfiSettings = () => {
   const [showSecret, setShowSecret] = useState(false);
   const [showPem, setShowPem] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [registeringWebhook, setRegisteringWebhook] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleRegisterWebhook = async () => {
+    if (!settings.client_id || !settings.client_secret || !settings.certificate_pem) {
+      toast.error('Salve as configurações com o certificado antes de registrar o webhook');
+      return;
+    }
+
+    setRegisteringWebhook(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('efi-pay', {
+        body: {
+          _action: 'setup-webhook',
+        },
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        toast.success('Webhook registrado com sucesso na EFI Bank! 🎉');
+      } else {
+        throw new Error(data?.error || 'Falha ao registrar webhook');
+      }
+    } catch (err: any) {
+      console.error('[EfiSettings] webhook registration error:', err);
+      toast.error('Erro ao registrar webhook: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setRegisteringWebhook(false);
+    }
+  };
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -408,7 +437,7 @@ const EfiSettings = () => {
               URL do Webhook
             </CardTitle>
             <CardDescription>
-              Configure esta URL no painel EFI Bank para receber confirmações de pagamento
+              O EFI Bank exige o registro do webhook via API para receber notificações automáticas de pagamento
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -423,9 +452,22 @@ const EfiSettings = () => {
                 <Copy className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              No painel EFI: <strong>API → Webhooks → Criar webhook → Cole a URL acima</strong>
-            </p>
+            
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRegisterWebhook}
+                disabled={registeringWebhook || !settings.certificate_pem}
+                className="w-full sm:w-auto self-start gap-2"
+              >
+                {registeringWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                {registeringWebhook ? 'Registrando...' : 'Registrar Webhook na EFI via API'}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-1">
+                Ao clicar acima, o sistema usa o certificado mTLS e credenciais salvas para registrar o Webhook nos servidores da EFI.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
