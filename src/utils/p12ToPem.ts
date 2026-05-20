@@ -143,7 +143,7 @@ export async function p12ToPem(
           }
         } catch (e) {
           console.error('[p12ToPem] Falha ao extrair PKCS8ShroudedKeyBag:', e);
-          throw new Error('Senha incorreta ou falha ao descriptografar a chave privada do arquivo .p12.');
+          throw new Error('Senha incorreta ou incompatibilidade do navegador (algoritmos antigos como 3DES/RC2 não são suportados pelo WebCrypto do browser). Converta o arquivo .p12 para .pem usando o OpenSSL localmente.');
         }
       }
     }
