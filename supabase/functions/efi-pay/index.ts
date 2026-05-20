@@ -48,39 +48,61 @@ async function loadEfiSettings(supabase: ReturnType<typeof getSupabaseAdmin>) {
   };
 }
 
-// ─── Cria client HTTP com mTLS (certificado PEM) ─────────────────────────────
-function createMtlsClient(certPem: string): Deno.HttpClient {
-  // O PEM pode conter cert + key concatenados (formato OpenSSL padrão)
-  // Extraímos separadamente se necessário
-  const certMatch = certPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
-  const keyMatch = certPem.match(/-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA )?PRIVATE KEY-----/g);
+// ─── Obtém URL do Proxy Vercel ───────────────────────────────────────────────
+const getProxyUrl = (req: Request): string => {
+  const envProxy = Deno.env.get("VERCEL_PROXY_URL");
+  if (envProxy) return envProxy;
 
-  if (!certMatch || !keyMatch) {
-    throw new Error("Certificado PEM inválido. Verifique se contém o certificado e a chave privada.");
+  const origin = req.headers.get("origin");
+  if (origin && !origin.includes("localhost") && !origin.includes("127.0.0.1")) {
+    return `${origin}/api/efi-proxy`;
   }
+  return "https://p-con-sistema.vercel.app/api/efi-proxy";
+};
 
-  return Deno.createHttpClient({
-    certChain: certMatch.join("\n"),
-    privateKey: keyMatch[0],
+// ─── Realiza requisição mTLS via Vercel Proxy ──────────────────────────────────
+async function fetchViaProxy(
+  proxyUrl: string,
+  targetUrl: string,
+  certPem: string,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: any;
+  }
+): Promise<Response> {
+  const response = await fetch(proxyUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: targetUrl,
+      method: options.method || "GET",
+      headers: options.headers || {},
+      body: options.body,
+      certPem,
+    }),
   });
+  return response;
 }
 
 // ─── Obtém access_token OAuth2 ───────────────────────────────────────────────
 async function getAccessToken(
   clientId: string,
   clientSecret: string,
-  httpClient: Deno.HttpClient,
+  proxyUrl: string,
+  certPem: string,
 ): Promise<string> {
   const credentials = btoa(`${clientId}:${clientSecret}`);
 
-  const response = await fetch(`${EFI_PIX_BASE}/oauth/token`, {
+  const response = await fetchViaProxy(proxyUrl, `${EFI_PIX_BASE}/oauth/token`, certPem, {
     method: "POST",
     headers: {
       "Authorization": `Basic ${credentials}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ grant_type: "client_credentials" }),
-    client: httpClient,
+    body: { grant_type: "client_credentials" },
   });
 
   const result = await response.json();
@@ -266,7 +288,7 @@ serve(async (req: Request) => {
 
     // Ações abaixo exigem configurações e mTLS configurados
     const settings = await loadEfiSettings(supabase);
-    const httpClient = createMtlsClient(settings.certPem);
+    const proxyUrl = getProxyUrl(req);
 
     // ─── CREATE PIX ──────────────────────────────────────────────────────────
     if (action === "create-pix") {
@@ -290,7 +312,7 @@ serve(async (req: Request) => {
       console.log("[efi-pay] Creating PIX:", { amount, clientName, description });
 
       // Obtem token OAuth2
-      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, httpClient);
+      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, proxyUrl, settings.certPem);
 
       // Gera txid único
       const txid = generateTxid();
@@ -337,18 +359,17 @@ serve(async (req: Request) => {
         { nome: "ref", valor: infoAdicionais.substring(0, 73) }, // EFI limita em 73 chars
       ];
 
-      console.log("[efi-pay] PUT /v2/cob/{txid}", txid);
+      console.log("[efi-pay] PUT /v2/cob/{txid} via Proxy", txid);
       console.log("[efi-pay] payload:", JSON.stringify(cobPayload));
 
-      // Cria a cobrança PIX na EFI
-      const cobResponse = await fetch(`${EFI_PIX_BASE}/v2/cob/${txid}`, {
+      // Cria a cobrança PIX na EFI via Proxy
+      const cobResponse = await fetchViaProxy(proxyUrl, `${EFI_PIX_BASE}/v2/cob/${txid}`, settings.certPem, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(cobPayload),
-        client: httpClient,
+        body: cobPayload,
       });
 
       const cobResult = await cobResponse.json();
@@ -361,13 +382,12 @@ serve(async (req: Request) => {
         );
       }
 
-      // Busca o QR Code da cobrança
-      const qrResponse = await fetch(`${EFI_PIX_BASE}/v2/loc/${cobResult.loc.id}/qrcode`, {
+      // Busca o QR Code da cobrança via Proxy
+      const qrResponse = await fetchViaProxy(proxyUrl, `${EFI_PIX_BASE}/v2/loc/${cobResult.loc.id}/qrcode`, settings.certPem, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
         },
-        client: httpClient,
       });
 
       const qrResult = await qrResponse.json();
@@ -411,16 +431,15 @@ serve(async (req: Request) => {
         if (dbError) console.error("[efi-pay] Error inserting payment:", dbError);
       }
 
-      // Configura webhook na EFI para receber notificações
+      // Configura webhook na EFI para receber notificações via Proxy
       try {
-        await fetch(`${EFI_PIX_BASE}/v2/webhook/${settings.pixKey}`, {
+        await fetchViaProxy(proxyUrl, `${EFI_PIX_BASE}/v2/webhook/${settings.pixKey}`, settings.certPem, {
           method: "PUT",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ webhookUrl: webhookBase }),
-          client: httpClient,
+          body: { webhookUrl: webhookBase },
         });
       } catch (wErr) {
         console.warn("[efi-pay] Webhook setup warning (non-fatal):", wErr);
@@ -447,21 +466,20 @@ serve(async (req: Request) => {
     // ─── SETUP WEBHOOK ───────────────────────────────────────────────────────
     if (action === "setup-webhook") {
       console.log("[efi-pay] Setting up webhook for key:", settings.pixKey);
-      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, httpClient);
+      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, proxyUrl, settings.certPem);
       
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const webhookBase = `${supabaseUrl}/functions/v1/efi-webhook`;
 
       console.log("[efi-pay] Registering webhookUrl:", webhookBase);
 
-      const response = await fetch(`${EFI_PIX_BASE}/v2/webhook/${settings.pixKey}`, {
+      const response = await fetchViaProxy(proxyUrl, `${EFI_PIX_BASE}/v2/webhook/${settings.pixKey}`, settings.certPem, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ webhookUrl: webhookBase }),
-        client: httpClient,
+        body: { webhookUrl: webhookBase },
       });
 
       const result = await response.text();
@@ -484,14 +502,13 @@ serve(async (req: Request) => {
 
       console.log("[efi-pay] Checking status for txid:", paymentId);
 
-      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, httpClient);
+      const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, proxyUrl, settings.certPem);
 
-      const response = await fetch(`${EFI_PIX_BASE}/v2/cob/${paymentId}`, {
+      const response = await fetchViaProxy(proxyUrl, `${EFI_PIX_BASE}/v2/cob/${paymentId}`, settings.certPem, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
         },
-        client: httpClient,
       });
 
       const result = await response.json();

@@ -24,3 +24,27 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Scratch and certificate files
+*.pem
+*.p12
+*.der
+update_cert.sql
+test-*.cjs
+test-*.mjs
+check-*.cjs
+check-*.mjs
+extract-*.cjs
+make-sql.cjs
+parse-json.cjs
+inspect-*.cjs
+decode-*.cjs
+temp_cert.json
+temp_cert.pem
+temp_key.der
+just_key.der
+just_key.pem
+list-buckets.cjs
+check_column.cjs
+check_msgs.mjs
+test_site.cjs
