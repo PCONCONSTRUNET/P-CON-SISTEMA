@@ -142,7 +142,8 @@ export async function p12ToPem(
             keyPem = toPemBlock(der, 'PRIVATE KEY');
           }
         } catch (e) {
-          console.warn('[p12ToPem] Falha ao extrair PKCS8ShroudedKeyBag:', e);
+          console.error('[p12ToPem] Falha ao extrair PKCS8ShroudedKeyBag:', e);
+          throw new Error('Senha incorreta ou falha ao descriptografar a chave privada do arquivo .p12.');
         }
       }
     }

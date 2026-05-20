@@ -179,10 +179,11 @@ const EfiSettings = () => {
     }
 
     // .p12 / .pfx → conversão direta no browser com pkijs
+    const password = prompt('Digite a senha do certificado .p12 (deixe em branco se não houver):') || '';
     const toastId = toast.loading('Convertendo certificado .p12 no browser...');
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const result = await p12ToPem(arrayBuffer, ''); // EFI Bank: senha vazia
+      const result = await p12ToPem(arrayBuffer, password);
       setSettings(prev => ({ ...prev, certificate_pem: result.pem }));
       setShowPem(true);
       toast.success(
