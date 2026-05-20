@@ -1,4 +1,8 @@
-import forge from 'node-forge';
+import { execSync } from 'child_process';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
   // Habilitar CORS
@@ -20,74 +24,88 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Arquivos temporários
+  const uniqueId = crypto.randomBytes(8).toString('hex');
+  const tmpDir = tmpdir();
+  const p12Path = join(tmpDir, `efi_cert_${uniqueId}.p12`);
+  const pemPath = join(tmpDir, `efi_cert_${uniqueId}.pem`);
+
+  const cleanup = () => {
+    try { if (existsSync(p12Path)) unlinkSync(p12Path); } catch (_) {}
+    try { if (existsSync(pemPath)) unlinkSync(pemPath); } catch (_) {}
+  };
+
   try {
     const { p12Base64, password = '' } = req.body;
 
     if (!p12Base64) {
-      res.status(400).json({ error: 'Dados do arquivo .p12 (base64) ausentes.' });
-      return;
+      return res.status(400).json({ error: 'Dados do arquivo .p12 (base64) ausentes.' });
     }
 
-    let pem = '';
-    try {
-      // Decodifica base64 para Buffer e depois para string binária (exigido pelo node-forge)
-      const p12Buffer = Buffer.from(p12Base64, 'base64');
-      const p12Der = p12Buffer.toString('binary');
-      
-      const p12Asn1 = forge.asn1.fromDer(p12Der);
-      const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
+    // Decodifica base64 e salva o .p12 em arquivo temporário
+    const p12Buffer = Buffer.from(p12Base64, 'base64');
+    writeFileSync(p12Path, p12Buffer);
 
-      // 1. Extrai Certificados (certBag)
-      const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-      const certs = certBags[forge.pki.oids.certBag] || [];
-      for (let i = 0; i < certs.length; i++) {
-        if (certs[i].cert) {
-          pem += forge.pki.certificateToPem(certs[i].cert) + '\n';
-        }
+    console.log(`[convert-p12] Arquivo .p12 salvo em ${p12Path} (${p12Buffer.length} bytes)`);
+
+    // Tenta converter com OpenSSL (sem flag -legacy primeiro — para formatos modernos PBES2/AES-256)
+    const passin = password ? `pass:${password}` : 'pass:';
+    let conversionError = null;
+
+    const attempts = [
+      `openssl pkcs12 -in "${p12Path}" -out "${pemPath}" -nodes -passin "${passin}"`,
+      `openssl pkcs12 -in "${p12Path}" -out "${pemPath}" -nodes -legacy -passin "${passin}"`,
+    ];
+
+    for (const cmd of attempts) {
+      try {
+        execSync(cmd, { timeout: 15000, stdio: 'pipe' });
+        conversionError = null;
+        console.log(`[convert-p12] Conversão bem-sucedida com: ${cmd}`);
+        break;
+      } catch (err) {
+        conversionError = err;
+        console.warn(`[convert-p12] Tentativa falhou: ${err.message}`);
       }
+    }
 
-      // 2. Extrai Chaves Privadas Criptografadas (pkcs8ShroudedKeyBag)
-      const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-      const keys = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [];
-      for (let i = 0; i < keys.length; i++) {
-        if (keys[i].key) {
-          pem += forge.pki.privateKeyToPem(keys[i].key) + '\n';
-        }
-      }
-
-      // 3. Extrai Chaves Privadas Não Criptografadas (keyBag) - caso existam
-      const plainKeyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
-      const plainKeys = plainKeyBags[forge.pki.oids.keyBag] || [];
-      for (let i = 0; i < plainKeys.length; i++) {
-        if (plainKeys[i].key) {
-          pem += forge.pki.privateKeyToPem(plainKeys[i].key) + '\n';
-        }
-      }
-
-      pem = pem.trim();
-
-      if (!pem || !pem.includes('BEGIN CERTIFICATE') || !pem.includes('BEGIN PRIVATE KEY')) {
-        res.status(400).json({ 
-          error: 'Não foi possível extrair a chave privada e o certificado do arquivo .p12. Verifique se o arquivo está correto.' 
-        });
-        return;
-      }
-
-    } catch (extractErr) {
-      console.error('[convert-p12] Falha na extração com node-forge:', extractErr);
-      res.status(400).json({
-        error: `Falha ao descriptografar o arquivo .p12. Verifique se há uma senha ou se o arquivo é válido. Detalhes: ${extractErr.message}`
+    if (conversionError) {
+      cleanup();
+      return res.status(400).json({
+        error: `Falha ao converter o arquivo .p12 com OpenSSL. Verifique se o arquivo é válido e se a senha está correta (normalmente vazia para certificados EFI Bank). Detalhes: ${conversionError.message}`,
       });
-      return;
     }
 
-    res.status(200).json({
+    // Lê o PEM gerado
+    const rawPem = readFileSync(pemPath, 'utf8');
+
+    // Remove os "Bag Attributes" que o OpenSSL insere (metadados não necessários)
+    // e retorna apenas os blocos PEM limpos (CERTIFICATE + PRIVATE KEY)
+    const cleanedPem = rawPem
+      .replace(/Bag Attributes[\s\S]*?(?=-----BEGIN)/g, '')
+      .replace(/subject=[\s\S]*?(?=-----BEGIN)/g, '')
+      .replace(/issuer=[\s\S]*?(?=-----BEGIN)/g, '')
+      .trim();
+
+    cleanup();
+
+    if (!cleanedPem.includes('BEGIN CERTIFICATE') || !cleanedPem.includes('BEGIN PRIVATE KEY')) {
+      return res.status(400).json({
+        error:
+          'O arquivo foi processado mas não contém tanto o certificado quanto a chave privada. Verifique se o arquivo .p12 está correto e não está corrompido.',
+      });
+    }
+
+    console.log(`[convert-p12] PEM gerado com sucesso (${cleanedPem.length} chars)`);
+
+    return res.status(200).json({
       success: true,
-      pem,
-      message: 'Certificado .p12 convertido para PEM com sucesso!'
+      pem: cleanedPem,
+      message: 'Certificado .p12 convertido para PEM com sucesso!',
     });
   } catch (err) {
+    cleanup();
     console.error('[convert-p12] Erro interno:', err);
-    res.status(500).json({ error: `Erro interno no servidor: ${err.message}` });
+    return res.status(500).json({ error: `Erro interno no servidor: ${err.message}` });
   }
 }
