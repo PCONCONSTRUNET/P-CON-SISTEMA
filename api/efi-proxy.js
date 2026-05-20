@@ -1,6 +1,6 @@
-const https = require('https');
+import https from 'https';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -127,4 +127,4 @@ module.exports = async (req, res) => {
     console.error('[efi-proxy] Internal Error:', err);
     res.status(500).json({ error: `Internal Proxy Error: ${err.message}` });
   }
-};
+}
