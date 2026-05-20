@@ -17,6 +17,15 @@ interface EfiSettings {
   updated_at?: string;
 }
 
+const getApiOrigin = () => {
+  if (typeof window === 'undefined') return 'https://p-con-sistema.vercel.app';
+  const origin = window.location.origin;
+  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    return 'https://p-con-sistema.vercel.app';
+  }
+  return origin;
+};
+
 const EfiSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -148,7 +157,7 @@ const EfiSettings = () => {
     }
   };
 
-  // ─── Leitura do arquivo .p12 → converte para base64 e instrui o usuário ───
+  // ─── Leitura do arquivo .p12 → converte para base64 e envia para conversão ou lê PEM direto ───
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -166,12 +175,37 @@ const EfiSettings = () => {
       return;
     }
 
-    // Para .p12, informa ao usuário que precisa converter
-    toast.info(
-      'Arquivo .p12 detectado. Por favor, converta para PEM e cole no campo abaixo. ' +
-      'Use o comando: openssl pkcs12 -in certificado.p12 -out certificado.pem -nodes',
-      { duration: 8000 }
-    );
+    // Para .p12 ou .pfx, realiza conversão automática via API serverless
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      const base64 = dataUrl.split(',')[1];
+      
+      const toastId = toast.loading('Processando e convertendo arquivo .p12...');
+      try {
+        const apiOrigin = getApiOrigin();
+        const response = await fetch(`${apiOrigin}/api/convert-p12`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ p12Base64: base64 }),
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success && data.pem) {
+          setSettings(prev => ({ ...prev, certificate_pem: data.pem }));
+          toast.success('Certificado .p12 convertido e carregado com sucesso! 🎉', { id: toastId });
+          setShowPem(true); // Abre o campo PEM para o usuário visualizar
+        } else {
+          toast.error(data.error || 'Erro na conversão do arquivo .p12. Verifique se o arquivo está corrompido.', { id: toastId });
+        }
+      } catch (err: any) {
+        console.error('[EfiSettings] Conversion error:', err);
+        toast.error('Erro de conexão ao converter certificado: ' + err.message, { id: toastId });
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const copyOpenSSLCommand = () => {
@@ -318,22 +352,26 @@ const EfiSettings = () => {
               <div className="flex items-start gap-2">
                 <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-blue-300">Como usar seu certificado .p12:</p>
-                  <ol className="text-xs text-blue-200/80 mt-2 space-y-1 list-decimal ml-4">
-                    <li>Baixe o certificado .p12 no painel EFI Bank</li>
-                    <li>Execute o comando abaixo para converter para PEM</li>
-                    <li>Cole o conteúdo do arquivo PEM gerado no campo abaixo</li>
-                  </ol>
+                  <p className="text-sm font-medium text-blue-300">🚀 Conversão Instantânea e Fácil:</p>
+                  <p className="text-xs text-blue-200/90 mt-1">
+                    Você não precisa mais executar comandos OpenSSL! Clique no botão <strong>Carregar arquivo (.pem ou .p12)</strong> abaixo e envie seu certificado <strong>.p12</strong> original obtido na EFI. O sistema irá convertê-lo automaticamente na hora.
+                  </p>
+                  <div className="mt-3 border-t border-blue-500/20 pt-2">
+                    <p className="text-[11px] text-blue-300/80 font-medium">Método manual alternativo (opcional):</p>
+                    <ol className="text-[11px] text-blue-200/70 mt-1 space-y-0.5 list-decimal ml-4">
+                      <li>Use o comando OpenSSL abaixo para gerar seu PEM localmente:</li>
+                    </ol>
+                  </div>
                 </div>
               </div>
               <div className="bg-black/30 rounded p-3 font-mono text-xs text-green-400 flex items-center justify-between gap-2">
-                <span>openssl pkcs12 -in seu-certificado.p12 -out certificado.pem -nodes</span>
+                <span className="break-all">openssl pkcs12 -in seu-certificado.p12 -out certificado.pem -nodes</span>
                 <button onClick={copyOpenSSLCommand} className="text-muted-foreground hover:text-foreground flex-shrink-0">
                   <Copy className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="text-xs text-blue-200/60">
-                Sem senha quando solicitado (ou pressione Enter). O arquivo PEM conterá o certificado e a chave privada.
+              <p className="text-[10px] text-blue-200/50">
+                Pressione Enter na senha se solicitado. Cole o conteúdo do certificado PEM e da chave privada gerada no campo de texto abaixo.
               </p>
             </div>
 
