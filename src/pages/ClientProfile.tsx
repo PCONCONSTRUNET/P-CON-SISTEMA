@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { useMisticPay } from '@/hooks/useMisticPay';
+import { useEfiPay } from '@/hooks/useEfiPay';
 import { useContracts } from '@/hooks/useContracts';
 import PixQRCode from '@/components/PixQRCode';
 import ClientVault from '@/components/ClientVault';
@@ -81,7 +81,7 @@ const ClientProfile = () => {
   const [isChargeDialogOpen, setIsChargeDialogOpen] = useState(false);
   const [newCharge, setNewCharge] = useState({ value: '', description: '' });
   const [isCreatingCharge, setIsCreatingCharge] = useState(false);
-  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useMisticPay();
+  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useEfiPay();
   
   // PIX QR Code state
   const [pixData, setPixData] = useState<{
@@ -740,7 +740,7 @@ const ClientProfile = () => {
                         <label className="text-sm font-medium">Método de Pagamento</label>
                         <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/30 rounded-md">
                           <QrCode className="w-4 h-4 text-success" />
-                          <span className="text-success font-medium">PIX via Mistic Pay</span>
+                          <span className="text-success font-medium">PIX via EFI Bank</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           O QR Code PIX será gerado automaticamente

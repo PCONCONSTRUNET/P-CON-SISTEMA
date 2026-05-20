@@ -31,6 +31,7 @@ import BudgetForm from "./pages/BudgetForm";
 import BudgetSettings from "./pages/BudgetSettings";
 import BudgetPublic from "./pages/BudgetPublic";
 import ContractPublic from "./pages/ContractPublic";
+import EfiSettings from "./pages/EfiSettings";
 
 import ClientLogin from "./pages/ClientLogin";
 import ClientRegister from "./pages/ClientRegister";
@@ -81,6 +82,7 @@ const App = () => (
                  <Route path="/budgets/:id" element={<ProtectedRoute><BudgetForm /></ProtectedRoute>} />
                  <Route path="/budgets/settings" element={<ProtectedRoute><BudgetSettings /></ProtectedRoute>} />
                  <Route path="/payment-links" element={<ProtectedRoute><PaymentLinks /></ProtectedRoute>} />
+                 <Route path="/efi-settings" element={<ProtectedRoute><EfiSettings /></ProtectedRoute>} />
                 {/* Referral Form (Public) */}
                 <Route path="/indicar" element={<ReferralForm />} />
                 <Route path="/r/:slug" element={<ReferralForm />} />

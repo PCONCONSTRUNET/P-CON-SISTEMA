@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useClientAuth } from '@/contexts/ClientAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useMisticPay } from '@/hooks/useMisticPay';
+import { useEfiPay } from '@/hooks/useEfiPay';
 import { useContracts, Contract } from '@/hooks/useContracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,7 @@ interface Payment {
 const Checkout = () => {
   const { client, isAuthenticated, isLoading: authLoading, logout } = useClientAuth();
   const navigate = useNavigate();
-  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useMisticPay();
+  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useEfiPay();
   const { contracts, loading: contractsLoading } = useContracts(client?.id);
   
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);

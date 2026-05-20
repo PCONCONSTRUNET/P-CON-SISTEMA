@@ -19,6 +19,7 @@ import {
   BarChart3,
   Wallet2,
   Mail,
+  Building2,
   ChevronDown,
   Calculator,
   FolderPlus,
@@ -51,6 +52,7 @@ const navItems = [
   { icon: Rocket, label: 'Implantações', path: '/implementations' },
   { icon: Ticket, label: 'Cupons', path: '/coupons' },
   { icon: Gift, label: 'Indicações', path: '/referrals' },
+  { icon: Building2, label: 'EFI Bank', path: '/efi-settings' },
 ];
 
 const budgetChildren = [

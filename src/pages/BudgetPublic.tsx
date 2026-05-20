@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Proposal, ProposalStatus } from '@/hooks/useProposals';
-import { useMisticPay } from '@/hooks/useMisticPay';
+import { useEfiPay } from '@/hooks/useEfiPay';
 import { supabase } from '@/integrations/supabase/client';
 import brandImage from '@/assets/pcon-construnet-brand.png';
 import pixIcon from '@/assets/pix-icon.svg';
@@ -71,7 +71,7 @@ const BudgetPublic = () => {
   } | null>(null);
   const hasTrackedView = useRef(false);
   const notificationRetryRef = useRef<Record<string, boolean>>({});
-  const { createPixPayment, createCardPayment, checkPaymentStatus } = useMisticPay();
+  const { createPixPayment, createCardPayment, checkPaymentStatus } = useEfiPay();
 
   useEffect(() => {
     if (!proposal) return;

@@ -34,7 +34,7 @@ import { useClients, Client } from '@/hooks/useClients';
 import { useReferrals } from '@/hooks/useReferrals';
 import { useAllClientFlags, FLAG_COLOR_MAP } from '@/hooks/useClientFlags';
 import { supabase } from '@/integrations/supabase/client';
-import { useMisticPay } from '@/hooks/useMisticPay';
+import { useEfiPay } from '@/hooks/useEfiPay';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -79,7 +79,7 @@ const Clients = () => {
 
   const { clients, loading, addClient, updateClient, deleteClient } = useClients();
   const { links, clicks, leads, rewards } = useReferrals();
-  const { createPixPayment, loading: mpLoading } = useMisticPay();
+  const { createPixPayment, loading: mpLoading } = useEfiPay();
   const { flagCounts } = useAllClientFlags();
 
   const referralData = { links, clicks, leads, rewards };

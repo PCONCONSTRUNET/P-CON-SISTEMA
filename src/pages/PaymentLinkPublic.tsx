@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import BlueBackground from '@/components/BlueBackground';
 import PixQRCode from '@/components/PixQRCode';
 import { supabase } from '@/integrations/supabase/client';
-import { useMisticPay } from '@/hooks/useMisticPay';
+import { useEfiPay } from '@/hooks/useEfiPay';
 import pixIcon from '@/assets/pix-icon.svg';
 
 interface CheckoutLinkData {
@@ -42,7 +42,7 @@ const PaymentLinkPublic = () => {
   const [loading, setLoading] = useState(true);
   const [creatingPix, setCreatingPix] = useState(false);
   const hasTrackedView = useRef(false);
-  const { createPixPayment, checkPaymentStatus } = useMisticPay();
+  const { createPixPayment, checkPaymentStatus } = useEfiPay();
   const [clientDocument, setClientDocument] = useState('');
 
   const [pixPayment, setPixPayment] = useState<{
