@@ -290,6 +290,25 @@ serve(async (req: Request) => {
     const settings = await loadEfiSettings(supabase);
     const proxyUrl = getProxyUrl(req);
 
+    // ─── TEST CONNECTION (OAuth + mTLS apenas) ─────────────────────────────
+    if (action === "test-connection") {
+      console.log("[efi-pay] Testing EFI connection (OAuth + mTLS)");
+      const accessToken = await getAccessToken(
+        settings.clientId,
+        settings.clientSecret,
+        proxyUrl,
+        settings.certPem,
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Conexão com EFI Bank estabelecida com sucesso!",
+          tokenPreview: `${accessToken.slice(0, 8)}…`,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // ─── CREATE PIX ──────────────────────────────────────────────────────────
     if (action === "create-pix") {
       const {

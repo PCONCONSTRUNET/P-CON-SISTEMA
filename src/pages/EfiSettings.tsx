@@ -127,24 +127,28 @@ const EfiSettings = () => {
     setTestResult(null);
     try {
       const { data, error } = await supabase.functions.invoke('efi-pay', {
-        body: {
-          _action: 'check-status',
-          paymentId: 'test_connection_only',
-        },
+        body: { _action: 'test-connection' },
       });
 
-      // A função vai falhar por "txid inválido", mas se chegou no servidor é porque autenticou!
-      // Erro de "txid não encontrado" significa que a autenticação funcionou
-      const errMsg = data?.error || error?.message || '';
-      const isAuthSuccess =
-        errMsg.includes('não encontrado') ||
-        errMsg.includes('not found') ||
-        errMsg.includes('txid') ||
-        errMsg.includes('ATIVA') ||
-        data?.success === true;
+      let errMsg = (data as { error?: string } | null)?.error || '';
+      if (!errMsg && error) {
+        errMsg = error.message || '';
+        const ctx = (error as { context?: Response }).context;
+        if (ctx) {
+          try {
+            const body = await ctx.json();
+            errMsg = body?.error || body?.message || errMsg;
+          } catch {
+            /* ignore parse errors */
+          }
+        }
+      }
 
-      if (isAuthSuccess) {
-        setTestResult({ success: true, message: 'Conexão com EFI Bank estabelecida com sucesso! ✅' });
+      if (data?.success) {
+        setTestResult({
+          success: true,
+          message: data.message || 'Conexão com EFI Bank estabelecida com sucesso! ✅',
+        });
         toast.success('Conexão EFI Bank OK!');
       } else {
         setTestResult({ success: false, message: errMsg || 'Falha na autenticação com EFI Bank' });
