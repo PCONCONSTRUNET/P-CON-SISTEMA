@@ -1,6 +1,6 @@
 /**
  * Conversão de .p12 / .pfx para PEM no browser
- * Usa pkijs + Web Crypto API — suporta PBES2/AES-256 (formato moderno da EFI Bank)
+ * Usa pkijs v3 + Web Crypto API — suporta PBES2/AES-256 (formato moderno da EFI Bank)
  */
 import * as pkijs from 'pkijs';
 import * as asn1js from 'asn1js';
@@ -27,16 +27,24 @@ function toPemBlock(der: ArrayBuffer, label: string): string {
   return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
 }
 
-function passwordToUint8Array(password: string): Uint8Array {
-  // PKCS12 passwords são codificados como UTF-16 Big Endian com null terminator
-  const buf = new ArrayBuffer((password.length + 1) * 2);
+function stringToArrayBuffer(str: string): ArrayBuffer {
+  // PKCS12 passwords são UTF-16 Big Endian com null terminator
+  if (str === '') return new ArrayBuffer(0);
+  const buf = new ArrayBuffer((str.length + 1) * 2);
   const view = new DataView(buf);
-  for (let i = 0; i < password.length; i++) {
-    view.setUint16(i * 2, password.charCodeAt(i), false); // big endian
+  for (let i = 0; i < str.length; i++) {
+    view.setUint16(i * 2, str.charCodeAt(i), false);
   }
-  view.setUint16(password.length * 2, 0, false); // null terminator
-  return new Uint8Array(buf);
+  view.setUint16(str.length * 2, 0, false);
+  return buf;
 }
+
+// ────────────────────────────────────────────────────────────────
+// OIDs dos SafeBag PKCS12
+// ────────────────────────────────────────────────────────────────
+const OID_KEYBAG = '1.2.840.113549.1.12.10.1.1';
+const OID_PKCS8_SHROUDED = '1.2.840.113549.1.12.10.1.2';
+const OID_CERTBAG = '1.2.840.113549.1.12.10.1.3';
 
 // ────────────────────────────────────────────────────────────────
 // Conversão principal
@@ -53,11 +61,10 @@ export async function p12ToPem(
   password: string = ''
 ): Promise<P12ConversionResult> {
   // Configura o engine de crypto do pkijs para usar o Web Crypto do browser
-  const cryptoEngine = new pkijs.CryptoEngine({
+  pkijs.setEngine('WebCrypto', new pkijs.CryptoEngine({
     name: 'WebCrypto',
-    crypto: crypto, // window.crypto / globalThis.crypto
-  });
-  pkijs.setEngine('WebCrypto', cryptoEngine);
+    crypto: globalThis.crypto,
+  }));
 
   // Parseia o arquivo PKCS12 (DER binário)
   const asn1 = asn1js.fromBER(p12Buffer);
@@ -67,73 +74,87 @@ export async function p12ToPem(
 
   const pfx = new pkijs.PFX({ schema: asn1.result });
 
-  // Decodifica o conteúdo interno com a senha fornecida
-  const passwordUint8 = passwordToUint8Array(password);
+  // Converte a senha para o formato PKCS12 (UTF-16 BE)
+  const passwordBuffer = stringToArrayBuffer(password);
+
+  // Decodifica o conteúdo interno (descriptografa SafeContents encriptados)
   await pfx.parseInternalValues({
-    password: passwordUint8,
+    password: passwordBuffer,
     checkIntegrity: true,
   });
 
   const certPems: string[] = [];
   let keyPem = '';
 
-  // Percorre os SafeContents para extrair certificados e chaves
-  const safeContents = pfx.parsedValue?.authenticatedSafe?.parsedValue;
-  if (!safeContents || !Array.isArray(safeContents)) {
-    throw new Error('Estrutura PKCS12 não contém SafeContents válidos.');
+  // ── Itera sobre os SafeContents (pkijs v3: authenticatedSafe é iterável como array) ──
+  const authenticatedSafe = pfx.parsedValue?.authenticatedSafe as any;
+
+  if (!authenticatedSafe) {
+    throw new Error('Arquivo .p12 não contém AuthenticatedSafe. O arquivo pode estar corrompido.');
   }
 
-  for (const sc of safeContents) {
-    const safeBags = sc.parsedValue?.safeBags;
-    if (!safeBags) continue;
+  // authenticatedSafe pode ser um array direto de ContentInfo ou ter uma prop .value
+  const contentInfoList: any[] = Array.isArray(authenticatedSafe)
+    ? authenticatedSafe
+    : (authenticatedSafe.value ?? authenticatedSafe.parsedValue ?? []);
+
+  if (!Array.isArray(contentInfoList) || contentInfoList.length === 0) {
+    console.error('[p12ToPem] authenticatedSafe structure:', JSON.stringify(Object.keys(authenticatedSafe)));
+    throw new Error(
+      'Estrutura PKCS12 inválida: não foi possível localizar os ContentInfo. ' +
+      'Verifique se o arquivo .p12 é um certificado EFI Bank válido.'
+    );
+  }
+
+  for (const contentInfo of contentInfoList) {
+    // parsedValue de cada ContentInfo é um SafeContents
+    const safeContents = contentInfo?.parsedValue as any;
+    const safeBags: any[] = safeContents?.safeBags ?? [];
 
     for (const bag of safeBags) {
-      const bagId = bag.bagId;
+      const bagId = bag.bagId as string;
 
-      // CertBag — 1.2.840.113549.1.12.10.1.3
-      if (bagId === '1.2.840.113549.1.12.10.1.3') {
+      // ── CertBag ──
+      if (bagId === OID_CERTBAG) {
         try {
-          const cert = bag.bagValue?.parsedValue?.certValue;
-          if (cert) {
-            const der = cert.toSchema(true).toBER(false);
+          const certValue = bag.bagValue?.parsedValue?.certValue;
+          if (certValue) {
+            const der = certValue.toSchema(true).toBER(false);
             certPems.push(toPemBlock(der, 'CERTIFICATE'));
           }
-        } catch (_) {
-          console.warn('[p12ToPem] Falha ao extrair certificado:', _);
+        } catch (e) {
+          console.warn('[p12ToPem] Falha ao extrair certificado:', e);
         }
       }
 
-      // KeyBag (não-encriptada) — 1.2.840.113549.1.12.10.1.1
-      if (bagId === '1.2.840.113549.1.12.10.1.1' && !keyPem) {
+      // ── KeyBag (chave não-encriptada, PKCS#8 PrivateKeyInfo) ──
+      if (bagId === OID_KEYBAG && !keyPem) {
         try {
-          const key = bag.bagValue;
-          if (key) {
-            const der = key.toSchema().toBER(false);
+          const keyValue = bag.bagValue;
+          if (keyValue) {
+            const der = keyValue.toSchema().toBER(false);
             keyPem = toPemBlock(der, 'PRIVATE KEY');
           }
-        } catch (_) {
-          console.warn('[p12ToPem] Falha ao extrair chave não-encriptada:', _);
+        } catch (e) {
+          console.warn('[p12ToPem] Falha ao extrair KeyBag:', e);
         }
       }
 
-      // PKCS8ShroudedKeyBag (encriptada) — 1.2.840.113549.1.12.10.1.2
-      if (bagId === '1.2.840.113549.1.12.10.1.2' && !keyPem) {
+      // ── PKCS8ShroudedKeyBag (chave encriptada → descriptografada após parseInternalValues) ──
+      if (bagId === OID_PKCS8_SHROUDED && !keyPem) {
         try {
-          const shroudedBag = bag.bagValue;
-          if (shroudedBag) {
-            // parsedValue já deve estar desencriptado após parseInternalValues
-            const parsed = shroudedBag.parsedValue;
-            if (parsed) {
-              const der = parsed.toSchema().toBER(false);
-              keyPem = toPemBlock(der, 'PRIVATE KEY');
-            } else {
-              // Tenta extrair diretamente do shroudedBag
-              const der = shroudedBag.toSchema().toBER(false);
-              keyPem = toPemBlock(der, 'ENCRYPTED PRIVATE KEY');
-            }
+          // parsedValue contém o PrivateKeyInfo já descriptografado
+          const parsed = bag.bagValue?.parsedValue;
+          if (parsed) {
+            const der = parsed.toSchema().toBER(false);
+            keyPem = toPemBlock(der, 'PRIVATE KEY');
+          } else if (bag.bagValue) {
+            // Fallback: usa o EncryptedPrivateKeyInfo diretamente
+            const der = bag.bagValue.toSchema().toBER(false);
+            keyPem = toPemBlock(der, 'ENCRYPTED PRIVATE KEY');
           }
-        } catch (_) {
-          console.warn('[p12ToPem] Falha ao extrair chave encriptada:', _);
+        } catch (e) {
+          console.warn('[p12ToPem] Falha ao extrair PKCS8ShroudedKeyBag:', e);
         }
       }
     }
@@ -141,8 +162,8 @@ export async function p12ToPem(
 
   if (certPems.length === 0 && !keyPem) {
     throw new Error(
-      'Não foi possível extrair nenhum certificado ou chave privada do arquivo .p12. ' +
-      'Verifique se o arquivo é válido e se a senha está correta (geralmente vazia para certificados EFI Bank).'
+      'Nenhum certificado ou chave privada encontrado no arquivo .p12. ' +
+      'Verifique se o arquivo é um certificado EFI Bank válido.'
     );
   }
 
