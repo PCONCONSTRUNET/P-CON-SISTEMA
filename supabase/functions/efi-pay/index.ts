@@ -164,8 +164,6 @@ serve(async (req: Request) => {
 
   try {
     const supabase = getSupabaseAdmin();
-    const settings = await loadEfiSettings(supabase);
-    const httpClient = createMtlsClient(settings.certPem);
 
     let requestBody: Record<string, any> = {};
     try {
@@ -178,6 +176,97 @@ serve(async (req: Request) => {
     const action = url.searchParams.get("action") || requestBody._action || "";
 
     console.log("[efi-pay] action:", action, "| body keys:", Object.keys(requestBody));
+
+    // ─── GET SETTINGS ────────────────────────────────────────────────────────
+    if (action === "get-settings") {
+      console.log("[efi-pay] Fetching masked settings");
+      const { data, error } = await supabase
+        .from("payment_gateway_settings")
+        .select("*")
+        .eq("gateway_name", "efi")
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Erro ao buscar configurações: ${error.message}`);
+      }
+
+      if (!data) {
+        return new Response(
+          JSON.stringify({ success: true, settings: null }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Mascara os campos sensíveis para segurança
+      const maskedSettings = {
+        client_id: data.client_id || "",
+        client_secret: data.client_secret ? "••••••••••••••••••••••••••••••••" : "",
+        pix_key: data.pix_key || "",
+        certificate_pem: data.certificate_pem || "", // Opcional: pode enviar o PEM mas ocultamos com máscara no front se quiser
+        is_active: !!data.is_active,
+        updated_at: data.updated_at,
+      };
+
+      return new Response(
+        JSON.stringify({ success: true, settings: maskedSettings }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ─── SAVE SETTINGS ───────────────────────────────────────────────────────
+    if (action === "save-settings") {
+      const { client_id, client_secret, pix_key, certificate_pem, is_active } = requestBody;
+      console.log("[efi-pay] Saving settings for gateway efi");
+
+      const { data: existing } = await supabase
+        .from("payment_gateway_settings")
+        .select("id, client_secret, certificate_pem")
+        .eq("gateway_name", "efi")
+        .maybeSingle();
+
+      const payload: Record<string, any> = {
+        gateway_name: "efi",
+        client_id: client_id?.trim() || null,
+        pix_key: pix_key?.trim().replace(/[^0-9]/g, "") || null,
+        is_active: !!is_active,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (client_secret && client_secret !== "••••••••••••••••••••••••••••••••") {
+        payload.client_secret = client_secret.trim();
+      }
+
+      if (certificate_pem) {
+        payload.certificate_pem = certificate_pem.trim();
+      }
+
+      let resError;
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("payment_gateway_settings")
+          .update(payload)
+          .eq("id", existing.id);
+        resError = error;
+      } else {
+        const { error } = await supabase
+          .from("payment_gateway_settings")
+          .insert(payload);
+        resError = error;
+      }
+
+      if (resError) {
+        throw new Error(`Erro ao salvar no banco: ${resError.message}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Configurações salvas com sucesso!" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Ações abaixo exigem configurações e mTLS configurados
+    const settings = await loadEfiSettings(supabase);
+    const httpClient = createMtlsClient(settings.certPem);
 
     // ─── CREATE PIX ──────────────────────────────────────────────────────────
     if (action === "create-pix") {

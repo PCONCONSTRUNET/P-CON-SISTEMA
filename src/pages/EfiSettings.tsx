@@ -66,20 +66,18 @@ const EfiSettings = () => {
     const fetchSettings = async () => {
       setLoading(true);
       try {
-        const { data, error } = await (supabase as any)
-          .from('payment_gateway_settings')
-          .select('*')
-          .eq('gateway_name', 'efi')
-          .maybeSingle();
+        const { data, error } = await supabase.functions.invoke('efi-pay', {
+          body: { _action: 'get-settings' },
+        });
 
-        if (data) {
+        if (data?.success && data?.settings) {
           setSettings({
-            client_id: data.client_id || '',
-            client_secret: data.client_secret || '',
-            pix_key: data.pix_key || '',
-            certificate_pem: data.certificate_pem || '',
-            is_active: !!data.is_active,
-            updated_at: data.updated_at,
+            client_id: data.settings.client_id || '',
+            client_secret: data.settings.client_secret || '',
+            pix_key: data.settings.pix_key || '',
+            certificate_pem: data.settings.certificate_pem || '',
+            is_active: !!data.settings.is_active,
+            updated_at: data.settings.updated_at,
           });
         } else {
           // Pre-fill with known credentials
@@ -108,36 +106,28 @@ const EfiSettings = () => {
 
     setSaving(true);
     try {
-      // Verifica se já existe um registro para EFI
-      const { data: existing } = await (supabase as any)
-        .from('payment_gateway_settings')
-        .select('id')
-        .eq('gateway_name', 'efi')
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke('efi-pay', {
+        body: {
+          _action: 'save-settings',
+          client_id: settings.client_id.trim(),
+          client_secret: settings.client_secret.trim(),
+          pix_key: settings.pix_key.trim(),
+          certificate_pem: settings.certificate_pem.trim(),
+          is_active: settings.is_active,
+        },
+      });
 
-      const payload = {
-        gateway_name: 'efi',
-        client_id: settings.client_id.trim(),
-        client_secret: settings.client_secret.trim(),
-        pix_key: settings.pix_key.trim().replace(/[^0-9]/g, ''), // CNPJ somente números
-        certificate_pem: settings.certificate_pem.trim(),
-        is_active: settings.is_active,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (existing?.id) {
-        await (supabase as any)
-          .from('payment_gateway_settings')
-          .update(payload)
-          .eq('id', existing.id);
+      if (error) throw error;
+      if (data?.success) {
+        toast.success('Configurações salvas com sucesso!');
+        setSettings(prev => ({ 
+          ...prev, 
+          is_active: !!settings.certificate_pem,
+          updated_at: new Date().toISOString()
+        }));
       } else {
-        await (supabase as any)
-          .from('payment_gateway_settings')
-          .insert(payload);
+        throw new Error(data?.error || 'Erro desconhecido');
       }
-
-      toast.success('Configurações salvas com sucesso!');
-      setSettings(prev => ({ ...prev, is_active: !!settings.certificate_pem }));
     } catch (err: any) {
       console.error('[EfiSettings] save error:', err);
       toast.error('Erro ao salvar: ' + (err.message || 'Tente novamente'));
