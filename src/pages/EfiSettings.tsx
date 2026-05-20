@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Building2, Key, Shield, CheckCircle2, AlertTriangle, Loader2, Save, Upload, Eye, EyeOff, Info, Copy, ExternalLink } from 'lucide-react';
+import { p12ToPem } from '@/utils/p12ToPem';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -157,10 +158,13 @@ const EfiSettings = () => {
     }
   };
 
-  // ─── Leitura do arquivo .p12 → converte para base64 e envia para conversão ou lê PEM direto ───
+  // ─── Leitura do arquivo .p12 → converte no browser usando pkijs (sem depender do servidor) ───
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Reset input para permitir re-upload do mesmo arquivo
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
     if (!file.name.endsWith('.p12') && !file.name.endsWith('.pfx') && !file.name.endsWith('.pem')) {
       toast.error('Por favor, selecione um arquivo .p12, .pfx ou .pem');
@@ -168,44 +172,30 @@ const EfiSettings = () => {
     }
 
     if (file.name.endsWith('.pem')) {
-      // Lê diretamente como texto
       const text = await file.text();
       setSettings(prev => ({ ...prev, certificate_pem: text }));
       toast.success('Certificado PEM carregado!');
       return;
     }
 
-    // Para .p12 ou .pfx, realiza conversão automática via API serverless
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      const base64 = dataUrl.split(',')[1];
-      
-      const toastId = toast.loading('Processando e convertendo arquivo .p12...');
-      try {
-        const apiOrigin = getApiOrigin();
-        const response = await fetch(`${apiOrigin}/api/convert-p12`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ p12Base64: base64 }),
-        });
-
-        const data = await response.json();
-        if (response.ok && data.success && data.pem) {
-          setSettings(prev => ({ ...prev, certificate_pem: data.pem }));
-          toast.success('Certificado .p12 convertido e carregado com sucesso! 🎉', { id: toastId });
-          setShowPem(true); // Abre o campo PEM para o usuário visualizar
-        } else {
-          toast.error(data.error || 'Erro na conversão do arquivo .p12. Verifique se o arquivo está corrompido.', { id: toastId });
-        }
-      } catch (err: any) {
-        console.error('[EfiSettings] Conversion error:', err);
-        toast.error('Erro de conexão ao converter certificado: ' + err.message, { id: toastId });
-      }
-    };
-    reader.readAsDataURL(file);
+    // .p12 / .pfx → conversão direta no browser com pkijs
+    const toastId = toast.loading('Convertendo certificado .p12 no browser...');
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await p12ToPem(arrayBuffer, ''); // EFI Bank: senha vazia
+      setSettings(prev => ({ ...prev, certificate_pem: result.pem }));
+      setShowPem(true);
+      toast.success(
+        `Certificado convertido! ${result.certCount} cert(s)${result.hasPrivateKey ? ' + chave privada' : ''} extraídos. 🎉`,
+        { id: toastId }
+      );
+    } catch (err: any) {
+      console.error('[EfiSettings] p12ToPem error:', err);
+      toast.error(
+        'Erro ao converter .p12: ' + (err.message || 'Arquivo inválido ou senha incorreta'),
+        { id: toastId }
+      );
+    }
   };
 
   const copyOpenSSLCommand = () => {
