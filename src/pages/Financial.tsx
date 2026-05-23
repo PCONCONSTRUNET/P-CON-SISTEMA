@@ -63,7 +63,6 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { Label } from '@/components/ui/label';
 
-const PRO_LABORE_KEY = 'pcon_pro_labore_config';
 
 const CHART_COLORS = {
   primary: 'hsl(216, 68%, 45%)',
@@ -331,7 +330,7 @@ const TransacoesTab = ({
 
 const Financial = () => {
 
-  const { clients, subscriptions, payments, invoices, loadingPayments } = useGlobalData();
+  const { clients, subscriptions, payments, invoices, loadingPayments, appSettings, updateAppSettings, loadingAppSettings } = useGlobalData();
   const { expenses } = useExpenses();
   const [period, setPeriod] = useState('month');
   const [tab, setTab] = useState('overview');
@@ -342,22 +341,21 @@ const Financial = () => {
   const [plPercent, setPlPercent] = useState(30);
   const [plFixed, setPlFixed] = useState(0);
 
-  // Load Pro Labore config from localStorage
+  // Load Pro Labore config from context
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(PRO_LABORE_KEY);
-      if (saved) {
-        const cfg = JSON.parse(saved);
-        if (cfg.mode) setPlMode(cfg.mode);
-        if (cfg.percent !== undefined) setPlPercent(cfg.percent);
-        if (cfg.fixed !== undefined) setPlFixed(cfg.fixed);
-      }
-    } catch {}
-  }, []);
+    if (appSettings) {
+      setPlMode(appSettings.pro_labore_mode);
+      setPlPercent(appSettings.pro_labore_percent);
+      setPlFixed(appSettings.pro_labore_fixed);
+    }
+  }, [appSettings]);
 
-  const savePlConfig = () => {
-    localStorage.setItem(PRO_LABORE_KEY, JSON.stringify({ mode: plMode, percent: plPercent, fixed: plFixed }));
-    toast.success('Configuração de Pro Labore salva!');
+  const savePlConfig = async () => {
+    await updateAppSettings({
+      pro_labore_mode: plMode,
+      pro_labore_percent: plPercent,
+      pro_labore_fixed: plFixed
+    });
   };
 
   const formatCurrency = (value: number) =>

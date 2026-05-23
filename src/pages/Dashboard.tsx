@@ -21,7 +21,7 @@ import { startOfMonth, endOfMonth, isWithinInterval, isPast, startOfDay, subMont
 import { ptBR } from 'date-fns/locale';
 import { format } from 'date-fns';
 
-const PRO_LABORE_KEY = 'pcon_pro_labore_config';
+
 import DashboardLayout from '@/components/DashboardLayout';
 import MetricCard from '@/components/MetricCard';
 import DataTable from '@/components/DataTable';
@@ -46,7 +46,6 @@ import { toast } from 'sonner';
 
 const Dashboard = () => {
   const [isResetting, setIsResetting] = useState(false);
-  const [proLaboreConfig, setProLaboreConfig] = useState<{ mode: 'percent' | 'fixed'; percent: number; fixed: number } | null>(null);
   const { 
     clients, 
     subscriptions, 
@@ -54,18 +53,12 @@ const Dashboard = () => {
     loadingClients, 
     loadingSubscriptions, 
     loadingPayments,
+    appSettings,
+    loadingAppSettings,
     refetchAll 
   } = useGlobalData();
 
-  // Load Pro Labore config from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(PRO_LABORE_KEY);
-      if (saved) {
-        setProLaboreConfig(JSON.parse(saved));
-      }
-    } catch {}
-  }, []);
+
 
   const handleResetAllData = async () => {
     setIsResetting(true);
@@ -302,7 +295,7 @@ const Dashboard = () => {
     },
   ];
 
-  const isLoading = loadingClients || loadingSubscriptions || loadingPayments;
+  const isLoading = loadingClients || loadingSubscriptions || loadingPayments || loadingAppSettings;
 
   return (
     <DashboardLayout 
@@ -437,7 +430,9 @@ const Dashboard = () => {
         />
         {/* Pro Labore card */}
         {(() => {
-          const plCfg = proLaboreConfig;
+          const plCfg = appSettings 
+            ? { mode: appSettings.pro_labore_mode, percent: appSettings.pro_labore_percent, fixed: appSettings.pro_labore_fixed }
+            : null;
           const plValue = plCfg
             ? plCfg.mode === 'percent'
               ? (metrics.monthlyRevenue * plCfg.percent) / 100

@@ -94,6 +94,13 @@ export interface WhatsAppSettings {
   admin_phone?: string | null;
 }
 
+export interface AppSettings {
+  id: string;
+  pro_labore_mode: 'percent' | 'fixed';
+  pro_labore_percent: number;
+  pro_labore_fixed: number;
+}
+
 interface GlobalDataContextType {
   // Data
   clients: Client[];
@@ -102,6 +109,7 @@ interface GlobalDataContextType {
   invoices: Invoice[];
   whatsappTemplates: WhatsAppTemplate[];
   whatsappSettings: WhatsAppSettings | null;
+  appSettings: AppSettings | null;
   
   // Loading states
   loadingClients: boolean;
@@ -109,6 +117,7 @@ interface GlobalDataContextType {
   loadingPayments: boolean;
   loadingInvoices: boolean;
   loadingTemplates: boolean;
+  loadingAppSettings: boolean;
   
   // Refetch functions
   refetchClients: () => Promise<void>;
@@ -139,6 +148,9 @@ interface GlobalDataContextType {
   // WhatsApp
   updateWhatsAppTemplate: (id: string, updates: Partial<WhatsAppTemplate>) => Promise<boolean>;
   updateWhatsAppSettings: (updates: Partial<WhatsAppSettings>) => Promise<boolean>;
+  
+  // App Settings
+  updateAppSettings: (updates: Partial<AppSettings>) => Promise<boolean>;
 }
 
 const GlobalDataContext = createContext<GlobalDataContextType | undefined>(undefined);
@@ -151,12 +163,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([]);
   const [whatsappSettings, setWhatsappSettings] = useState<WhatsAppSettings | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [loadingAppSettings, setLoadingAppSettings] = useState(true);
 
   // Fetch functions
   const fetchClients = useCallback(async () => {
@@ -253,15 +267,28 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const fetchAppSettings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('app_settings').select('*').maybeSingle();
+      if (error) throw error;
+      setAppSettings(data);
+    } catch (error) {
+      console.error('Error fetching app settings:', error);
+    } finally {
+      setLoadingAppSettings(false);
+    }
+  }, []);
+
   const refetchAll = useCallback(async () => {
     await Promise.all([
       fetchClients(),
       fetchSubscriptions(),
       fetchPayments(),
       fetchInvoices(),
-      fetchWhatsApp()
+      fetchWhatsApp(),
+      fetchAppSettings()
     ]);
-  }, [fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp]);
+  }, [fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
 
   // CRUD - Clients
   const addClient = async (client: Omit<Client, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<Client | null> => {
@@ -650,6 +677,46 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateAppSettings = async (updates: Partial<AppSettings>): Promise<boolean> => {
+    try {
+      let result;
+      if (!appSettings?.id) {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .insert({
+            pro_labore_mode: updates.pro_labore_mode ?? 'percent',
+            pro_labore_percent: updates.pro_labore_percent ?? 30,
+            pro_labore_fixed: updates.pro_labore_fixed ?? 0
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+      } else {
+        const safeUpdates = { ...updates };
+        delete (safeUpdates as any).id;
+        delete (safeUpdates as any).created_at;
+        delete (safeUpdates as any).updated_at;
+
+        const { data, error } = await supabase
+          .from('app_settings')
+          .update(safeUpdates)
+          .eq('id', appSettings.id)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+      }
+      setAppSettings(result);
+      toast.success('Configurações atualizadas com sucesso!');
+      return true;
+    } catch (error: any) {
+      console.error('Error updating app settings:', error);
+      toast.error('Erro ao salvar configurações');
+      return false;
+    }
+  };
+
   // Initialize and set up realtime subscriptions
   useEffect(() => {
     refetchAll();
@@ -659,6 +726,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     const paymentsChannel = supabase.channel('global-payments-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => fetchPayments()).subscribe();
     const invoicesChannel = supabase.channel('global-invoices-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => fetchInvoices()).subscribe();
     const whatsappChannel = supabase.channel('global-whatsapp-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => fetchWhatsApp()).subscribe();
+    const appSettingsChannel = supabase.channel('global-app-settings-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => fetchAppSettings()).subscribe();
 
     return () => {
       supabase.removeChannel(clientsChannel);
@@ -666,8 +734,9 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       supabase.removeChannel(paymentsChannel);
       supabase.removeChannel(invoicesChannel);
       supabase.removeChannel(whatsappChannel);
+      supabase.removeChannel(appSettingsChannel);
     };
-  }, [refetchAll, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp]);
+  }, [refetchAll, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
 
   return (
     <GlobalDataContext.Provider
@@ -678,11 +747,13 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         invoices,
         whatsappTemplates,
         whatsappSettings,
+        appSettings,
         loadingClients,
         loadingSubscriptions,
         loadingPayments,
         loadingInvoices,
         loadingTemplates,
+        loadingAppSettings,
         refetchClients: fetchClients,
         refetchSubscriptions: fetchSubscriptions,
         refetchPayments: fetchPayments,
@@ -701,6 +772,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         deleteInvoice,
         updateWhatsAppTemplate,
         updateWhatsAppSettings,
+        updateAppSettings,
       }}
     >
       {children}
