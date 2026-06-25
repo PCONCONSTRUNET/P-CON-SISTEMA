@@ -319,13 +319,13 @@ const Checkout = () => {
       
       {/* Header */}
       <motion.header 
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="relative z-20 glass-card border-b border-border/20 sticky top-0"
+        transition={{ duration: 0.5, type: 'spring', stiffness: 100 }}
+        className="sticky top-4 z-50 mx-4 sm:mx-auto max-w-5xl mt-4 rounded-2xl glass-card border border-border/30 shadow-2xl"
       >
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <img src={logo} alt="Logo P-CON" className="w-auto h-16 sm:h-20 max-w-[14rem] sm:max-w-[18rem] drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" />
+        <div className="px-4 py-3 sm:px-6 sm:py-3 flex items-center justify-between">
+          <img src={logo} alt="Logo P-CON" className="w-auto h-14 sm:h-16 max-w-[12rem] sm:max-w-[16rem] drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" />
           <div className="flex items-center gap-4">
             <motion.div 
               whileHover={{ scale: 1.05 }} 
