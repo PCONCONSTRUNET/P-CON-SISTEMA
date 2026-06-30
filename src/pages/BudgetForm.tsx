@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Download, Loader2, Plus, Trash2, GripVertical } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,31 +10,28 @@ import { toast } from 'sonner';
 
 const BudgetForm = () => {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  
+  // Estrutura neutra e dinâmica
   const [form, setForm] = useState<PConProposalData>({
-    clientName: 'Ateliê Mimos da Preta',
-    currentCatalogItems: [
-      { item: 'Mensalidade', value: 'R$ 55,00' },
-      { item: 'Entrega', value: 'R$ 0,00 (Promoção Dia das Mães)' },
+    clientName: '',
+    tables: [
+      {
+        title: 'Serviços / Produtos',
+        items: [
+          { item: '', value: '' }
+        ]
+      }
     ],
-    newProposalItems: [
-      { item: 'Novo catálogo (layout exclusivo e personalizado)', value: '' },
-      { item: 'Mensalidade', value: 'R$ 65,00' },
-      { item: 'Entrega', value: 'R$ 300,00' },
-    ],
-    financialSummary: [
-      'Total mensal (2 catálogos ativos): R$ 120,00',
-      'Entrega do novo catálogo: R$ 300,00 (aceitamos parcelamento)',
-    ],
-    includedItems: [
-      'Suporte completo em ambos os catálogos.',
-      'Atendimento e acompanhamento contínuo.',
-      'Exclusividade de Lucas Pereira para adicionar fotos, organizar e manter o catálogo da proprietária do Ateliê.',
-    ],
-    courtesyItems: [
-      'Sistema de Cupons.',
-      'Sistema de Carrinho (clientes poderão montar pedidos diretamente pelo catálogo).',
-      'Essas funcionalidades serão disponibilizadas nos dois catálogos.',
-    ],
+    textSections: [
+      {
+        title: 'Resumo Financeiro',
+        items: ['']
+      },
+      {
+        title: 'Observações',
+        items: ['']
+      }
+    ]
   });
 
   const handleDownloadPdf = async () => {
@@ -55,33 +52,106 @@ const BudgetForm = () => {
     }
   };
 
-  const updateArrayItem = (field: keyof PConProposalData, index: number, value: any) => {
-    setForm(current => {
-      const arr = [...(current[field] as any[])];
-      arr[index] = value;
-      return { ...current, [field]: arr };
-    });
-  };
-
-  const addArrayItem = (field: keyof PConProposalData, defaultVal: any) => {
+  // --- Funções para Tabelas Dinâmicas ---
+  const addTable = () => {
     setForm(current => ({
       ...current,
-      [field]: [...(current[field] as any[]), defaultVal]
+      tables: [...current.tables, { title: 'Nova Tabela', items: [{ item: '', value: '' }] }]
     }));
   };
 
-  const removeArrayItem = (field: keyof PConProposalData, index: number) => {
+  const removeTable = (tableIndex: number) => {
     setForm(current => {
-      const arr = [...(current[field] as any[])];
-      arr.splice(index, 1);
-      return { ...current, [field]: arr };
+      const newTables = [...current.tables];
+      newTables.splice(tableIndex, 1);
+      return { ...current, tables: newTables };
+    });
+  };
+
+  const updateTableTitle = (tableIndex: number, title: string) => {
+    setForm(current => {
+      const newTables = [...current.tables];
+      newTables[tableIndex].title = title;
+      return { ...current, tables: newTables };
+    });
+  };
+
+  const addTableItem = (tableIndex: number) => {
+    setForm(current => {
+      const newTables = [...current.tables];
+      newTables[tableIndex].items.push({ item: '', value: '' });
+      return { ...current, tables: newTables };
+    });
+  };
+
+  const updateTableItem = (tableIndex: number, itemIndex: number, field: 'item' | 'value', val: string) => {
+    setForm(current => {
+      const newTables = [...current.tables];
+      newTables[tableIndex].items[itemIndex][field] = val;
+      return { ...current, tables: newTables };
+    });
+  };
+
+  const removeTableItem = (tableIndex: number, itemIndex: number) => {
+    setForm(current => {
+      const newTables = [...current.tables];
+      newTables[tableIndex].items.splice(itemIndex, 1);
+      return { ...current, tables: newTables };
+    });
+  };
+
+  // --- Funções para Seções de Texto Dinâmicas ---
+  const addTextSection = () => {
+    setForm(current => ({
+      ...current,
+      textSections: [...current.textSections, { title: 'Nova Seção', items: [''] }]
+    }));
+  };
+
+  const removeTextSection = (sectionIndex: number) => {
+    setForm(current => {
+      const newSections = [...current.textSections];
+      newSections.splice(sectionIndex, 1);
+      return { ...current, textSections: newSections };
+    });
+  };
+
+  const updateTextSectionTitle = (sectionIndex: number, title: string) => {
+    setForm(current => {
+      const newSections = [...current.textSections];
+      newSections[sectionIndex].title = title;
+      return { ...current, textSections: newSections };
+    });
+  };
+
+  const addTextSectionItem = (sectionIndex: number) => {
+    setForm(current => {
+      const newSections = [...current.textSections];
+      newSections[sectionIndex].items.push('');
+      return { ...current, textSections: newSections };
+    });
+  };
+
+  const updateTextSectionItem = (sectionIndex: number, itemIndex: number, val: string) => {
+    setForm(current => {
+      const newSections = [...current.textSections];
+      newSections[sectionIndex].items[itemIndex] = val;
+      return { ...current, textSections: newSections };
+    });
+  };
+
+  const removeTextSectionItem = (sectionIndex: number, itemIndex: number) => {
+    setForm(current => {
+      const newSections = [...current.textSections];
+      newSections[sectionIndex].items.splice(itemIndex, 1);
+      return { ...current, textSections: newSections };
     });
   };
 
   return (
     <DashboardLayout
-      title="Novo Orçamento em PDF"
-      subtitle="Gere a proposta comercial com layout da P-CON"
+      title="Gerador de Orçamento em PDF"
+      subtitle="Crie propostas comerciais dinâmicas e neutras"
       headerAction={
         <Button onClick={handleDownloadPdf} disabled={downloadingPdf}>
           {downloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
@@ -89,7 +159,9 @@ const BudgetForm = () => {
         </Button>
       }
     >
-      <div className="space-y-6 max-w-4xl mx-auto pb-10">
+      <div className="space-y-8 max-w-4xl mx-auto pb-10">
+        
+        {/* IDENTIFICAÇÃO */}
         <Card className="glass-card">
           <CardHeader>
             <CardTitle>Identificação</CardTitle>
@@ -99,6 +171,7 @@ const BudgetForm = () => {
               <Label htmlFor="client-name">Nome do Cliente / Empresa</Label>
               <Input 
                 id="client-name" 
+                placeholder="Ex: Ateliê Mimos da Preta"
                 value={form.clientName} 
                 onChange={(e) => setForm({ ...form, clientName: e.target.value })} 
               />
@@ -106,135 +179,116 @@ const BudgetForm = () => {
           </CardContent>
         </Card>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="glass-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg">Catálogo Atual</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => addArrayItem('currentCatalogItems', { item: '', value: '' })}>
-                <Plus className="w-4 h-4" />
+        {/* TABELAS DE PREÇO / SERVIÇOS */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Tabelas de Preços</h2>
+            <Button variant="secondary" onClick={addTable}>
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Tabela
+            </Button>
+          </div>
+          
+          {form.tables.map((table, tIndex) => (
+            <Card key={tIndex} className="glass-card border-l-4 border-l-primary relative">
+              <Button 
+                variant="destructive" 
+                size="icon" 
+                className="absolute -right-3 -top-3 h-8 w-8 rounded-full shadow-md"
+                onClick={() => removeTable(tIndex)}
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-4">
-              {form.currentCatalogItems.map((row, index) => (
-                <div key={index} className="flex items-center gap-2">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
                   <Input 
-                    placeholder="Item" 
-                    value={row.item} 
-                    onChange={e => updateArrayItem('currentCatalogItems', index, { ...row, item: e.target.value })} 
+                    className="text-lg font-semibold bg-transparent border-none px-0 h-auto w-full focus-visible:ring-0"
+                    value={table.title}
+                    placeholder="Título da Tabela (Ex: Catálogo Atual, Serviços)"
+                    onChange={(e) => updateTableTitle(tIndex, e.target.value)}
                   />
-                  <Input 
-                    placeholder="Valor" 
-                    value={row.value} 
-                    onChange={e => updateArrayItem('currentCatalogItems', index, { ...row, value: e.target.value })} 
-                  />
-                  <Button size="icon" variant="destructive" onClick={() => removeArrayItem('currentCatalogItems', index)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
                 </div>
-              ))}
-              {form.currentCatalogItems.length === 0 && <p className="text-sm text-muted-foreground text-center">Nenhum item adicionado.</p>}
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg">Nova Proposta</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => addArrayItem('newProposalItems', { item: '', value: '' })}>
-                <Plus className="w-4 h-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-4">
-              {form.newProposalItems.map((row, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input 
-                    placeholder="Item" 
-                    value={row.item} 
-                    onChange={e => updateArrayItem('newProposalItems', index, { ...row, item: e.target.value })} 
-                  />
-                  <Input 
-                    placeholder="Valor" 
-                    value={row.value} 
-                    onChange={e => updateArrayItem('newProposalItems', index, { ...row, value: e.target.value })} 
-                  />
-                  <Button size="icon" variant="destructive" onClick={() => removeArrayItem('newProposalItems', index)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-              {form.newProposalItems.length === 0 && <p className="text-sm text-muted-foreground text-center">Nenhum item adicionado.</p>}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {table.items.map((row, iIndex) => (
+                  <div key={iIndex} className="flex items-center gap-2">
+                    <Input 
+                      placeholder="Descrição do Item" 
+                      value={row.item} 
+                      className="flex-1"
+                      onChange={e => updateTableItem(tIndex, iIndex, 'item', e.target.value)} 
+                    />
+                    <Input 
+                      placeholder="Valor (R$)" 
+                      value={row.value} 
+                      className="w-32 md:w-48"
+                      onChange={e => updateTableItem(tIndex, iIndex, 'value', e.target.value)} 
+                    />
+                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => removeTableItem(tIndex, iIndex)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => addTableItem(tIndex)}>
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar Linha
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg">Resumo Financeiro</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => addArrayItem('financialSummary', '')}>
-              <Plus className="w-4 h-4" />
+        {/* SEÇÕES DE TEXTO */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Seções de Informação</h2>
+            <Button variant="secondary" onClick={addTextSection}>
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Seção
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-4">
-            {form.financialSummary.map((text, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <Input 
-                  value={text} 
-                  onChange={e => updateArrayItem('financialSummary', index, e.target.value)} 
-                />
-                <Button size="icon" variant="destructive" onClick={() => removeArrayItem('financialSummary', index)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg">Incluso sem custo adicional</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => addArrayItem('includedItems', '')}>
-              <Plus className="w-4 h-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-4">
-            {form.includedItems.map((text, index) => (
-              <div key={index} className="flex items-center gap-2">
+          {form.textSections.map((section, sIndex) => (
+            <Card key={sIndex} className="glass-card border-l-4 border-l-primary relative">
+              <Button 
+                variant="destructive" 
+                size="icon" 
+                className="absolute -right-3 -top-3 h-8 w-8 rounded-full shadow-md"
+                onClick={() => removeTextSection(sIndex)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <CardHeader className="pb-3">
                 <Input 
-                  value={text} 
-                  onChange={e => updateArrayItem('includedItems', index, e.target.value)} 
+                  className="text-lg font-semibold bg-transparent border-none px-0 h-auto w-full focus-visible:ring-0"
+                  value={section.title}
+                  placeholder="Título da Seção (Ex: Resumo Financeiro, Cortesia Exclusiva)"
+                  onChange={(e) => updateTextSectionTitle(sIndex, e.target.value)}
                 />
-                <Button size="icon" variant="destructive" onClick={() => removeArrayItem('includedItems', index)}>
-                  <Trash2 className="w-4 h-4" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {section.items.map((text, iIndex) => (
+                  <div key={iIndex} className="flex items-start gap-2">
+                    <Input 
+                      value={text} 
+                      placeholder="Adicione uma informação ou tópico..."
+                      onChange={e => updateTextSectionItem(sIndex, iIndex, e.target.value)} 
+                    />
+                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 shrink-0" onClick={() => removeTextSectionItem(sIndex, iIndex)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => addTextSectionItem(sIndex)}>
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar Linha
                 </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-        <Card className="glass-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg">Cortesia Exclusiva</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => addArrayItem('courtesyItems', '')}>
-              <Plus className="w-4 h-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-4">
-            {form.courtesyItems.map((text, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <Input 
-                  value={text} 
-                  onChange={e => updateArrayItem('courtesyItems', index, e.target.value)} 
-                />
-                <Button size="icon" variant="destructive" onClick={() => removeArrayItem('courtesyItems', index)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Button className="w-full h-12 text-lg mt-8" onClick={handleDownloadPdf} disabled={downloadingPdf}>
+        <Button className="w-full h-14 text-lg font-bold mt-8 shadow-lg" onClick={handleDownloadPdf} disabled={downloadingPdf}>
           {downloadingPdf ? <Loader2 className="w-6 h-6 mr-2 animate-spin" /> : <Download className="w-6 h-6 mr-2" />}
-          GERAR PDF
+          GERAR PDF DA PROPOSTA
         </Button>
       </div>
     </DashboardLayout>

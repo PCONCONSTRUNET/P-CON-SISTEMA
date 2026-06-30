@@ -4,11 +4,14 @@ import brandImage from '@/assets/pcon-construnet-brand.png';
 
 export interface PConProposalData {
   clientName: string;
-  currentCatalogItems: { item: string; value: string }[];
-  newProposalItems: { item: string; value: string }[];
-  financialSummary: string[];
-  includedItems: string[];
-  courtesyItems: string[];
+  tables: {
+    title: string;
+    items: { item: string; value: string }[];
+  }[];
+  textSections: {
+    title: string;
+    items: string[];
+  }[];
 }
 
 const loadImageAsBase64 = (url: string): Promise<string> =>
@@ -41,7 +44,6 @@ export const generatePConProposalPDF = async (data: PConProposalData) => {
   // Header - Logo
   try {
     const brandBase64 = await loadImageAsBase64(brandImage);
-    // Tentar centralizar a logo. Ajustar as proporções conforme necessário.
     const imgWidth = 64;
     const imgHeight = 24;
     doc.addImage(brandBase64, 'PNG', (pageWidth - imgWidth) / 2, currentY, imgWidth, imgHeight);
@@ -67,20 +69,29 @@ export const generatePConProposalPDF = async (data: PConProposalData) => {
   doc.text(`Cliente: ${data.clientName}`, 16, currentY);
   currentY += 15;
 
-  const primaryBlue: [number, number, number] = [11, 71, 157]; // #0b479d aproximado
+  const primaryBlue: [number, number, number] = [11, 71, 157];
   const textColor: [number, number, number] = [30, 30, 30];
 
-  // Seção 1: Catálogo Atual
-  if (data.currentCatalogItems.length > 0) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.text('Catálogo Atual', 16, currentY);
-    currentY += 5;
+  // Renderiza Tabelas Dinâmicas
+  data.tables.forEach((table) => {
+    if (table.items.length === 0) return;
+    
+    if (currentY > 250) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    if (table.title) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(14);
+      doc.text(table.title, 16, currentY);
+      currentY += 5;
+    }
 
     autoTable(doc, {
       startY: currentY,
       head: [['Item', 'Valor']],
-      body: data.currentCatalogItems.map((row) => [row.item, row.value]),
+      body: table.items.map((row) => [row.item, row.value]),
       theme: 'grid',
       headStyles: { fillColor: primaryBlue, textColor: 255, fontStyle: 'normal' },
       bodyStyles: { textColor: textColor },
@@ -92,65 +103,36 @@ export const generatePConProposalPDF = async (data: PConProposalData) => {
       },
     });
     currentY = (doc as any).lastAutoTable.finalY + 15;
-  }
+  });
 
-  // Seção 2: Nova Proposta
-  if (data.newProposalItems.length > 0) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.text('Nova Proposta – Segundo Catálogo', 16, currentY);
-    currentY += 5;
-
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Item', 'Valor']],
-      body: data.newProposalItems.map((row) => [row.item, row.value]),
-      theme: 'grid',
-      headStyles: { fillColor: primaryBlue, textColor: 255, fontStyle: 'normal' },
-      bodyStyles: { textColor: textColor },
-      margin: { left: 16, right: 16 },
-      styles: { fontSize: 11, cellPadding: 4 },
-      columnStyles: {
-        0: { cellWidth: 'auto' },
-        1: { cellWidth: 60 },
-      },
-    });
-    currentY = (doc as any).lastAutoTable.finalY + 15;
-  }
-
-  // Helper para listas com marcadores
-  const renderListSection = (title: string, items: string[], isBullet = true) => {
-    if (items.length === 0) return;
+  // Renderiza Seções de Texto Dinâmicas
+  data.textSections.forEach((section) => {
+    if (section.items.length === 0 && !section.title) return;
     
     if (currentY > 260) {
       doc.addPage();
       currentY = 20;
     }
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text(title, 16, currentY);
-    currentY += 8;
+    if (section.title) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text(section.title, 16, currentY);
+      currentY += 8;
+    }
 
     doc.setFontSize(11);
-    items.forEach((item) => {
+    section.items.forEach((item) => {
+      // Se tiver mais de um item, usa bullet, se for só 1 item e parecer um parágrafo longo, não usa.
+      const isBullet = section.items.length > 1;
       const bullet = isBullet ? '• ' : '';
       const lines = doc.splitTextToSize(`${bullet}${item}`, 178);
       doc.text(lines, 16, currentY);
       currentY += (lines.length * 5) + 1;
     });
     currentY += 10;
-  };
-
-  // Seção 3: Resumo Financeiro
-  renderListSection('Resumo Financeiro', data.financialSummary);
-
-  // Seção 4: Incluso sem custo adicional
-  renderListSection('Incluso sem custo adicional', data.includedItems);
-
-  // Seção 5: Cortesia Exclusiva
-  renderListSection('Cortesia Exclusiva', data.courtesyItems);
+  });
 
   // Rodapé
   const footerY = Math.max(currentY + 20, 270);
