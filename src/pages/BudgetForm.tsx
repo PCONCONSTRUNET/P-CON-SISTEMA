@@ -190,24 +190,22 @@ const BudgetForm = () => {
           </div>
           
           {form.tables.map((table, tIndex) => (
-            <Card key={tIndex} className="glass-card border-l-4 border-l-primary relative">
-              <Button 
-                variant="destructive" 
-                size="icon" 
-                className="absolute -right-3 -top-3 h-8 w-8 rounded-full shadow-md"
-                onClick={() => removeTable(tIndex)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <Input 
-                    className="text-lg font-semibold bg-transparent border-none px-0 h-auto w-full focus-visible:ring-0"
-                    value={table.title}
-                    placeholder="Título da Tabela (Ex: Catálogo Atual, Serviços)"
-                    onChange={(e) => updateTableTitle(tIndex, e.target.value)}
-                  />
-                </div>
+            <Card key={tIndex} className="glass-card border-l-4 border-l-primary">
+              <CardHeader className="flex flex-row items-start justify-between pb-3 gap-4">
+                <Input 
+                  className="text-lg font-semibold bg-transparent border-none px-0 h-auto flex-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/50"
+                  value={table.title}
+                  placeholder="Título da Tabela (Ex: Catálogo Atual, Serviços)"
+                  onChange={(e) => updateTableTitle(tIndex, e.target.value)}
+                />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0 mt-0"
+                  onClick={() => removeTable(tIndex)}
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {table.items.map((row, iIndex) => (
@@ -248,22 +246,22 @@ const BudgetForm = () => {
           </div>
 
           {form.textSections.map((section, sIndex) => (
-            <Card key={sIndex} className="glass-card border-l-4 border-l-primary relative">
-              <Button 
-                variant="destructive" 
-                size="icon" 
-                className="absolute -right-3 -top-3 h-8 w-8 rounded-full shadow-md"
-                onClick={() => removeTextSection(sIndex)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              <CardHeader className="pb-3">
+            <Card key={sIndex} className="glass-card border-l-4 border-l-primary">
+              <CardHeader className="flex flex-row items-start justify-between pb-3 gap-4">
                 <Input 
-                  className="text-lg font-semibold bg-transparent border-none px-0 h-auto w-full focus-visible:ring-0"
+                  className="text-lg font-semibold bg-transparent border-none px-0 h-auto flex-1 focus-visible:ring-0 shadow-none placeholder:text-muted-foreground/50"
                   value={section.title}
                   placeholder="Título da Seção (Ex: Resumo Financeiro, Cortesia Exclusiva)"
                   onChange={(e) => updateTextSectionTitle(sIndex, e.target.value)}
                 />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0 mt-0"
+                  onClick={() => removeTextSection(sIndex)}
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {section.items.map((text, iIndex) => (
