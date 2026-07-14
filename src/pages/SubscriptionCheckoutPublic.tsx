@@ -57,14 +57,23 @@ const SubscriptionCheckoutPublic = () => {
 
     const loadSubscription = async () => {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('subscriptions')
           .select(`
             id, plan_name, value, status, next_payment,
-            clients (id, name, email, document, phone)
-          `)
-          .eq('id', id)
-          .single();
+            clients!inner (id, name, email, document, phone)
+          `);
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(id)) {
+           query = query.eq('id', id);
+        } else {
+           // Decode URI component just in case
+           const decodedId = decodeURIComponent(id);
+           query = query.ilike('clients.name', `${decodedId}%`).eq('status', 'active');
+        }
+
+        const { data, error } = await query.limit(1).maybeSingle();
 
         if (error || !data) throw new Error('Assinatura não encontrada');
 
@@ -202,7 +211,7 @@ const SubscriptionCheckoutPublic = () => {
                 </span>
                 <div>
                   <h1 className="text-3xl sm:text-4xl font-heading font-bold leading-tight text-foreground">Pagamento de Assinatura</h1>
-                  <p className="text-base sm:text-lg text-muted-foreground leading-relaxed mt-2">{subData.plan_name}</p>
+                  <p className="text-base sm:text-lg text-foreground/90 font-medium leading-relaxed mt-2">{subData.plan_name}</p>
                 </div>
               </div>
             </motion.div>

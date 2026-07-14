@@ -620,7 +620,8 @@ const Subscriptions = () => {
             {item.status === 'active' && (
               <DropdownMenuItem 
                 onClick={() => {
-                  const url = `${window.location.origin}/pagar-assinatura/${item.id}`;
+                  const firstName = item.clients?.name ? item.clients.name.split(' ')[0] : item.id;
+                  const url = `${window.location.origin}/pagar-assinatura/${firstName}`;
                   navigator.clipboard.writeText(url);
                   toast.success('Link copiado!');
                 }}
