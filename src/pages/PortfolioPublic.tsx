@@ -161,7 +161,7 @@ const PortfolioPublic = () => {
           
           <div className="flex items-center gap-4">
             <a 
-              href="https://instagram.com/pcon_construnet" 
+              href="https://www.instagram.com/pconconstrunet/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="hover:scale-110 transition-transform opacity-90 hover:opacity-100"
