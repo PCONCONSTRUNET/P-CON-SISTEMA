@@ -80,17 +80,17 @@ const PortfolioPublic = () => {
                 key={item.id} 
                 className="glass-card rounded-2xl overflow-hidden group hover:border-primary/50 transition-colors flex flex-col"
               >
-                <div className="h-64 sm:h-80 w-full relative bg-secondary/20 p-4 flex items-center justify-center">
+                <div className="aspect-[4/5] sm:aspect-square w-full relative bg-black/5 dark:bg-white/5">
                   {item.image_urls && item.image_urls.length > 1 ? (
-                    <Carousel className="w-full h-full">
+                    <Carousel className="absolute inset-0">
                       <CarouselContent className="h-full ml-0">
                         {item.image_urls.map((url, index) => (
-                          <CarouselItem key={index} className="pl-0 h-full">
-                            <div className="relative w-full h-full overflow-hidden">
+                          <CarouselItem key={index} className="pl-0 h-full relative">
+                            <div className="absolute inset-0 p-4 flex items-center justify-center">
                               <img 
                                 src={url} 
                                 alt={`${item.title} - Imagem ${index + 1}`}
-                                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+                                className="max-w-full max-h-full object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-105"
                               />
                               {item.project_url && (
                                 <a 
@@ -113,11 +113,11 @@ const PortfolioPublic = () => {
                       <CarouselNext className="right-2 bg-background/80 hover:bg-background border-none shadow-sm" />
                     </Carousel>
                   ) : (
-                    <div className="relative w-full h-full overflow-hidden">
+                    <div className="absolute inset-0 p-4 flex items-center justify-center">
                       <img 
                         src={item.image_urls?.[0] || ''} 
                         alt={item.title}
-                        className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+                        className="max-w-full max-h-full object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-105"
                       />
                       {item.project_url && (
                         <a 
