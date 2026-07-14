@@ -45,6 +45,8 @@ import SubscriptionCheckoutPublic from "./pages/SubscriptionCheckoutPublic";
 
 import NotFound from "./pages/NotFound";
 import Receipt from "./pages/Receipt";
+import PortfolioPublic from "./pages/PortfolioPublic";
+import PortfolioAdmin from "./pages/PortfolioAdmin";
 
 const queryClient = new QueryClient();
 
@@ -84,6 +86,7 @@ const App = () => (
                  <Route path="/budgets/settings" element={<ProtectedRoute><BudgetSettings /></ProtectedRoute>} />
                  <Route path="/payment-links" element={<ProtectedRoute><PaymentLinks /></ProtectedRoute>} />
                  <Route path="/efi-settings" element={<ProtectedRoute><EfiSettings /></ProtectedRoute>} />
+                 <Route path="/admin/portfolio" element={<ProtectedRoute><PortfolioAdmin /></ProtectedRoute>} />
                 {/* Referral Form (Public) */}
                 <Route path="/indicar" element={<ReferralForm />} />
                 <Route path="/r/:slug" element={<ReferralForm />} />
@@ -104,6 +107,9 @@ const App = () => (
                 
                 {/* Receipt Route (Public) */}
                 <Route path="/c/:id" element={<Receipt />} />
+                
+                {/* Portfolio Route (Public) */}
+                <Route path="/portfolio" element={<PortfolioPublic />} />
                 
                 <Route path="*" element={<NotFound />} />
               </Routes>
