@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import Sidebar, { MobileHeader } from '@/components/Sidebar';
-import { Plus, Pencil, Trash2, Loader2, Upload, GripVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Upload, GripVertical, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -10,7 +10,7 @@ interface PortfolioItem {
   title: string;
   description: string | null;
   project_url: string | null;
-  image_url: string;
+  image_urls: string[];
   order_index: number | null;
 }
 
@@ -26,8 +26,8 @@ const PortfolioAdmin = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectUrl, setProjectUrl] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [currentImageUrl, setCurrentImageUrl] = useState('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [currentImageUrls, setCurrentImageUrls] = useState<string[]>([]);
 
   useEffect(() => {
     fetchItems();
@@ -58,22 +58,31 @@ const PortfolioAdmin = () => {
       setTitle(item.title);
       setDescription(item.description || '');
       setProjectUrl(item.project_url || '');
-      setCurrentImageUrl(item.image_url);
+      setCurrentImageUrls(item.image_urls || []);
     } else {
       setEditingId(null);
       setTitle('');
       setDescription('');
       setProjectUrl('');
-      setCurrentImageUrl('');
+      setCurrentImageUrls([]);
     }
-    setImageFile(null);
+    setImageFiles([]);
     setIsFormOpen(true);
   };
 
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingId(null);
-    setImageFile(null);
+    setImageFiles([]);
+    setCurrentImageUrls([]);
+  };
+
+  const removeCurrentImage = (urlToRemove: string) => {
+    setCurrentImageUrls(currentImageUrls.filter(url => url !== urlToRemove));
+  };
+
+  const removeNewFile = (index: number) => {
+    setImageFiles(imageFiles.filter((_, i) => i !== index));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -82,24 +91,24 @@ const PortfolioAdmin = () => {
       toast.error('O título é obrigatório');
       return;
     }
-    if (!editingId && !imageFile && !currentImageUrl) {
-      toast.error('A imagem é obrigatória');
+    if (currentImageUrls.length === 0 && imageFiles.length === 0) {
+      toast.error('Pelo menos uma imagem é obrigatória');
       return;
     }
 
     try {
       setSaving(true);
-      let finalImageUrl = currentImageUrl;
+      const finalImageUrls = [...currentImageUrls];
 
-      // Handle Image Upload
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
+      // Handle Image Uploads
+      for (const file of imageFiles) {
+        const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('portfolio')
-          .upload(filePath, imageFile);
+          .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
@@ -107,14 +116,14 @@ const PortfolioAdmin = () => {
           .from('portfolio')
           .getPublicUrl(filePath);
 
-        finalImageUrl = publicUrlData.publicUrl;
+        finalImageUrls.push(publicUrlData.publicUrl);
       }
 
       const itemData = {
         title,
         description: description || null,
         project_url: projectUrl || null,
-        image_url: finalImageUrl,
+        image_urls: finalImageUrls,
       };
 
       if (editingId) {
@@ -144,15 +153,17 @@ const PortfolioAdmin = () => {
     }
   };
 
-  const handleDelete = async (id: string, imageUrl: string) => {
+  const handleDelete = async (id: string, imageUrls: string[]) => {
     if (!confirm('Tem certeza que deseja excluir este projeto?')) return;
 
     try {
-      // Optional: Delete image from storage
-      if (imageUrl.includes('supabase.co/storage/v1/object/public/portfolio/')) {
-        const fileName = imageUrl.split('/').pop();
-        if (fileName) {
-          await supabase.storage.from('portfolio').remove([fileName]);
+      // Optional: Delete images from storage
+      for (const url of imageUrls) {
+        if (url.includes('supabase.co/storage/v1/object/public/portfolio/')) {
+          const fileName = url.split('/').pop();
+          if (fileName) {
+            await supabase.storage.from('portfolio').remove([fileName]);
+          }
         }
       }
 
@@ -227,21 +238,49 @@ const PortfolioAdmin = () => {
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-foreground">Imagem do Projeto</label>
-                    <div className="flex items-center gap-4">
-                      {currentImageUrl && !imageFile && (
-                        <img src={currentImageUrl} alt="Current" className="h-16 w-16 object-cover rounded-md border border-border" />
-                      )}
-                      <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-colors border border-input rounded-md hover:bg-secondary/50">
-                        <Upload className="w-4 h-4" />
-                        {imageFile ? imageFile.name : (currentImageUrl ? 'Trocar Imagem' : 'Fazer Upload da Imagem')}
+                    <label className="text-sm font-medium text-foreground">Imagens do Projeto</label>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
+                      {/* Imagens Atuais */}
+                      {currentImageUrls.map((url, i) => (
+                        <div key={`current-${i}`} className="relative group rounded-md overflow-hidden border border-border aspect-square">
+                          <img src={url} alt={`Saved ${i}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeCurrentImage(url)}
+                            className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-destructive text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      
+                      {/* Novas Imagens Selecionadas */}
+                      {imageFiles.map((file, i) => (
+                        <div key={`new-${i}`} className="relative group rounded-md overflow-hidden border border-border aspect-square">
+                          <img src={URL.createObjectURL(file)} alt={`New ${i}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeNewFile(i)}
+                            className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-destructive text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Botão de Upload */}
+                      <label className="cursor-pointer flex flex-col items-center justify-center gap-2 aspect-square text-sm font-medium transition-colors border border-dashed border-border rounded-md hover:bg-secondary/50 text-muted-foreground">
+                        <Upload className="w-6 h-6" />
+                        <span>Adicionar</span>
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
                           className="hidden"
                           onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              setImageFile(e.target.files[0]);
+                            if (e.target.files) {
+                              setImageFiles([...imageFiles, ...Array.from(e.target.files)]);
                             }
                           }}
                         />
@@ -249,7 +288,7 @@ const PortfolioAdmin = () => {
                     </div>
                   </div>
                 </div>
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
                   <Button type="button" variant="outline" onClick={handleCloseForm} disabled={saving}>
                     Cancelar
                   </Button>
@@ -291,11 +330,20 @@ const PortfolioAdmin = () => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <img src={item.image_url} alt={item.title} className="w-10 h-10 rounded-md object-cover border border-border" />
+                            {item.image_urls && item.image_urls.length > 0 ? (
+                              <img src={item.image_urls[0]} alt={item.title} className="w-10 h-10 rounded-md object-cover border border-border" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-md bg-secondary/50 border border-border flex items-center justify-center">
+                                <span className="text-xs text-muted-foreground">0</span>
+                              </div>
+                            )}
                             <div>
                               <div className="font-medium text-foreground">{item.title}</div>
                               <div className="text-xs text-muted-foreground truncate max-w-[200px]">
                                 {item.description || '-'}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {item.image_urls?.length || 0} {(item.image_urls?.length === 1) ? 'imagem' : 'imagens'}
                               </div>
                             </div>
                           </div>
@@ -314,7 +362,7 @@ const PortfolioAdmin = () => {
                             <Button variant="ghost" size="icon" onClick={() => handleOpenForm(item)} className="h-8 w-8 text-muted-foreground hover:text-primary">
                               <Pencil className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id, item.image_url)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id, item.image_urls || [])} className="h-8 w-8 text-muted-foreground hover:text-destructive">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>

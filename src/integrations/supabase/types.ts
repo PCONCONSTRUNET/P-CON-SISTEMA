@@ -20,7 +20,7 @@ export type Database = {
           title: string
           description: string | null
           project_url: string | null
-          image_url: string
+          image_urls: string[]
           created_at: string
           updated_at: string
           order_index: number | null
@@ -30,7 +30,7 @@ export type Database = {
           title: string
           description?: string | null
           project_url?: string | null
-          image_url: string
+          image_urls?: string[]
           created_at?: string
           updated_at?: string
           order_index?: number | null
@@ -40,7 +40,7 @@ export type Database = {
           title?: string
           description?: string | null
           project_url?: string | null
-          image_url?: string
+          image_urls?: string[]
           created_at?: string
           updated_at?: string
           order_index?: number | null

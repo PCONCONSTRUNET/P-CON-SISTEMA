@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import logo from '@/assets/logo-pcon-grande.png';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@/components/ui/carousel';
 
 interface PortfolioItem {
   id: string;
   title: string;
   description: string | null;
   project_url: string | null;
-  image_url: string;
+  image_urls: string[];
 }
 
 const PortfolioPublic = () => {
@@ -73,24 +80,59 @@ const PortfolioPublic = () => {
                 key={item.id} 
                 className="glass-card rounded-2xl overflow-hidden group hover:border-primary/50 transition-colors flex flex-col"
               >
-                <div className="aspect-video w-full overflow-hidden relative">
-                  <img 
-                    src={item.image_url} 
-                    alt={item.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  {item.project_url && (
-                    <a 
-                      href={item.project_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm"
-                    >
-                      <div className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-full font-medium hover:bg-primary/90 transition-colors">
-                        <span>Acessar Projeto</span>
-                        <ExternalLink className="w-4 h-4" />
-                      </div>
-                    </a>
+                <div className="aspect-video w-full relative bg-secondary/20">
+                  {item.image_urls && item.image_urls.length > 1 ? (
+                    <Carousel className="w-full h-full">
+                      <CarouselContent className="h-full ml-0">
+                        {item.image_urls.map((url, index) => (
+                          <CarouselItem key={index} className="pl-0 h-full">
+                            <div className="relative w-full h-full overflow-hidden">
+                              <img 
+                                src={url} 
+                                alt={`${item.title} - Imagem ${index + 1}`}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                              />
+                              {item.project_url && (
+                                <a 
+                                  href={item.project_url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm"
+                                >
+                                  <div className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-full font-medium hover:bg-primary/90 transition-colors">
+                                    <span>Acessar Projeto</span>
+                                    <ExternalLink className="w-4 h-4" />
+                                  </div>
+                                </a>
+                              )}
+                            </div>
+                          </CarouselItem>
+                        ))}
+                      </CarouselContent>
+                      <CarouselPrevious className="left-2 bg-background/80 hover:bg-background border-none shadow-sm" />
+                      <CarouselNext className="right-2 bg-background/80 hover:bg-background border-none shadow-sm" />
+                    </Carousel>
+                  ) : (
+                    <div className="relative w-full h-full overflow-hidden">
+                      <img 
+                        src={item.image_urls?.[0] || ''} 
+                        alt={item.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      {item.project_url && (
+                        <a 
+                          href={item.project_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm"
+                        >
+                          <div className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-full font-medium hover:bg-primary/90 transition-colors">
+                            <span>Acessar Projeto</span>
+                            <ExternalLink className="w-4 h-4" />
+                          </div>
+                        </a>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="p-6 flex flex-col flex-grow">
