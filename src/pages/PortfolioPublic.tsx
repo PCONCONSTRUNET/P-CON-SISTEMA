@@ -74,7 +74,7 @@ const PortfolioPublic = () => {
             <p>Nenhum projeto encontrado no momento.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
             {items.map((item) => (
               <div 
                 key={item.id} 
@@ -96,11 +96,11 @@ const PortfolioPublic = () => {
                           </CarouselItem>
                         ))}
                       </CarouselContent>
-                      <CarouselPrevious className="left-2 bg-background/80 hover:bg-background border-none shadow-sm" />
-                      <CarouselNext className="right-2 bg-background/80 hover:bg-background border-none shadow-sm" />
+                      <CarouselPrevious className="left-2 bg-background/80 hover:bg-background border-none shadow-sm h-6 w-6 sm:h-8 sm:w-8" />
+                      <CarouselNext className="right-2 bg-background/80 hover:bg-background border-none shadow-sm h-6 w-6 sm:h-8 sm:w-8" />
                     </Carousel>
                   ) : (
-                    <div className="absolute inset-0 p-4 flex items-center justify-center">
+                    <div className="absolute inset-0 p-2 sm:p-4 flex items-center justify-center">
                       <img 
                         src={item.image_urls?.[0] || ''} 
                         alt={item.title}
@@ -109,23 +109,23 @@ const PortfolioPublic = () => {
                     </div>
                   )}
                 </div>
-                <div className="p-6 flex flex-col flex-grow">
-                  <h3 className="text-xl font-bold mb-2 text-foreground">{item.title}</h3>
+                <div className="p-3 sm:p-6 flex flex-col flex-grow">
+                  <h3 className="text-base sm:text-xl font-bold mb-1 sm:mb-2 text-foreground line-clamp-2">{item.title}</h3>
                   {item.description && (
-                    <p className="text-muted-foreground line-clamp-3 mb-4 flex-grow">
+                    <p className="text-xs sm:text-base text-muted-foreground line-clamp-2 sm:line-clamp-3 mb-3 sm:mb-4 flex-grow">
                       {item.description}
                     </p>
                   )}
                   {item.project_url && (
-                    <div className="mt-auto pt-4">
+                    <div className="mt-auto pt-2 sm:pt-4">
                       <a 
                         href={item.project_url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground px-4 py-2.5 rounded-lg font-medium transition-colors w-full justify-center"
+                        className="inline-flex items-center gap-1 sm:gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground px-2 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-base transition-colors w-full justify-center"
                       >
-                        <ExternalLink className="w-4 h-4" />
-                        Acessar Projeto
+                        <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">Acessar Projeto</span>
                       </a>
                     </div>
                   )}
