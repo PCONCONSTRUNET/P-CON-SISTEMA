@@ -80,7 +80,7 @@ const PortfolioPublic = () => {
                 key={item.id} 
                 className="glass-card rounded-2xl overflow-hidden group hover:border-primary/50 transition-colors flex flex-col"
               >
-                <div className="aspect-video w-full relative bg-secondary/20">
+                <div className="h-64 sm:h-80 w-full relative bg-secondary/20 p-4 flex items-center justify-center">
                   {item.image_urls && item.image_urls.length > 1 ? (
                     <Carousel className="w-full h-full">
                       <CarouselContent className="h-full ml-0">
@@ -90,7 +90,7 @@ const PortfolioPublic = () => {
                               <img 
                                 src={url} 
                                 alt={`${item.title} - Imagem ${index + 1}`}
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
                               />
                               {item.project_url && (
                                 <a 
@@ -117,7 +117,7 @@ const PortfolioPublic = () => {
                       <img 
                         src={item.image_urls?.[0] || ''} 
                         alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
                       />
                       {item.project_url && (
                         <a 
