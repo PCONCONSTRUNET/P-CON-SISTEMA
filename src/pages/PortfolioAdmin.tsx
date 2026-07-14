@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Sidebar, MobileHeader } from '@/components/Sidebar';
+import Sidebar, { MobileHeader } from '@/components/Sidebar';
 import { Plus, Pencil, Trash2, Loader2, Upload, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
