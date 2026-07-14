@@ -135,6 +135,60 @@ const PortfolioPublic = () => {
           </div>
         )}
       </main>
+
+      {/* Call to Action */}
+      <section className="py-20 mt-10 border-t border-border/10 bg-gradient-to-b from-transparent to-secondary/5">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-4 text-foreground">Gostou do que viu?</h2>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-8">
+            Vamos transformar a sua ideia no nosso próximo caso de sucesso. Entre em contato e vamos conversar sobre o seu projeto!
+          </p>
+          <a 
+            href="https://wa.me/5511978363600?text=Olá! Vim pelo portfólio e gostaria de falar sobre um projeto." 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 shadow-lg shadow-primary/20"
+          >
+            Falar com um consultor
+          </a>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-12 border-t border-border/10 bg-background/50">
+        <div className="container mx-auto px-4 flex flex-col items-center justify-center gap-6">
+          <img src={logo} alt="P-CON" className="h-10 w-auto brightness-0 invert opacity-50" />
+          
+          <div className="flex items-center gap-4">
+            <a 
+              href="https://instagram.com/pcon_construnet" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:scale-110 transition-transform opacity-90 hover:opacity-100"
+              title="Siga nosso Instagram"
+            >
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#insta_grad)" strokeWidth="2"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" stroke="url(#insta_grad)" strokeWidth="2"/>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" stroke="url(#insta_grad)" strokeWidth="2.5" strokeLinecap="round"/>
+                <defs>
+                  <linearGradient id="insta_grad" x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#f09433"/>
+                    <stop offset="0.25" stopColor="#e6683c"/>
+                    <stop offset="0.5" stopColor="#dc2743"/>
+                    <stop offset="0.75" stopColor="#cc2366"/>
+                    <stop offset="1" stopColor="#bc1888"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </a>
+          </div>
+
+          <p className="text-sm text-muted-foreground text-center">
+            © {new Date().getFullYear()} P-CON Construnet. Todos os direitos reservados.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };
