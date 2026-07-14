@@ -92,19 +92,6 @@ const PortfolioPublic = () => {
                                 alt={`${item.title} - Imagem ${index + 1}`}
                                 className="max-w-full max-h-full object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-105"
                               />
-                              {item.project_url && (
-                                <a 
-                                  href={item.project_url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm"
-                                >
-                                  <div className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-full font-medium hover:bg-primary/90 transition-colors">
-                                    <span>Acessar Projeto</span>
-                                    <ExternalLink className="w-4 h-4" />
-                                  </div>
-                                </a>
-                              )}
                             </div>
                           </CarouselItem>
                         ))}
@@ -119,19 +106,6 @@ const PortfolioPublic = () => {
                         alt={item.title}
                         className="max-w-full max-h-full object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-105"
                       />
-                      {item.project_url && (
-                        <a 
-                          href={item.project_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm"
-                        >
-                          <div className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-full font-medium hover:bg-primary/90 transition-colors">
-                            <span>Acessar Projeto</span>
-                            <ExternalLink className="w-4 h-4" />
-                          </div>
-                        </a>
-                      )}
                     </div>
                   )}
                 </div>
@@ -143,15 +117,17 @@ const PortfolioPublic = () => {
                     </p>
                   )}
                   {item.project_url && (
-                    <a 
-                      href={item.project_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:text-primary/80 font-medium text-sm flex items-center gap-1 mt-auto xl:hidden"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Acessar
-                    </a>
+                    <div className="mt-auto pt-4">
+                      <a 
+                        href={item.project_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground px-4 py-2.5 rounded-lg font-medium transition-colors w-full justify-center"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Acessar Projeto
+                      </a>
+                    </div>
                   )}
                 </div>
               </div>
