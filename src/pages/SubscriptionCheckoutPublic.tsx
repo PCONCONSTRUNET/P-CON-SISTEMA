@@ -124,8 +124,6 @@ const SubscriptionCheckoutPublic = () => {
           expirationDate: result.expirationDate,
           amount: Number(subData.value)
         });
-      } else {
-        toast.error('Erro ao gerar PIX. Tente novamente.');
       }
     } catch (err) {
       console.error('Error generating PIX:', err);
