@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Filter, MoreHorizontal, Trash2, Calendar, AlertTriangle, Plus, Pencil, CreditCard, Loader2, Receipt, QrCode, FileText, CheckCircle } from 'lucide-react';
+import { Search, Filter, MoreHorizontal, Trash2, Calendar, AlertTriangle, Plus, Pencil, CreditCard, Loader2, Receipt, QrCode, FileText, CheckCircle, Link } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import WhatsAppSendModal, { WhatsAppSendParams } from '@/components/WhatsAppSendModal';
 
@@ -617,6 +617,18 @@ const Subscriptions = () => {
               )}
               {generatingChargeId === item.id ? 'Gerando...' : 'Gerar cobrança'}
             </DropdownMenuItem>
+            {item.status === 'active' && (
+              <DropdownMenuItem 
+                onClick={() => {
+                  const url = `${window.location.origin}/pagar-assinatura/${item.id}`;
+                  navigator.clipboard.writeText(url);
+                  toast.success('Link copiado!');
+                }}
+              >
+                <Link className="w-4 h-4 mr-2" />
+                Copiar link de pagamento
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem 
               onSelect={() => {
                 const p: WhatsAppSendParams = {

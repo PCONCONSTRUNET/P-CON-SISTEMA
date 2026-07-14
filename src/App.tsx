@@ -41,6 +41,7 @@ import ClientResetPassword from "./pages/ClientResetPassword";
 import Checkout from "./pages/Checkout";
 import PaymentLinks from "./pages/PaymentLinks";
 import PaymentLinkPublic from "./pages/PaymentLinkPublic";
+import SubscriptionCheckoutPublic from "./pages/SubscriptionCheckoutPublic";
 
 import NotFound from "./pages/NotFound";
 import Receipt from "./pages/Receipt";
@@ -88,6 +89,7 @@ const App = () => (
                 <Route path="/r/:slug" element={<ReferralForm />} />
                  <Route path="/proposta/:slug" element={<BudgetPublic />} />
                  <Route path="/pay/:slug" element={<PaymentLinkPublic />} />
+                 <Route path="/pagar-assinatura/:id" element={<SubscriptionCheckoutPublic />} />
                  <Route path="/contrato/:id" element={<ContractPublic />} />
                 
                 {/* Client Routes */}
