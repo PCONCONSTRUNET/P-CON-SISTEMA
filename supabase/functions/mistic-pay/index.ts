@@ -240,21 +240,51 @@ serve(async (req: Request) => {
       const supabase = getSupabaseAdmin();
       const { data: paymentRecord } = await supabase
         .from("payments")
-        .select("id, proposal_id, proposal_payment_type")
+        .select("id, proposal_id, proposal_payment_type, status, subscription_id")
         .eq("transaction_id", paymentId)
         .maybeSingle();
 
-      if (paymentRecord && dbStatus !== "pending") {
+      if (paymentRecord && dbStatus !== "pending" && paymentRecord.status !== "paid") {
         await supabase.from("payments").update({ status: dbStatus, paid_at: paidAt }).eq("id", paymentRecord.id);
 
-        if (isPaid && paymentRecord.proposal_id) {
-          const { data: proposal } = await supabase.from("proposals").select("status").eq("id", paymentRecord.proposal_id).maybeSingle();
-          const nextStatus = paymentRecord.proposal_payment_type === "entry" && proposal?.status !== "paid" ? "entry_paid" : "paid";
-          await supabase.from("proposals").update(
-            paymentRecord.proposal_payment_type === "entry"
-              ? { status: nextStatus, entry_paid_at: paidAt }
-              : { status: "paid", paid_at: paidAt },
-          ).eq("id", paymentRecord.proposal_id);
+        if (isPaid) {
+          if (paymentRecord.proposal_id) {
+            const { data: proposal } = await supabase.from("proposals").select("status").eq("id", paymentRecord.proposal_id).maybeSingle();
+            const nextStatus = paymentRecord.proposal_payment_type === "entry" && proposal?.status !== "paid" ? "entry_paid" : "paid";
+            await supabase.from("proposals").update(
+              paymentRecord.proposal_payment_type === "entry"
+                ? { status: nextStatus, entry_paid_at: paidAt }
+                : { status: "paid", paid_at: paidAt },
+            ).eq("id", paymentRecord.proposal_id);
+          }
+
+          if (paymentRecord.subscription_id) {
+            const { data: subscription } = await supabase
+              .from("subscriptions")
+              .select("next_payment, billing_cycle")
+              .eq("id", paymentRecord.subscription_id)
+              .maybeSingle();
+
+            if (subscription?.next_payment) {
+              const nextDate = new Date(subscription.next_payment);
+              const cycle = subscription.billing_cycle || "monthly";
+
+              if (cycle === "monthly") {
+                nextDate.setMonth(nextDate.getMonth() + 1);
+              } else if (cycle === "yearly") {
+                nextDate.setFullYear(nextDate.getFullYear() + 1);
+              } else if (cycle === "quarterly") {
+                nextDate.setMonth(nextDate.getMonth() + 3);
+              } else if (cycle === "weekly") {
+                nextDate.setDate(nextDate.getDate() + 7);
+              }
+
+              await supabase
+                .from("subscriptions")
+                .update({ next_payment: nextDate.toISOString().split("T")[0] })
+                .eq("id", paymentRecord.subscription_id);
+            }
+          }
         }
       }
 

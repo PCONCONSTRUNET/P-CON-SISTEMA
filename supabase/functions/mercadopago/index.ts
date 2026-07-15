@@ -423,39 +423,69 @@ serve(async (req: Request) => {
 
       const { data: paymentRecord } = await supabase
         .from("payments")
-        .select("id, proposal_id, proposal_payment_type")
+        .select("id, proposal_id, proposal_payment_type, status, subscription_id")
         .eq("transaction_id", paymentId)
         .maybeSingle();
 
-      if (paymentRecord) {
+      if (paymentRecord && paymentRecord.status !== "paid") {
+        const paidAt = localStatus === "paid" ? result.date_approved || new Date().toISOString() : null;
         await supabase
           .from("payments")
           .update({
             status: localStatus,
-            paid_at: localStatus === "paid" ? result.date_approved || new Date().toISOString() : null,
+            paid_at: paidAt,
           })
           .eq("id", paymentRecord.id);
 
-        if (localStatus === "paid" && paymentRecord.proposal_id) {
-          const { data: proposal } = await supabase
-            .from("proposals")
-            .select("status")
-            .eq("id", paymentRecord.proposal_id)
-            .maybeSingle();
+        if (localStatus === "paid") {
+          if (paymentRecord.proposal_id) {
+            const { data: proposal } = await supabase
+              .from("proposals")
+              .select("status")
+              .eq("id", paymentRecord.proposal_id)
+              .maybeSingle();
 
-          const paidAt = result.date_approved || new Date().toISOString();
-          const nextStatus = paymentRecord.proposal_payment_type === "entry" && proposal?.status !== "paid"
-            ? "entry_paid"
-            : "paid";
+            const nextStatus = paymentRecord.proposal_payment_type === "entry" && proposal?.status !== "paid"
+              ? "entry_paid"
+              : "paid";
 
-          await supabase
-            .from("proposals")
-            .update(
-              paymentRecord.proposal_payment_type === "entry"
-                ? { status: nextStatus, entry_paid_at: paidAt }
-                : { status: "paid", paid_at: paidAt }
-            )
-            .eq("id", paymentRecord.proposal_id);
+            await supabase
+              .from("proposals")
+              .update(
+                paymentRecord.proposal_payment_type === "entry"
+                  ? { status: nextStatus, entry_paid_at: paidAt }
+                  : { status: "paid", paid_at: paidAt }
+              )
+              .eq("id", paymentRecord.proposal_id);
+          }
+
+          if (paymentRecord.subscription_id) {
+            const { data: subscription } = await supabase
+              .from("subscriptions")
+              .select("next_payment, billing_cycle")
+              .eq("id", paymentRecord.subscription_id)
+              .maybeSingle();
+
+            if (subscription?.next_payment) {
+              const nextDate = new Date(subscription.next_payment);
+              const cycle = subscription.billing_cycle || "monthly";
+
+              if (cycle === "monthly") {
+                nextDate.setMonth(nextDate.getMonth() + 1);
+              } else if (cycle === "yearly") {
+                nextDate.setFullYear(nextDate.getFullYear() + 1);
+              } else if (cycle === "quarterly") {
+                nextDate.setMonth(nextDate.getMonth() + 3);
+              } else if (cycle === "weekly") {
+                nextDate.setDate(nextDate.getDate() + 7);
+              }
+
+              await supabase
+                .from("subscriptions")
+                .update({ next_payment: nextDate.toISOString().split("T")[0] })
+                .eq("id", paymentRecord.subscription_id);
+            }
+          }
         }
       }
 
