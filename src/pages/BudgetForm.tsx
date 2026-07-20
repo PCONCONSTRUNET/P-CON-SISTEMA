@@ -110,14 +110,27 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
         throw new Error('Formato de resposta inválido da IA');
       }
 
-      setForm({
-        clientName: parsedData.clientName || '',
+      const newForm = {
+        clientName: parsedData.clientName || 'Cliente',
         tables: parsedData.tables && parsedData.tables.length > 0 ? parsedData.tables : [{ title: 'Serviços', items: [{ item: '', value: '' }] }],
         textSections: parsedData.textSections && parsedData.textSections.length > 0 ? parsedData.textSections : [{ title: 'Observações', items: [''] }]
-      });
+      };
+      setForm(newForm);
       
       toast.success('Orçamento gerado pela IA com sucesso!');
       setAiPrompt('');
+      
+      // Auto-download PDF since fields are hidden
+      setDownloadingPdf(true);
+      try {
+        await generatePConProposalPDF(newForm);
+        toast.success('PDF baixado automaticamente!');
+      } catch (err) {
+        console.error('Error auto-generating PDF:', err);
+        toast.error('Erro ao baixar PDF automaticamente.');
+      } finally {
+        setDownloadingPdf(false);
+      }
     } catch (error) {
       console.error('Error generating AI budget:', error);
       toast.error('Erro ao gerar orçamento com IA. Tente novamente.');
