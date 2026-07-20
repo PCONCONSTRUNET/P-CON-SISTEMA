@@ -254,7 +254,25 @@ const Payments = () => {
     {
       key: 'status',
       header: 'Status',
-      render: (item: Payment) => <StatusBadge status={item.status} />,
+      render: (item: Payment) => {
+        let displayStatus = item.status;
+        if (displayStatus === 'pending') {
+          let dueDate;
+          if (item.due_date) {
+            dueDate = new Date(item.due_date);
+          } else {
+            const createdDate = new Date(item.created_at);
+            dueDate = new Date(createdDate);
+            dueDate.setDate(dueDate.getDate() + 7);
+          }
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (dueDate < today) {
+            displayStatus = 'overdue';
+          }
+        }
+        return <StatusBadge status={displayStatus} />;
+      },
     },
     {
       key: 'actions',

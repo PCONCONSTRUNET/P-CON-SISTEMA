@@ -133,11 +133,15 @@ const Dashboard = () => {
     // Overdue payments (pending but past due date based on created_at + 7 days or explicit check)
     const overduePayments = payments.filter(p => {
       if (p.status !== 'pending') return false;
-      const createdDate = new Date(p.created_at);
-      // Consider payment overdue if created more than 7 days ago and still pending
-      const dueDate = new Date(createdDate);
-      dueDate.setDate(dueDate.getDate() + 7);
-      return isPast(dueDate);
+      let dueDate;
+      if (p.due_date) {
+        dueDate = new Date(p.due_date);
+      } else {
+        const createdDate = new Date(p.created_at);
+        dueDate = new Date(createdDate);
+        dueDate.setDate(dueDate.getDate() + 7);
+      }
+      return dueDate < today;
     }).length;
 
     // Monthly revenue from paid payments in current month

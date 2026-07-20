@@ -288,10 +288,6 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold tracking-tight">Tabelas de Preços</h2>
-            <Button variant="secondary" onClick={addTable}>
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar Tabela
-            </Button>
           </div>
           
           {form.tables.map((table, tIndex) => (
@@ -303,14 +299,6 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
                   placeholder="Título da Tabela (Ex: Catálogo Atual, Serviços)"
                   onChange={(e) => updateTableTitle(tIndex, e.target.value)}
                 />
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0 mt-0"
-                  onClick={() => removeTable(tIndex)}
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {table.items.map((row, iIndex) => (
@@ -327,14 +315,8 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
                       className="w-32 md:w-48"
                       onChange={e => updateTableItem(tIndex, iIndex, 'value', e.target.value)} 
                     />
-                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => removeTableItem(tIndex, iIndex)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
                 ))}
-                <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => addTableItem(tIndex)}>
-                  <Plus className="w-4 h-4 mr-2" /> Adicionar Linha
-                </Button>
               </CardContent>
             </Card>
           ))}
@@ -344,10 +326,6 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold tracking-tight">Seções de Informação</h2>
-            <Button variant="secondary" onClick={addTextSection}>
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar Seção
-            </Button>
           </div>
 
           {form.textSections.map((section, sIndex) => (
@@ -359,14 +337,6 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
                   placeholder="Título da Seção (Ex: Resumo Financeiro, Cortesia Exclusiva)"
                   onChange={(e) => updateTextSectionTitle(sIndex, e.target.value)}
                 />
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0 mt-0"
-                  onClick={() => removeTextSection(sIndex)}
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {section.items.map((text, iIndex) => (
@@ -376,14 +346,8 @@ Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de merc
                       placeholder="Adicione uma informação ou tópico..."
                       onChange={e => updateTextSectionItem(sIndex, iIndex, e.target.value)} 
                     />
-                    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 shrink-0" onClick={() => removeTextSectionItem(sIndex, iIndex)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
                 ))}
-                <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => addTextSectionItem(sIndex)}>
-                  <Plus className="w-4 h-4 mr-2" /> Adicionar Linha
-                </Button>
               </CardContent>
             </Card>
           ))}
