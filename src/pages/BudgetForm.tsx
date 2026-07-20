@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Download, Loader2, Plus, Trash2, GripVertical } from 'lucide-react';
+import { Download, Loader2, Plus, Trash2, GripVertical, Sparkles } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { generatePConProposalPDF, PConProposalData } from '@/utils/pconPdfGenerator';
 import { toast } from 'sonner';
 
 const BudgetForm = () => {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
   
   // Estrutura neutra e dinâmica
   const [form, setForm] = useState<PConProposalData>({
@@ -49,6 +52,77 @@ const BudgetForm = () => {
       toast.error('Erro ao gerar PDF da proposta');
     } finally {
       setDownloadingPdf(false);
+    }
+  };
+
+  const handleGenerateAI = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error('Digite como você quer o orçamento.');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    try {
+      const systemPrompt = `Você é um assistente especialista em criar propostas comerciais e orçamentos profissionais.
+O usuário vai fornecer uma descrição do orçamento que deseja.
+Sua tarefa é retornar APENAS um objeto JSON válido, contendo os seguintes campos exatamente nesta estrutura:
+{
+  "clientName": "Nome do cliente (invente um se não fornecido ou deixe genérico)",
+  "tables": [
+    {
+      "title": "Título da tabela de preços (ex: Investimento, Serviços)",
+      "items": [
+        { "item": "Descrição do serviço/produto", "value": "Valor formatado em R$ (ex: 1.500,00)" }
+      ]
+    }
+  ],
+  "textSections": [
+    {
+      "title": "Título da seção (ex: Escopo do Projeto, Prazos, Observações)",
+      "items": [ "Parágrafo ou item da seção" ]
+    }
+  ]
+}
+Sempre crie pelo menos uma tabela com os valores solicitados (ou valores de mercado se não informados) e pelo menos duas seções de texto (ex: Escopo e Prazos/Condições). Não coloque blocos de formatação markdown (\`\`\`json). Apenas o JSON puro.`;
+
+      const res = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: aiPrompt }
+          ],
+          jsonMode: true
+        })
+      });
+
+      if (!res.ok) throw new Error('Erro na API de IA');
+      
+      const responseText = await res.text();
+      let parsedData;
+      try {
+        // Tratar caso a IA ainda envie os backticks de markdown
+        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsedData = JSON.parse(cleanedText);
+      } catch (e) {
+        console.error('Erro ao fazer parse do JSON:', responseText);
+        throw new Error('Formato de resposta inválido da IA');
+      }
+
+      setForm({
+        clientName: parsedData.clientName || '',
+        tables: parsedData.tables && parsedData.tables.length > 0 ? parsedData.tables : [{ title: 'Serviços', items: [{ item: '', value: '' }] }],
+        textSections: parsedData.textSections && parsedData.textSections.length > 0 ? parsedData.textSections : [{ title: 'Observações', items: [''] }]
+      });
+      
+      toast.success('Orçamento gerado pela IA com sucesso!');
+      setAiPrompt('');
+    } catch (error) {
+      console.error('Error generating AI budget:', error);
+      toast.error('Erro ao gerar orçamento com IA. Tente novamente.');
+    } finally {
+      setIsGeneratingAI(false);
     }
   };
 
@@ -161,6 +235,37 @@ const BudgetForm = () => {
     >
       <div className="space-y-8 max-w-4xl mx-auto pb-10">
         
+        {/* IA GENERATOR */}
+        <Card className="glass-card border-primary/50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Sparkles className="w-24 h-24 text-primary" />
+          </div>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <Sparkles className="w-5 h-5" />
+              Gerar Orçamento com IA (Gratuito)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4 relative z-10">
+              <Textarea 
+                placeholder="Ex: Quero um orçamento para o João, referente à criação de um site institucional por R$ 2500, prazo de 15 dias, 50% de entrada."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                className="min-h-[100px] resize-none bg-background/50"
+              />
+              <Button 
+                onClick={handleGenerateAI} 
+                disabled={isGeneratingAI || !aiPrompt.trim()}
+                className="w-full sm:w-auto font-semibold"
+              >
+                {isGeneratingAI ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                {isGeneratingAI ? 'Gerando Mágica...' : 'Gerar Orçamento Completo'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* IDENTIFICAÇÃO */}
         <Card className="glass-card">
           <CardHeader>

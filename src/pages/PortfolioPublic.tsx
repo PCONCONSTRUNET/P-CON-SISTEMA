@@ -9,6 +9,13 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface PortfolioItem {
   id: string;
@@ -21,6 +28,7 @@ interface PortfolioItem {
 const PortfolioPublic = () => {
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<PortfolioItem | null>(null);
 
   useEffect(() => {
     fetchPortfolioItems();
@@ -78,7 +86,8 @@ const PortfolioPublic = () => {
             {items.map((item) => (
               <div 
                 key={item.id} 
-                className="glass-card rounded-2xl overflow-hidden group hover:border-primary/50 transition-colors flex flex-col"
+                className="glass-card rounded-2xl overflow-hidden group hover:border-primary/50 transition-colors flex flex-col cursor-pointer"
+                onClick={() => setSelectedItem(item)}
               >
                 <div className="aspect-[4/5] sm:aspect-square w-full relative bg-black/5 dark:bg-white/5">
                   {item.image_urls && item.image_urls.length > 1 ? (
@@ -123,6 +132,7 @@ const PortfolioPublic = () => {
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 sm:gap-2 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground px-2 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-base transition-colors w-full justify-center"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
                         <span className="truncate">Acessar Projeto</span>
@@ -134,6 +144,74 @@ const PortfolioPublic = () => {
             ))}
           </div>
         )}
+
+        <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+          <DialogContent className="max-w-3xl max-h-[90vh] p-0 overflow-hidden bg-background border-border/50">
+            {selectedItem && (
+              <div className="flex flex-col md:flex-row h-full max-h-[90vh]">
+                {/* Imagem (Desktop) / Carrossel (Mobile/Desktop) */}
+                <div className="w-full md:w-1/2 bg-black/5 dark:bg-white/5 relative flex-shrink-0 h-[40vh] md:h-auto">
+                  {selectedItem.image_urls && selectedItem.image_urls.length > 1 ? (
+                    <Carousel className="absolute inset-0">
+                      <CarouselContent className="h-full ml-0">
+                        {selectedItem.image_urls.map((url, index) => (
+                          <CarouselItem key={index} className="pl-0 h-full relative">
+                            <div className="absolute inset-0 p-4 flex items-center justify-center">
+                              <img 
+                                src={url} 
+                                alt={`${selectedItem.title} - Imagem ${index + 1}`}
+                                className="max-w-full max-h-full object-contain drop-shadow-lg"
+                              />
+                            </div>
+                          </CarouselItem>
+                        ))}
+                      </CarouselContent>
+                      <CarouselPrevious className="left-2 bg-background/80 hover:bg-background border-none shadow-sm h-8 w-8" />
+                      <CarouselNext className="right-2 bg-background/80 hover:bg-background border-none shadow-sm h-8 w-8" />
+                    </Carousel>
+                  ) : (
+                    <div className="absolute inset-0 p-4 flex items-center justify-center">
+                      <img 
+                        src={selectedItem.image_urls?.[0] || ''} 
+                        alt={selectedItem.title}
+                        className="max-w-full max-h-full object-contain drop-shadow-lg"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Conteúdo (Título, Descrição, Botão) */}
+                <div className="w-full md:w-1/2 flex flex-col p-6 overflow-hidden">
+                  <DialogHeader className="mb-4 text-left">
+                    <DialogTitle className="text-2xl font-bold text-foreground">
+                      {selectedItem.title}
+                    </DialogTitle>
+                  </DialogHeader>
+                  
+                  <ScrollArea className="flex-grow pr-4 -mr-4">
+                    <div className="text-muted-foreground whitespace-pre-wrap leading-relaxed text-sm md:text-base">
+                      {selectedItem.description}
+                    </div>
+                  </ScrollArea>
+
+                  {selectedItem.project_url && (
+                    <div className="pt-6 mt-auto border-t border-border/10">
+                      <a 
+                        href={selectedItem.project_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-3 rounded-xl font-bold transition-colors w-full"
+                      >
+                        <ExternalLink className="w-5 h-5" />
+                        <span>Acessar Projeto</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
 
       {/* Call to Action */}
