@@ -26,7 +26,6 @@ import {
   Settings2,
   Send,
   Link2,
-  Briefcase,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,7 +52,6 @@ const navItems = [
   { icon: Rocket, label: 'Implantações', path: '/implementations' },
   { icon: Ticket, label: 'Cupons', path: '/coupons' },
   { icon: Gift, label: 'Indicações', path: '/referrals' },
-  { icon: Briefcase, label: 'Portfólio', path: '/admin/portfolio' },
   { icon: Building2, label: 'EFI Bank', path: '/efi-settings' },
 ];
 
