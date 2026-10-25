@@ -1,13 +1,18 @@
 -- ==============================================================================
--- P-CON SISTEMA - RESOLUÇÃO DE DISK I/O E EXCLUSÃO DEFINITIVA DO PORTFÓLIO
+-- P-CON SISTEMA - REMOÇÃO DEFINITIVA DE PORTFÓLIO E ORÇAMENTOS + OTIMIZAÇÃO
 -- Cole e execute este script no SQL Editor do Supabase
--- (Os arquivos de storage já foram 100% removidos via Storage API)
 -- ==============================================================================
 
--- 1. Excluir a tabela do banco de dados (e suas policies em cascata)
+-- 1. Excluir a tabela do Portfólio (caso ainda exista)
 DROP TABLE IF EXISTS public.portfolio_items CASCADE;
 
--- 2. Desativar/Remover cron jobs agressivos que rodam a cada minuto ou apontam para o banco antigo
+-- 2. Excluir a tabela e funções de Orçamentos / Propostas
+DROP TABLE IF EXISTS public.proposals CASCADE;
+DROP FUNCTION IF EXISTS public.validate_proposal_fields() CASCADE;
+DROP FUNCTION IF EXISTS public.update_proposal_view(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.respond_to_proposal(TEXT, TEXT) CASCADE;
+
+-- 3. Desativar cron jobs obsoletos que rodavam a cada minuto
 DO $$
 DECLARE
   r RECORD;
@@ -26,7 +31,7 @@ BEGIN
   END IF;
 END $$;
 
--- 3. Limpar logs acumulados do pg_cron e pg_net que geram gravações constantes em disco
+-- 4. Limpar logs acumulados do pg_cron e pg_net
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'cron' AND table_name = 'job_run_details') THEN
@@ -40,7 +45,7 @@ EXCEPTION WHEN OTHERS THEN
   NULL;
 END $$;
 
--- 4. Criar índices essenciais para evitar leituras sequenciais (Seq Scans) em disco
+-- 5. Criar índices essenciais para evitar leituras sequenciais (Seq Scans) em disco
 CREATE INDEX IF NOT EXISTS idx_subscriptions_client_id ON public.subscriptions(client_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON public.subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_created_at ON public.subscriptions(created_at DESC);
@@ -60,7 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_invoices_issued_at ON public.invoices(issued_at D
 
 CREATE INDEX IF NOT EXISTS idx_admin_notifications_is_read ON public.admin_notifications(is_read, created_at DESC);
 
--- 5. Atualizar estatísticas do planejador do PostgreSQL
+-- 6. Atualizar estatísticas do PostgreSQL
 ANALYZE public.clients;
 ANALYZE public.subscriptions;
 ANALYZE public.payments;
