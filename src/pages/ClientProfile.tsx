@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag, FolderArchive } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
@@ -577,8 +577,9 @@ const ClientProfile = () => {
             <span className="sm:hidden">Docs</span>
           </TabsTrigger>
           <TabsTrigger value="vault" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
-            <Lock className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span>Cofre</span>
+            <FolderArchive className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Pastas & Cofre</span>
+            <span className="sm:hidden">Pastas</span>
           </TabsTrigger>
           <TabsTrigger value="flags" className="gap-1 px-1 text-xs sm:text-sm sm:px-3">
             <Flag className="w-3 h-3 sm:w-4 sm:h-4" />
