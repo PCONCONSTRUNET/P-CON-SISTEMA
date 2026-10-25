@@ -29,6 +29,7 @@ export interface Subscription {
     name: string;
     email?: string;
     phone?: string;
+    document?: string | null;
   };
   clientName?: string;
 }
@@ -50,6 +51,9 @@ export interface Payment {
   subscriptions?: {
     clients?: {
       name: string;
+      email?: string;
+      phone?: string | null;
+      document?: string | null;
     };
     plan_name?: string;
   };
@@ -57,6 +61,7 @@ export interface Payment {
     name: string;
     email?: string;
     phone?: string | null;
+    document?: string | null;
   };
 }
 
@@ -70,6 +75,9 @@ export interface Invoice {
   issued_at: string;
   clients?: {
     name: string;
+    email?: string;
+    phone?: string | null;
+    document?: string | null;
   };
 }
 
@@ -193,7 +201,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase
         .from('subscriptions')
-        .select('*, clients(name, email, phone)')
+        .select('*, clients(name, email, phone, document)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -215,7 +223,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase
         .from('payments')
-        .select('*, subscriptions(clients(name), plan_name), clients(name, email, phone)')
+        .select('*, subscriptions(clients(name, email, phone, document), plan_name), clients(name, email, phone, document)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -238,7 +246,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, clients(name, email, phone)')
+        .select('*, clients(name, email, phone, document)')
         .order('issued_at', { ascending: false });
 
       if (error) throw error;

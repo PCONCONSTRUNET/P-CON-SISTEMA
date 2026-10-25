@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGlobalData, Subscription } from '@/contexts/GlobalDataContext';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInCalendarDays, isPast, isToday, format, addDays } from 'date-fns';
@@ -725,21 +726,12 @@ const Subscriptions = () => {
                 <TabsContent value="recurring" className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Cliente *</label>
-                    <Select
+                    <ClientSearchSelect
+                      clients={clients}
                       value={newSubscription.clientId}
-                      onValueChange={(value) => setNewSubscription({ ...newSubscription, clientId: value })}
-                    >
-                      <SelectTrigger className="bg-secondary/50 border-border/50">
-                        <SelectValue placeholder="Selecione um cliente" />
-                      </SelectTrigger>
-                      <SelectContent className="glass-card border-border/50">
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => setNewSubscription({ ...newSubscription, clientId: value })}
+                      placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+                    />
                   </div>
                   
                   <div className="space-y-2">
@@ -790,21 +782,12 @@ const Subscriptions = () => {
                 <TabsContent value="single" className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Cliente *</label>
-                    <Select
+                    <ClientSearchSelect
+                      clients={clients}
                       value={newCharge.clientId}
-                      onValueChange={(value) => setNewCharge({ ...newCharge, clientId: value })}
-                    >
-                      <SelectTrigger className="bg-secondary/50 border-border/50">
-                        <SelectValue placeholder="Selecione um cliente" />
-                      </SelectTrigger>
-                      <SelectContent className="glass-card border-border/50">
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => setNewCharge({ ...newCharge, clientId: value })}
+                      placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+                    />
                   </div>
                   
                   <div className="space-y-2">
@@ -869,21 +852,12 @@ const Subscriptions = () => {
                 <TabsContent value="register" className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Cliente *</label>
-                    <Select
+                    <ClientSearchSelect
+                      clients={clients}
                       value={newManualPayment.clientId}
-                      onValueChange={(value) => setNewManualPayment({ ...newManualPayment, clientId: value })}
-                    >
-                      <SelectTrigger className="bg-secondary/50 border-border/50">
-                        <SelectValue placeholder="Selecione um cliente" />
-                      </SelectTrigger>
-                      <SelectContent className="glass-card border-border/50">
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => setNewManualPayment({ ...newManualPayment, clientId: value })}
+                      placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+                    />
                   </div>
                   
                   <div className="space-y-2">

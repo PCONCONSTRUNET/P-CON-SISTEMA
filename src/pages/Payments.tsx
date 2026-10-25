@@ -86,10 +86,29 @@ const Payments = () => {
     }
   };
 
-  const filteredPayments = payments.filter(payment =>
-    (payment.subscriptions?.clients?.name || payment.clients?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (payment.description || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPayments = payments.filter(payment => {
+    const term = search.toLowerCase().trim();
+    if (!term) return true;
+    const cleanDigits = term.replace(/\D/g, '');
+
+    const clientName = (payment.subscriptions?.clients?.name || payment.clients?.name || payment.clientName || '').toLowerCase();
+    const description = (payment.description || '').toLowerCase();
+    const clientEmail = (payment.subscriptions?.clients?.email || payment.clients?.email || '').toLowerCase();
+    const rawDoc = (payment.subscriptions?.clients?.document || payment.clients?.document || '');
+    const cleanDoc = rawDoc.replace(/\D/g, '');
+    const rawPhone = (payment.subscriptions?.clients?.phone || payment.clients?.phone || '');
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+
+    return (
+      clientName.includes(term) ||
+      description.includes(term) ||
+      clientEmail.includes(term) ||
+      rawDoc.toLowerCase().includes(term) ||
+      (cleanDigits.length >= 3 && cleanDoc.includes(cleanDigits)) ||
+      rawPhone.toLowerCase().includes(term) ||
+      (cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits))
+    );
+  });
 
   const [visibleCount, setVisibleCount] = useState(10);
 

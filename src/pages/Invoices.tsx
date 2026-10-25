@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 
 interface InvoiceWithClient {
   id: string;
@@ -324,17 +325,13 @@ const Invoices = () => {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Cliente</Label>
-                <Select value={newInvoice.client_id} onValueChange={(v) => setNewInvoice(prev => ({ ...prev, client_id: v }))}>
-                  <SelectTrigger className="bg-secondary/50 border-border/50">
-                    <SelectValue placeholder="Selecione um cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map(client => (
-                      <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Cliente *</Label>
+                <ClientSearchSelect
+                  clients={clients}
+                  value={newInvoice.client_id}
+                  onChange={(v) => setNewInvoice(prev => ({ ...prev, client_id: v }))}
+                  placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+                />
               </div>
               <div className="space-y-2">
                 <Label>Valor (R$)</Label>

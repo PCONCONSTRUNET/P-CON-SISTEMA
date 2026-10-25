@@ -29,6 +29,7 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import { useClientCoupons, ClientCoupon } from '@/hooks/useClientCoupons';
 import { useClients } from '@/hooks/useClients';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -440,21 +441,12 @@ const ClientCoupons = () => {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Cliente *</label>
-                  <Select
+                  <ClientSearchSelect
+                    clients={clients}
                     value={newCoupon.client_id}
-                    onValueChange={(value) => setNewCoupon({ ...newCoupon, client_id: value })}
-                  >
-                    <SelectTrigger className="bg-secondary/50 border-border/50">
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setNewCoupon({ ...newCoupon, client_id: value })}
+                    placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+                  />
                 </div>
 
                 {newCoupon.origin === 'referral' && newCoupon.client_id && (

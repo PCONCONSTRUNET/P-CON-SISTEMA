@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useClients } from '@/hooks/useClients';
+import ClientSearchSelect from '@/components/ClientSearchSelect';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -254,21 +255,12 @@ const Contracts = () => {
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Cliente *</label>
-                <Select 
-                  value={newContract.clientId} 
-                  onValueChange={(value) => setNewContract({ ...newContract, clientId: value })}
-                >
-                  <SelectTrigger className="bg-secondary/50 border-border/50">
-                    <SelectValue placeholder="Selecione um cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ClientSearchSelect
+                  clients={clients}
+                  value={newContract.clientId}
+                  onChange={(value) => setNewContract({ ...newContract, clientId: value })}
+                  placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+                />
               </div>
 
               <div className="space-y-2">

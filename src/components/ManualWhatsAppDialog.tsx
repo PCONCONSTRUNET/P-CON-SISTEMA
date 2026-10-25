@@ -32,6 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useClients } from "@/hooks/useClients";
 import { useSubscriptions } from "@/hooks/useSubscriptions";
+import ClientSearchSelect from "@/components/ClientSearchSelect";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -150,52 +151,13 @@ export function ManualWhatsAppDialog({
           {/* Client Selector */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Selecionar Cliente</label>
-            <Popover open={openSelector} onOpenChange={setOpenSelector}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openSelector}
-                  className="w-full justify-between bg-secondary/30 border-border/50 text-left h-auto py-2 px-3"
-                  disabled={loadingClients}
-                >
-                  <span className="truncate">
-                    {selectedClientId
-                      ? clients.find((c) => c.id === selectedClientId)?.name
-                      : "Escolha um cliente..."}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 glass-card">
-                <Command>
-                  <CommandInput placeholder="Buscar cliente..." />
-                  <CommandList>
-                    <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
-                    <CommandGroup>
-                      {clients.map((c) => (
-                        <CommandItem
-                          key={c.id}
-                          value={c.name}
-                          onSelect={() => {
-                            setSelectedClientId(c.id);
-                            setOpenSelector(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedClientId === c.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {c.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <ClientSearchSelect
+              clients={clients}
+              value={selectedClientId || ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
+              disabled={loadingClients}
+            />
           </div>
 
           {/* Client & Sub Info */}

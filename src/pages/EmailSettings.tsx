@@ -64,10 +64,22 @@ const EmailSettings = () => {
     fetchSettings();
   }, []);
 
-  const filteredClients = clients.filter(c =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredClients = clients.filter(c => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
+    const cleanDigits = term.replace(/\D/g, '');
+    const clientDocDigits = (c.document || '').replace(/\D/g, '');
+    const clientPhoneDigits = (c.phone || '').replace(/\D/g, '');
+
+    return (
+      c.name.toLowerCase().includes(term) ||
+      c.email.toLowerCase().includes(term) ||
+      (c.document && c.document.toLowerCase().includes(term)) ||
+      (cleanDigits.length >= 3 && clientDocDigits.includes(cleanDigits)) ||
+      (c.phone && c.phone.toLowerCase().includes(term)) ||
+      (cleanDigits.length >= 3 && clientPhoneDigits.includes(cleanDigits))
+    );
+  });
 
   const handleTestBillingEmail = async () => {
     setIsTesting(true);
@@ -215,7 +227,9 @@ const EmailSettings = () => {
                       <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{client.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{client.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {client.document ? `CPF/CNPJ: ${client.document} • ` : ''}{client.email}
+                        </p>
                       </div>
                     </button>
                   ))}

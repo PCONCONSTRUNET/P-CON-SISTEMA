@@ -106,11 +106,22 @@ const Clients = () => {
     }
   };
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(search.toLowerCase()) ||
-    client.email.toLowerCase().includes(search.toLowerCase()) ||
-    (client.document && client.document.includes(search))
-  );
+  const filteredClients = clients.filter(client => {
+    const term = search.toLowerCase().trim();
+    if (!term) return true;
+    const cleanDigits = term.replace(/\D/g, '');
+    const clientDocDigits = (client.document || '').replace(/\D/g, '');
+    const clientPhoneDigits = (client.phone || '').replace(/\D/g, '');
+
+    return (
+      client.name.toLowerCase().includes(term) ||
+      client.email.toLowerCase().includes(term) ||
+      (client.document && client.document.toLowerCase().includes(term)) ||
+      (cleanDigits.length >= 3 && clientDocDigits.includes(cleanDigits)) ||
+      (client.phone && client.phone.toLowerCase().includes(term)) ||
+      (cleanDigits.length >= 3 && clientPhoneDigits.includes(cleanDigits))
+    );
+  });
 
   const handleAddClient = async () => {
     if (!newClient.name || !newClient.email) {
