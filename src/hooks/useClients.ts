@@ -93,14 +93,19 @@ export const useClients = () => {
   useEffect(() => {
     fetchClients();
 
+    let debounceTimer: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel('clients-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
-        fetchClients();
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          fetchClients();
+        }, 800);
       })
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, []);

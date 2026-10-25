@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -280,14 +280,16 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refetchAll = useCallback(async () => {
-    await Promise.all([
-      fetchClients(),
-      fetchSubscriptions(),
-      fetchPayments(),
-      fetchInvoices(),
-      fetchWhatsApp(),
-      fetchAppSettings()
-    ]);
+    try {
+      await fetchClients();
+      await fetchSubscriptions();
+      await fetchPayments();
+      await fetchInvoices();
+      await fetchWhatsApp();
+      await fetchAppSettings();
+    } catch (e) {
+      console.error('Error in sequential refetchAll:', e);
+    }
   }, [fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
 
   // CRUD - Clients
@@ -717,18 +719,54 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Debounce timers for realtime events to prevent database overload
+  const debounceTimers = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
+
+  const debouncedFetch = useCallback((key: string, fetchFn: () => Promise<void>) => {
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
+    }
+    debounceTimers.current[key] = setTimeout(() => {
+      fetchFn();
+    }, 600);
+  }, []);
+
   // Initialize and set up realtime subscriptions
   useEffect(() => {
     refetchAll();
 
-    const clientsChannel = supabase.channel('global-clients-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => fetchClients()).subscribe();
-    const subscriptionsChannel = supabase.channel('global-subscriptions-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => fetchSubscriptions()).subscribe();
-    const paymentsChannel = supabase.channel('global-payments-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => fetchPayments()).subscribe();
-    const invoicesChannel = supabase.channel('global-invoices-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => fetchInvoices()).subscribe();
-    const whatsappChannel = supabase.channel('global-whatsapp-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => fetchWhatsApp()).subscribe();
-    const appSettingsChannel = supabase.channel('global-app-settings-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => fetchAppSettings()).subscribe();
+    const clientsChannel = supabase
+      .channel('global-clients-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => debouncedFetch('clients', fetchClients))
+      .subscribe();
+
+    const subscriptionsChannel = supabase
+      .channel('global-subscriptions-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => debouncedFetch('subscriptions', fetchSubscriptions))
+      .subscribe();
+
+    const paymentsChannel = supabase
+      .channel('global-payments-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => debouncedFetch('payments', fetchPayments))
+      .subscribe();
+
+    const invoicesChannel = supabase
+      .channel('global-invoices-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => debouncedFetch('invoices', fetchInvoices))
+      .subscribe();
+
+    const whatsappChannel = supabase
+      .channel('global-whatsapp-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => debouncedFetch('whatsapp', fetchWhatsApp))
+      .subscribe();
+
+    const appSettingsChannel = supabase
+      .channel('global-app-settings-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => debouncedFetch('appSettings', fetchAppSettings))
+      .subscribe();
 
     return () => {
+      Object.values(debounceTimers.current).forEach(clearTimeout);
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(subscriptionsChannel);
       supabase.removeChannel(paymentsChannel);
@@ -736,7 +774,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       supabase.removeChannel(whatsappChannel);
       supabase.removeChannel(appSettingsChannel);
     };
-  }, [refetchAll, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
+  }, [refetchAll, debouncedFetch, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
 
   return (
     <GlobalDataContext.Provider

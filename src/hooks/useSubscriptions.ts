@@ -118,14 +118,19 @@ export const useSubscriptions = () => {
   useEffect(() => {
     fetchSubscriptions();
 
+    let debounceTimer: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel('subscriptions-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
-        fetchSubscriptions();
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          fetchSubscriptions();
+        }, 800);
       })
       .subscribe();
 
     return () => {
+      clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, []);
