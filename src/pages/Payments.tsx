@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle, Pencil } from 'lucide-react';
 import WhatsAppSendModal, { WhatsAppSendParams } from '@/components/WhatsAppSendModal';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -90,6 +90,14 @@ const Payments = () => {
     (payment.subscriptions?.clients?.name || payment.clients?.name || '').toLowerCase().includes(search.toLowerCase()) ||
     (payment.description || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const [visibleCount, setVisibleCount] = useState(10);
+
+  useEffect(() => {
+    setVisibleCount(10);
+  }, [search]);
+
+  const displayedPayments = filteredPayments.slice(0, visibleCount);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -446,7 +454,24 @@ const Payments = () => {
           <p className="text-muted-foreground">Carregando...</p>
         </div>
       ) : (
-        <DataTable data={filteredPayments} columns={columns} />
+        <div className="space-y-4">
+          <DataTable data={displayedPayments} columns={columns} />
+
+          {visibleCount < filteredPayments.length && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 pt-2 pb-4">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Exibindo <span className="font-semibold text-foreground">{displayedPayments.length}</span> de <span className="font-semibold text-foreground">{filteredPayments.length}</span> pagamentos
+              </p>
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto bg-secondary/50 hover:bg-secondary/90 border-border/60 text-sm font-medium px-6 py-2 h-10 gap-2 shadow-sm"
+                onClick={() => setVisibleCount((prev) => prev + 10)}
+              >
+                Ver mais pagamentos (+10)
+              </Button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Details Dialog */}
