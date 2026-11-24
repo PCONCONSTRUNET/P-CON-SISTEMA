@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { useEfiPay, fetchEfiGatewayStatus } from '@/hooks/useEfiPay';
 import { useMercadoPago, fetchMercadoPagoGatewayStatus } from '@/hooks/useMercadoPago';
 
@@ -36,43 +37,190 @@ export interface UnifiedPixResult {
   gatewayUsed: PaymentGatewayId;
 }
 
+interface StoredGatewaySnapshot {
+  efiActive: boolean | null;
+  mercadoPagoActive: boolean | null;
+  mercadoPagoPublicKey: string | null;
+  savedAt: number;
+}
+
+const GATEWAY_STORAGE_KEY = 'pcon_gw_status_v1';
+const STORAGE_TTL_MS = 5 * 60 * 1000;
+
+function readGatewaySnapshot(): StoredGatewaySnapshot | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(GATEWAY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredGatewaySnapshot;
+    if (!parsed || Date.now() - (parsed.savedAt || 0) > STORAGE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeGatewaySnapshot(snapshot: Omit<StoredGatewaySnapshot, 'savedAt'>) {
+  try {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(
+      GATEWAY_STORAGE_KEY,
+      JSON.stringify({ ...snapshot, savedAt: Date.now() }),
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
+}
+
+async function fetchStatusViaRpc(): Promise<{
+  efiActive: boolean;
+  mercadoPagoActive: boolean;
+  mercadoPagoPublicKey: string | null;
+} | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('get_public_payment_gateway_status');
+    if (error || !Array.isArray(data) || data.length === 0) return null;
+
+    let efiActive = false;
+    let mercadoPagoActive = false;
+    let mercadoPagoPublicKey: string | null = null;
+
+    for (const row of data as Array<{
+      gateway_name?: string;
+      is_active?: boolean;
+      public_key?: string | null;
+    }>) {
+      if (row.gateway_name === 'efi') {
+        efiActive = !!row.is_active;
+      } else if (row.gateway_name === 'mercadopago') {
+        mercadoPagoActive = !!row.is_active;
+        mercadoPagoPublicKey = row.public_key || null;
+      }
+    }
+
+    return { efiActive, mercadoPagoActive, mercadoPagoPublicKey };
+  } catch {
+    return null;
+  }
+}
+
 export function usePaymentGateway() {
   const efi = useEfiPay({ checkStatusOnMount: false });
   const mp = useMercadoPago({ checkStatusOnMount: false });
 
-  const [efiActive, setEfiActive] = useState<boolean | null>(null);
-  const [mercadoPagoActive, setMercadoPagoActive] = useState<boolean | null>(null);
-  const [mercadoPagoPublicKey, setMercadoPagoPublicKey] = useState<string | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
+  const initialSnapshot = useMemo(() => readGatewaySnapshot(), []);
+
+  const [efiActive, setEfiActive] = useState<boolean | null>(initialSnapshot?.efiActive ?? null);
+  const [mercadoPagoActive, setMercadoPagoActive] = useState<boolean | null>(
+    initialSnapshot?.mercadoPagoActive ?? null,
+  );
+  const [mercadoPagoPublicKey, setMercadoPagoPublicKey] = useState<string | null>(
+    initialSnapshot?.mercadoPagoPublicKey ?? null,
+  );
+  const [statusLoading, setStatusLoading] = useState<boolean>(
+    initialSnapshot === null ||
+      (initialSnapshot.efiActive === null && initialSnapshot.mercadoPagoActive === null),
+  );
   const [lastGatewayUsed, setLastGatewayUsed] = useState<PaymentGatewayId>('efi');
 
-  const refreshStatuses = useCallback(async () => {
-    setStatusLoading(true);
+  const refreshStatuses = useCallback(async (force = false) => {
+    const snap = !force ? readGatewaySnapshot() : null;
+    if (snap === null) {
+      setStatusLoading((prev) => prev || (efiActive === null && mercadoPagoActive === null));
+    }
+
     try {
-      const [efiStatus, mpStatus] = await Promise.all([
-        fetchEfiGatewayStatus().catch(() => null),
-        fetchMercadoPagoGatewayStatus().catch(() => null),
-      ]);
+      // 1. Caminho ultrarrápido via RPC no PostgreSQL (~50ms, sem cold-start de Edge Functions)
+      const rpcRes = await withTimeout(fetchStatusViaRpc(), 3500, null);
+      if (rpcRes) {
+        setEfiActive(rpcRes.efiActive);
+        setMercadoPagoActive(rpcRes.mercadoPagoActive);
+        setMercadoPagoPublicKey(rpcRes.mercadoPagoPublicKey);
+        writeGatewaySnapshot(rpcRes);
+        return {
+          efiActive: rpcRes.efiActive,
+          mercadoPagoActive: rpcRes.mercadoPagoActive,
+        };
+      }
 
-      const nextEfi = efiStatus ? efiStatus.isActive : null;
-      const nextMp = mpStatus ? mpStatus.isActive : null;
+      // 2. Fallback independente: cada gateway atualiza a UI assim que responder
+      //    (se um demorar ou não estiver deployado, NÃO bloqueia o outro!)
+      let nextEfi: boolean | null = null;
+      let nextMp: boolean | null = null;
+      let nextMpKey: string | null = null;
 
-      setEfiActive(nextEfi);
-      setMercadoPagoActive(nextMp);
-      setMercadoPagoPublicKey(mpStatus?.publicKey || null);
+      const efiPromise = withTimeout(fetchEfiGatewayStatus(force), 4500, null).then((res) => {
+        if (res) {
+          nextEfi = res.isActive;
+          setEfiActive(res.isActive);
+        }
+        return res;
+      });
 
-      return { efiActive: nextEfi, mercadoPagoActive: nextMp };
+      const mpPromise = withTimeout(fetchMercadoPagoGatewayStatus(force), 4500, null).then((res) => {
+        if (res) {
+          nextMp = res.isActive;
+          nextMpKey = res.publicKey || null;
+          setMercadoPagoActive(res.isActive);
+          setMercadoPagoPublicKey(nextMpKey);
+        } else {
+          // Se Mercado Pago falhar/timeout (ex.: ainda não deployado), marca false em vez de prender a UI
+          nextMp = false;
+          setMercadoPagoActive((prev) => (prev === null ? false : prev));
+        }
+        return res;
+      });
+
+      await Promise.all([efiPromise, mpPromise]);
+
+      const finalEfi = nextEfi ?? efiActive;
+      const finalMp = nextMp ?? mercadoPagoActive;
+      const finalMpKey = nextMpKey ?? mercadoPagoPublicKey;
+
+      if (nextEfi !== null || nextMp !== null) {
+        writeGatewaySnapshot({
+          efiActive: finalEfi,
+          mercadoPagoActive: finalMp,
+          mercadoPagoPublicKey: finalMpKey,
+        });
+      }
+
+      return { efiActive: finalEfi, mercadoPagoActive: finalMp };
     } finally {
       setStatusLoading(false);
     }
-  }, []);
+  }, [efiActive, mercadoPagoActive, mercadoPagoPublicKey]);
 
   useEffect(() => {
-    void refreshStatuses();
+    void refreshStatuses(true);
 
     const onEfiChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ isActive: boolean }>).detail;
-      if (detail !== undefined) setEfiActive(detail.isActive);
+      if (detail !== undefined) {
+        setEfiActive(detail.isActive);
+        const cur = readGatewaySnapshot();
+        writeGatewaySnapshot({
+          efiActive: detail.isActive,
+          mercadoPagoActive: cur?.mercadoPagoActive ?? null,
+          mercadoPagoPublicKey: cur?.mercadoPagoPublicKey ?? null,
+        });
+      }
     };
     const onMpChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ isActive: boolean; publicKey?: string | null }>).detail;
@@ -81,6 +229,13 @@ export function usePaymentGateway() {
         if (detail.publicKey !== undefined) {
           setMercadoPagoPublicKey(detail.publicKey || null);
         }
+        const cur = readGatewaySnapshot();
+        writeGatewaySnapshot({
+          efiActive: cur?.efiActive ?? null,
+          mercadoPagoActive: detail.isActive,
+          mercadoPagoPublicKey:
+            detail.publicKey !== undefined ? detail.publicKey || null : cur?.mercadoPagoPublicKey ?? null,
+        });
       }
     };
 
@@ -92,7 +247,7 @@ export function usePaymentGateway() {
         window.removeEventListener('mercadopago-gateway-status-changed', onMpChanged);
       };
     }
-  }, [refreshStatuses]);
+  }, []);
 
   const activeGateways = useMemo<PaymentGatewayId[]>(() => {
     const list: PaymentGatewayId[] = [];
@@ -105,7 +260,6 @@ export function usePaymentGateway() {
     if (efiActive === null && mercadoPagoActive === null) return null;
     if (activeGateways.length > 0) return true;
     if (efiActive === false && mercadoPagoActive === false) return false;
-    // Se um respondeu false e o outro falhou/ainda null, segue verificando no backend
     return statusLoading ? null : false;
   }, [efiActive, mercadoPagoActive, activeGateways, statusLoading]);
 

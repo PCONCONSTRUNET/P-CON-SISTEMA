@@ -78,25 +78,27 @@ export async function fetchEfiGatewayStatus(forceRefresh = false): Promise<Gatew
       return result;
     }
 
-    // Fallback caso a Edge Function deployada ainda não possua a action get-status
-    const { data: settingsData, error: settingsError } = await supabase.functions.invoke('efi-pay', {
-      body: { _action: 'get-settings' },
-    });
+    // Só tenta fallback get-settings se a função respondeu (não em erro de rede/404/timeout)
+    if (!error) {
+      const { data: settingsData, error: settingsError } = await supabase.functions.invoke('efi-pay', {
+        body: { _action: 'get-settings' },
+      });
 
-    if (!settingsError && settingsData?.success) {
-      const s = settingsData.settings;
-      if (!s) {
-        const empty = { isActive: false, configured: false };
-        cachedEfiStatus = { value: empty, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
-        return empty;
+      if (!settingsError && settingsData?.success) {
+        const s = settingsData.settings;
+        if (!s) {
+          const empty = { isActive: false, configured: false };
+          cachedEfiStatus = { value: empty, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
+          return empty;
+        }
+        const configured = !!(s.client_id && s.client_secret && s.pix_key && s.certificate_pem);
+        const result: GatewayStatusResult = {
+          isActive: !!s.is_active && configured,
+          configured,
+        };
+        cachedEfiStatus = { value: result, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
+        return result;
       }
-      const configured = !!(s.client_id && s.client_secret && s.pix_key && s.certificate_pem);
-      const result: GatewayStatusResult = {
-        isActive: !!s.is_active && configured,
-        configured,
-      };
-      cachedEfiStatus = { value: result, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
-      return result;
     }
 
     return null;

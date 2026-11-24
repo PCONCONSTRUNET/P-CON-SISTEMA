@@ -633,6 +633,29 @@ const SubscriptionCheckoutPublic = () => {
                       </div>
                     )}
 
+                    {/* Skeleton imediato enquanto verifica meios de pagamento na 1ª visita */}
+                    {!isPaid &&
+                      isSubscriptionActive &&
+                      !isLinkCancelled &&
+                      !pixPayment &&
+                      !pendingCardPaymentId &&
+                      !isGatewayDisabled &&
+                      !canUsePix &&
+                      !canUseCard &&
+                      gatewayStatusLoading && (
+                        <div className="space-y-3 pt-1">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Carregando opções de pagamento...</span>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="h-[62px] rounded-xl border border-white/10 bg-white/[0.04] animate-pulse" />
+                            <div className="h-[62px] rounded-xl border border-white/10 bg-white/[0.04] animate-pulse" />
+                          </div>
+                          <div className="h-12 rounded-xl border border-white/10 bg-white/[0.05] animate-pulse" />
+                        </div>
+                      )}
+
                     {/* Seletor PIX vs Cartão com ícones do sistema */}
                     {!isPaid &&
                       isSubscriptionActive &&

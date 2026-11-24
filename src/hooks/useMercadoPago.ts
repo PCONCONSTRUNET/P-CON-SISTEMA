@@ -129,25 +129,27 @@ export async function fetchMercadoPagoGatewayStatus(forceRefresh = false): Promi
       return result;
     }
 
-    const { data: settingsData, error: settingsError } = await supabase.functions.invoke('mercadopago', {
-      body: { _action: 'get-settings' },
-    });
+    if (!error) {
+      const { data: settingsData, error: settingsError } = await supabase.functions.invoke('mercadopago', {
+        body: { _action: 'get-settings' },
+      });
 
-    if (!settingsError && settingsData?.success) {
-      const s = settingsData.settings;
-      if (!s) {
-        const empty = { isActive: false, configured: false, publicKey: null };
-        cachedMpStatus = { value: empty, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
-        return empty;
+      if (!settingsError && settingsData?.success) {
+        const s = settingsData.settings;
+        if (!s) {
+          const empty = { isActive: false, configured: false, publicKey: null };
+          cachedMpStatus = { value: empty, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
+          return empty;
+        }
+        const configured = !!s.access_token;
+        const result: MercadoPagoGatewayStatus = {
+          isActive: !!s.is_active && configured,
+          configured,
+          publicKey: s.public_key || null,
+        };
+        cachedMpStatus = { value: result, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
+        return result;
       }
-      const configured = !!s.access_token;
-      const result: MercadoPagoGatewayStatus = {
-        isActive: !!s.is_active && configured,
-        configured,
-        publicKey: s.public_key || null,
-      };
-      cachedMpStatus = { value: result, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
-      return result;
     }
 
     return null;
