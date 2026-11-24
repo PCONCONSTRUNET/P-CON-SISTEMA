@@ -26,6 +26,7 @@ import PixQRCode from '@/components/PixQRCode';
 import SubscriptionCardPayment, { CardPaymentFormData } from '@/components/SubscriptionCardPayment';
 import { supabase } from '@/integrations/supabase/client';
 import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
+import { calculateCardPricing } from '@/utils/cardFees';
 import {
   ensureSubscriptionPaymentLink,
   SubscriptionPaymentLinkRecord,
@@ -78,6 +79,7 @@ const SubscriptionCheckoutPublic = () => {
   const [creatingPix, setCreatingPix] = useState(false);
   const [submittingCard, setSubmittingCard] = useState(false);
   const [paymentTab, setPaymentTab] = useState<'pix' | 'card'>('pix');
+  const [cardInstallments, setCardInstallments] = useState(1);
   const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayId | null>(null);
   const [clientDocument, setClientDocument] = useState('');
   const [pendingCardPaymentId, setPendingCardPaymentId] = useState<string | null>(null);
@@ -243,6 +245,16 @@ const SubscriptionCheckoutPublic = () => {
   const isPaid = isPaidLocally || linkRecord?.status === 'paid';
   const chargeAmount = Number(linkRecord?.amount ?? subData?.value ?? 0);
   const chargeDueDate = linkRecord?.due_date || subData?.next_payment;
+  const cardPricing = calculateCardPricing(chargeAmount, cardInstallments);
+  const isCardCheckoutView =
+    paymentTab === 'card' &&
+    canUseCard &&
+    !isPaid &&
+    isSubscriptionActive &&
+    !isLinkCancelled &&
+    !pixPayment &&
+    !pendingCardPaymentId &&
+    !isGatewayDisabled;
   // Mercado Pago é o gateway preferido (PIX + cartão no mesmo lugar)
   const preferredDefaultGateway: PaymentGatewayId | null = activeGateways.includes('mercadopago')
     ? 'mercadopago'
@@ -486,68 +498,100 @@ const SubscriptionCheckoutPublic = () => {
                 <div className="h-1 w-full bg-gradient-to-r from-[#32BCAD] via-[#1E4FA3] to-[#009EE3]" />
 
                 <CardContent className="p-0">
-                  {/* Hero / Plan & Amount Header */}
-                  <div className="relative overflow-hidden bg-gradient-to-br from-[#1E4FA3]/30 via-[#0e2550]/60 to-[#091836]/80 border-b border-white/10 p-5">
-                    <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#32BCAD]/15 blur-2xl" />
-                    <div className="pointer-events-none absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-[#009EE3]/15 blur-2xl" />
-
-                    <div className="relative flex items-center justify-between gap-2 mb-3">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        Pagamento seguro
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-blue-100/80">
-                        <Sparkles className="h-3 w-3 text-sky-300" />
-                        Mensalidade
-                      </span>
-                    </div>
-
-                    <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-sky-300/80 font-medium">
-                          Assinatura
+                  {isCardCheckoutView ? (
+                    /* Modo Cartão: esconde detalhes de cima e deixa apenas Valor + botão rápido para voltar ao PIX */
+                    <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-gradient-to-r from-[#0e2550]/80 to-[#091836]/80 px-4 py-3.5 sm:px-5">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.15em] text-sky-300/80 font-medium">
+                          Valor no cartão ({cardInstallments}x)
                         </p>
-                        <h1 className="text-lg sm:text-xl font-heading font-bold text-white truncate">
-                          {subData.plan_name}
-                        </h1>
-                      </div>
-                      <div className="sm:text-right">
-                        <p className="text-[11px] text-blue-100/60">Valor a pagar</p>
-                        <div className="flex items-baseline sm:justify-end gap-1">
-                          <span className="text-3xl sm:text-4xl font-heading font-extrabold tracking-tight text-white">
-                            {formatCurrency(chargeAmount)}
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl sm:text-3xl font-heading font-extrabold tracking-tight text-white">
+                            {formatCurrency(cardPricing.totalCustomerAmount)}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            ({cardInstallments}x de {formatCurrency(cardPricing.installmentAmount)})
                           </span>
                         </div>
                       </div>
+
+                      {canUsePix && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentTab('pix')}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white hover:bg-white/[0.12] transition-colors"
+                        >
+                          <img src={pixIcon} alt="PIX" className="h-3.5 w-3.5 object-contain" />
+                          Trocar p/ PIX
+                        </button>
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    /* Hero / Plan & Amount Header */
+                    <div className="relative overflow-hidden bg-gradient-to-br from-[#1E4FA3]/30 via-[#0e2550]/60 to-[#091836]/80 border-b border-white/10 p-5">
+                      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#32BCAD]/15 blur-2xl" />
+                      <div className="pointer-events-none absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-[#009EE3]/15 blur-2xl" />
+
+                      <div className="relative flex items-center justify-between gap-2 mb-3">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Pagamento seguro
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-blue-100/80">
+                          <Sparkles className="h-3 w-3 text-sky-300" />
+                          Mensalidade
+                        </span>
+                      </div>
+
+                      <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-sky-300/80 font-medium">
+                            Assinatura
+                          </p>
+                          <h1 className="text-lg sm:text-xl font-heading font-bold text-white truncate">
+                            {subData.plan_name}
+                          </h1>
+                        </div>
+                        <div className="sm:text-right">
+                          <p className="text-[11px] text-blue-100/60">Valor a pagar</p>
+                          <div className="flex items-baseline sm:justify-end gap-1">
+                            <span className="text-3xl sm:text-4xl font-heading font-extrabold tracking-tight text-white">
+                              {formatCurrency(chargeAmount)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Body */}
                   <div className="p-4 sm:p-5 space-y-4">
-                    {/* Compact Client & Due Date Row */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 min-w-0">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                          <User className="h-3 w-3 text-sky-400 shrink-0" />
-                          Cliente
-                        </p>
-                        <p className="text-xs sm:text-sm font-semibold text-foreground truncate mt-0.5">
-                          {subData.clients?.name || 'Cliente'}
-                        </p>
-                      </div>
+                    {/* Compact Client & Due Date Row (oculto no modo Cartão) */}
+                    {!isCardCheckoutView && (
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 min-w-0">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <User className="h-3 w-3 text-sky-400 shrink-0" />
+                            Cliente
+                          </p>
+                          <p className="text-xs sm:text-sm font-semibold text-foreground truncate mt-0.5">
+                            {subData.clients?.name || 'Cliente'}
+                          </p>
+                        </div>
 
-                      <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 min-w-0">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                          <Calendar className="h-3 w-3 text-emerald-400 shrink-0" />
-                          Vencimento
-                        </p>
-                        <p className="text-xs sm:text-sm font-semibold text-foreground mt-0.5">
-                          {chargeDueDate
-                            ? new Date(chargeDueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-                            : '—'}
-                        </p>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 min-w-0">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Calendar className="h-3 w-3 text-emerald-400 shrink-0" />
+                            Vencimento
+                          </p>
+                          <p className="text-xs sm:text-sm font-semibold text-foreground mt-0.5">
+                            {chargeDueDate
+                              ? new Date(chargeDueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                              : '—'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Pagamento Confirmado */}
                     {isPaid && (
@@ -664,7 +708,7 @@ const SubscriptionCheckoutPublic = () => {
                       !pendingCardPaymentId &&
                       !isGatewayDisabled && (
                         <div className="space-y-4">
-                          {(canUsePix || canUseCard) && (
+                          {!isCardCheckoutView && (canUsePix || canUseCard) && (
                             <div className="space-y-2">
                               <p className="text-xs font-medium text-muted-foreground">
                                 Escolha como deseja pagar
@@ -788,6 +832,8 @@ const SubscriptionCheckoutPublic = () => {
                             <SubscriptionCardPayment
                               publicKey={mercadoPagoPublicKey}
                               amount={chargeAmount}
+                              installments={cardInstallments}
+                              onInstallmentsChange={setCardInstallments}
                               payerEmail={subData.clients?.email}
                               payerName={subData.clients?.name || 'Cliente'}
                               payerDocument={clientDocument || subData.clients?.document}

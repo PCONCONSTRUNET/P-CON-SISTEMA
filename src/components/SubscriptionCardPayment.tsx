@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
-import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react';
-import { CreditCard, ExternalLink, Loader2, Lock, ShieldCheck, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CardPayment, initMercadoPago, useCardPaymentBrick } from '@mercadopago/sdk-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { calculateCardPricing } from '@/utils/cardFees';
-import mercadoPagoIcon from '@/assets/mercado-pago-icon.png';
 
 let initializedPublicKey: string | null = null;
 
@@ -26,6 +25,8 @@ export interface CardPaymentFormData {
 interface SubscriptionCardPaymentProps {
   publicKey?: string | null;
   amount: number;
+  installments: number;
+  onInstallmentsChange: (installments: number) => void;
   payerEmail?: string | null;
   payerName: string;
   payerDocument?: string | null;
@@ -44,6 +45,8 @@ const formatPercent = (value: number) => `${(value * 100).toFixed(2).replace('.'
 const SubscriptionCardPayment = ({
   publicKey,
   amount,
+  installments,
+  onInstallmentsChange,
   payerEmail,
   payerName,
   payerDocument,
@@ -51,8 +54,9 @@ const SubscriptionCardPayment = ({
   onSubmitBrick,
   onCheckoutProFallback,
 }: SubscriptionCardPaymentProps) => {
-  const [installments, setInstallments] = useState(1);
   const [sdkReady, setSdkReady] = useState(false);
+  const [brickReady, setBrickReady] = useState(false);
+  const { update: updateBrickValues } = useCardPaymentBrick();
 
   const trimmedPublicKey = (publicKey || '').trim();
 
@@ -69,156 +73,200 @@ const SubscriptionCardPayment = ({
   }, [trimmedPublicKey]);
 
   const cleanDocument = normalizeDocument(payerDocument);
-  const pricing = calculateCardPricing(amount, installments);
-  const installmentOptions = [1, 2, 3, 4].map((option) => ({
-    value: option,
-    pricing: calculateCardPricing(amount, option),
-  }));
-  const formKey = `${trimmedPublicKey}-${amount}-${installments}-${payerEmail || 'guest'}-${cleanDocument || 'no-doc'}`;
+  const pricing = useMemo(() => calculateCardPricing(amount, installments), [amount, installments]);
+
+  const installmentOptions = useMemo(
+    () =>
+      [1, 2, 3, 4].map((option) => ({
+        value: option,
+        pricing: calculateCardPricing(amount, option),
+      })),
+    [amount],
+  );
+
+  // Refs para callbacks e valores dinâmicos evitarem desmontagem do Brick
+  const latestSubmitRef = useRef(onSubmitBrick);
+  latestSubmitRef.current = onSubmitBrick;
+
+  const latestTotalRef = useRef(pricing.totalCustomerAmount);
+  latestTotalRef.current = pricing.totalCustomerAmount;
+
+  const latestInstallmentsRef = useRef(installments);
+  latestInstallmentsRef.current = installments;
+
+  // Inicializa o valor do Brick apenas com o valor inicial de mount;
+  // mudanças de parcelamento atualizam via controller.update({ amount }) sem recarregar o iframe.
+  const initialAmountRef = useRef(pricing.totalCustomerAmount);
+
+  const initialization = useMemo(
+    () => ({
+      amount: initialAmountRef.current,
+      payer: {
+        email: payerEmail || 'cliente@pconassinantes.site',
+        identification: cleanDocument
+          ? {
+              type: cleanDocument.length <= 11 ? 'CPF' : 'CNPJ',
+              number: cleanDocument,
+            }
+          : undefined,
+      },
+    }),
+    // Só reinicializa se chave/pagador base mudar (nunca por digitação ou troca de parcelas)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trimmedPublicKey, payerEmail],
+  );
+
+  useEffect(() => {
+    if (brickReady) {
+      updateBrickValues({ amount: pricing.totalCustomerAmount });
+    }
+  }, [brickReady, pricing.totalCustomerAmount, updateBrickValues]);
+
+  const customization = useMemo(
+    () => ({
+      paymentMethods: {
+        minInstallments: 1,
+        maxInstallments: 4,
+        types: {
+          included: ['credit_card' as const],
+        },
+      },
+      visual: {
+        hideFormTitle: true,
+        texts: {
+          formSubmit: 'Pagar com cartão',
+        },
+        style: {
+          theme: 'dark' as const,
+          customVariables: {
+            formBackgroundColor: 'transparent',
+            formPadding: '0px',
+            inputBackgroundColor: '#0d1f3f',
+            textPrimaryColor: '#f8fafc',
+            textSecondaryColor: '#94a3b8',
+            outlinePrimaryColor: 'rgba(255, 255, 255, 0.14)',
+            outlineSecondaryColor: '#009EE3',
+            baseColor: '#009EE3',
+            baseColorFirstVariant: '#0284c7',
+            baseColorSecondVariant: '#0369a1',
+            buttonTextColor: '#ffffff',
+            borderRadiusMedium: '12px',
+            borderRadiusLarge: '12px',
+            inputVerticalPadding: '12px',
+            inputHorizontalPadding: '14px',
+            inputBorderWidth: '1px',
+            inputFocusedBorderWidth: '1.5px',
+          },
+        },
+      },
+    }),
+    [],
+  );
+
+  const handleBrickSubmit = useCallback(async (formData: unknown) => {
+    const typed = formData as CardPaymentFormData;
+    await latestSubmitRef.current({
+      ...typed,
+      transaction_amount: latestTotalRef.current,
+      installments: latestInstallmentsRef.current,
+    });
+  }, []);
+
+  const handleBrickError = useCallback((error: unknown) => {
+    console.error('[SubscriptionCardPayment] Brick error:', error);
+    toast.error('Não foi possível carregar o formulário do cartão.');
+  }, []);
+
+  const handleBrickReady = useCallback(() => {
+    setBrickReady(true);
+    console.log('[SubscriptionCardPayment] Brick ready for', payerName);
+  }, [payerName]);
 
   return (
-    <div className="relative isolate space-y-3 overflow-hidden rounded-2xl border border-primary/20 bg-card/80 p-3 shadow-lg backdrop-blur-sm">
-      <div className="rounded-xl bg-gradient-to-r from-primary/20 via-primary/10 to-secondary/40 px-3 py-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 shadow-inner">
-              <CreditCard className="h-4 w-4 text-sky-300" />
-              <img
-                src={mercadoPagoIcon}
-                alt="Mercado Pago"
-                className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-[#0a1d3d] bg-white object-contain p-[1px]"
-              />
-            </div>
-            <div>
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                Cartão de Crédito
-                <Sparkles className="h-3.5 w-3.5 text-sky-400" />
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Até 4x via Mercado Pago • Aprovação imediata
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
-            <ShieldCheck className="h-3 w-3" />
-            Seguro
-          </div>
-        </div>
-      </div>
-
-      {/* Parcelamento */}
-      <div className={submitting ? 'pointer-events-none opacity-70 space-y-3' : 'space-y-3'}>
-        <div className="space-y-1.5 rounded-xl border border-border/40 bg-secondary/20 p-3">
+    <div className={submitting ? 'pointer-events-none opacity-70 space-y-4' : 'space-y-4'}>
+      {/* Parcelamento limpo em botões */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-muted-foreground">Parcelamento</p>
-          <select
-            value={installments}
-            onChange={(event) => setInstallments(Number(event.target.value))}
-            className="h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-primary"
-          >
-            {installmentOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.value}x de {formatCurrency(option.pricing.installmentAmount)} (Total: {formatCurrency(option.pricing.totalCustomerAmount)})
-              </option>
-            ))}
-          </select>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground pt-1">
-            <span>
-              Valor base: <strong className="text-foreground">{formatCurrency(pricing.requestedAmount)}</strong>
-            </span>
-            <span>
-              Total no cartão: <strong className="text-primary">{formatCurrency(pricing.totalCustomerAmount)}</strong>
-            </span>
-          </div>
           <p className="text-[11px] text-muted-foreground">
-            Taxa do cartão: {formatPercent(pricing.baseFeeRate)}
+            Base {formatCurrency(pricing.requestedAmount)} • Taxa {formatPercent(pricing.baseFeeRate)}
             {pricing.installmentSurchargeRate > 0
-              ? ` + parcelamento ${formatPercent(pricing.installmentSurchargeRate)}`
+              ? ` + ${formatPercent(pricing.installmentSurchargeRate)}`
               : ''}
-            .
           </p>
         </div>
 
-        {/* Se Public Key configurada -> Brick transparente; senão -> Checkout Pro Mercado Pago */}
-        {trimmedPublicKey && sdkReady ? (
-          <div className="rounded-xl border border-border/40 bg-background/40 p-2.5">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <p className="text-xs font-medium text-foreground">Dados do cartão</p>
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Lock className="h-3 w-3 text-primary" />
-                Criptografado
-              </span>
-            </div>
-            <CardPayment
-              key={formKey}
-              initialization={{
-                amount: pricing.totalCustomerAmount,
-                payer: {
-                  email: payerEmail || 'cliente@pconassinantes.site',
-                  identification: cleanDocument
-                    ? {
-                        type: cleanDocument.length <= 11 ? 'CPF' : 'CNPJ',
-                        number: cleanDocument,
-                      }
-                    : undefined,
-                },
-              } as Record<string, unknown>}
-              customization={{
-                paymentMethods: {
-                  minInstallments: 1,
-                  maxInstallments: 4,
-                  types: {
-                    included: ['credit_card'],
-                  },
-                },
-                visual: {
-                  style: {
-                    theme: 'dark',
-                  },
-                },
-              } as Record<string, unknown>}
-              locale="pt-BR"
-              onSubmit={async (formData) => {
-                await onSubmitBrick({
-                  ...(formData as CardPaymentFormData),
-                  transaction_amount: pricing.totalCustomerAmount,
-                  installments,
-                });
-              }}
-              onError={(error) => {
-                console.error('[SubscriptionCardPayment] Brick error:', error);
-                toast.error('Não foi possível carregar o formulário do cartão.');
-              }}
-              onReady={() => {
-                console.log('[SubscriptionCardPayment] Brick ready for', payerName);
-              }}
-            />
-          </div>
-        ) : (
-          <div className="space-y-3 rounded-xl border border-border/40 bg-secondary/20 p-4 text-center">
-            <p className="text-xs text-muted-foreground">
-              Você será redirecionado ao ambiente seguro do Mercado Pago para finalizar o pagamento no cartão.
-            </p>
-            <Button
-              type="button"
-              onClick={() => onCheckoutProFallback?.(pricing.totalCustomerAmount, installments)}
-              disabled={submitting || !onCheckoutProFallback}
-              className="w-full h-11 font-semibold gap-2"
-            >
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ExternalLink className="h-4 w-4" />
-              )}
-              {submitting ? 'Redirecionando...' : `Pagar ${formatCurrency(pricing.totalCustomerAmount)} com Cartão`}
-            </Button>
-          </div>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {installmentOptions.map((option) => {
+            const active = installments === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onInstallmentsChange(option.value)}
+                className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                  active
+                    ? 'border-[#009EE3]/80 bg-[#009EE3]/15 shadow-[0_0_16px_rgba(0,158,227,0.18)]'
+                    : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
+                }`}
+              >
+                <p className={`text-xs font-bold ${active ? 'text-white' : 'text-foreground'}`}>
+                  {option.value}x de {formatCurrency(option.pricing.installmentAmount)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Total {formatCurrency(option.pricing.totalCustomerAmount)}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {/* Formulário Mercado Pago sem caixas aninhadas */}
+      {trimmedPublicKey && sdkReady ? (
+        <div className="relative min-h-[340px]">
+          {!brickReady && (
+            <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin text-[#009EE3]" />
+              Carregando formulário seguro do cartão...
+            </div>
+          )}
+          <div className={brickReady ? 'opacity-100 transition-opacity duration-200' : 'opacity-0 h-0 overflow-hidden'}>
+            <CardPayment
+              key={trimmedPublicKey}
+              initialization={initialization}
+              customization={customization}
+              locale="pt-BR"
+              onSubmit={handleBrickSubmit}
+              onError={handleBrickError}
+              onReady={handleBrickReady}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3 pt-1 text-center">
+          <p className="text-xs text-muted-foreground">
+            Você será redirecionado ao ambiente seguro do Mercado Pago para finalizar o pagamento no cartão.
+          </p>
+          <Button
+            type="button"
+            onClick={() => onCheckoutProFallback?.(pricing.totalCustomerAmount, installments)}
+            disabled={submitting || !onCheckoutProFallback}
+            className="w-full h-11 font-semibold gap-2 bg-[#009EE3] hover:bg-[#0284c7] text-white"
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ExternalLink className="h-4 w-4" />
+            )}
+            {submitting ? 'Redirecionando...' : `Pagar ${formatCurrency(pricing.totalCustomerAmount)} com Cartão`}
+          </Button>
+        </div>
+      )}
+
       {submitting && (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/40 px-4 py-2.5 text-xs text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-[#009EE3]" />
           Processando pagamento no cartão...
         </div>
       )}
