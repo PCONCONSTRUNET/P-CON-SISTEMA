@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { completeSubscriptionPaymentCycle } from "../_shared/subscription-cycle.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,7 +54,7 @@ serve(async (req: Request) => {
       // Busca o pagamento pelo transaction_id (txid da EFI)
       const { data: paymentRecord, error: fetchError } = await supabase
         .from("payments")
-        .select("id, proposal_id, proposal_payment_type, subscription_id, client_id, status")
+        .select("id, proposal_id, proposal_payment_type, subscription_id, subscription_link_id, client_id, amount, description, status")
         .eq("transaction_id", txid)
         .maybeSingle();
 
@@ -74,74 +75,38 @@ serve(async (req: Request) => {
 
       const paidAt = pix.horario || new Date().toISOString();
 
-      // Marca o pagamento como pago
-      const { error: updateError } = await supabase
+      // Marca o pagamento como pago atomicamente (evita corrida com check-status)
+      const { data: updatedRows, error: updateError } = await supabase
         .from("payments")
         .update({ status: "paid", paid_at: paidAt })
-        .eq("id", paymentRecord.id);
+        .eq("id", paymentRecord.id)
+        .neq("status", "paid")
+        .select("id");
 
       if (updateError) {
         console.error("[efi-webhook] Error updating payment:", updateError);
         continue;
       }
 
+      if (!updatedRows || updatedRows.length === 0) {
+        console.log("[efi-webhook] Payment already marked paid concurrently:", txid);
+        continue;
+      }
+
       console.log("[efi-webhook] Payment marked as paid:", paymentRecord.id);
 
-      // Se for uma assinatura, atualiza a data do próximo pagamento
-      if (paymentRecord.subscription_id) {
-        const { data: subscription } = await supabase
-          .from("subscriptions")
-          .select("next_payment, billing_cycle")
-          .eq("id", paymentRecord.subscription_id)
-          .maybeSingle();
-
-        if (subscription?.next_payment) {
-          const nextDate = new Date(subscription.next_payment);
-          const cycle = subscription.billing_cycle || "monthly";
-
-          if (cycle === "monthly") {
-            nextDate.setMonth(nextDate.getMonth() + 1);
-          } else if (cycle === "yearly") {
-            nextDate.setFullYear(nextDate.getFullYear() + 1);
-          } else if (cycle === "quarterly") {
-            nextDate.setMonth(nextDate.getMonth() + 3);
-          } else if (cycle === "weekly") {
-            nextDate.setDate(nextDate.getDate() + 7);
-          }
-
-          await supabase
-            .from("subscriptions")
-            .update({ next_payment: nextDate.toISOString().split("T")[0] })
-            .eq("id", paymentRecord.subscription_id);
-
-          console.log("[efi-webhook] Subscription next_payment updated:", nextDate.toISOString());
-        }
-      }
-
-      // Se for uma proposta, atualiza o status da proposta
-      if (paymentRecord.proposal_id) {
-        const { data: proposal } = await supabase
-          .from("proposals")
-          .select("status")
-          .eq("id", paymentRecord.proposal_id)
-          .maybeSingle();
-
-        const nextStatus =
-          paymentRecord.proposal_payment_type === "entry" && proposal?.status !== "paid"
-            ? "entry_paid"
-            : "paid";
-
-        await supabase
-          .from("proposals")
-          .update(
-            paymentRecord.proposal_payment_type === "entry"
-              ? { status: nextStatus, entry_paid_at: paidAt }
-              : { status: "paid", paid_at: paidAt },
-          )
-          .eq("id", paymentRecord.proposal_id);
-
-        console.log("[efi-webhook] Proposal updated:", paymentRecord.proposal_id, "→", nextStatus);
-      }
+      await completeSubscriptionPaymentCycle(supabase, {
+        paymentId: paymentRecord.id,
+        subscriptionId: paymentRecord.subscription_id,
+        subscriptionLinkId: paymentRecord.subscription_link_id,
+        proposalId: paymentRecord.proposal_id,
+        proposalPaymentType: paymentRecord.proposal_payment_type,
+        clientId: paymentRecord.client_id,
+        amount: paymentRecord.amount,
+        description: paymentRecord.description,
+        paymentMethod: "PIX",
+        paidAt,
+      });
     }
 
     return new Response(JSON.stringify({ ok: true }), {

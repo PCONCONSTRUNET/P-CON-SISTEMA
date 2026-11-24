@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ensurePendingSubscriptionLink } from "../_shared/subscription-cycle.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +16,7 @@ const generateEmailHTML = (
   planName: string,
   amount: string,
   dueDate: string,
+  paymentUrl: string = CLIENT_AREA_URL,
 ) => `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -99,8 +101,8 @@ const generateEmailHTML = (
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="${CLIENT_AREA_URL}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#1E4FA3 0%,#2A3F86 100%);color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;letter-spacing:0.3px;">
-                      Acessar Área do Cliente
+                    <a href="${paymentUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#1E4FA3 0%,#2A3F86 100%);color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;letter-spacing:0.3px;">
+                      Pagar agora (PIX ou Cartão)
                     </a>
                   </td>
                 </tr>
@@ -160,7 +162,7 @@ const generateEmailHTML = (
 </html>
 `;
 
-const sendEmailForSubscription = async (sub: any, client: any, resendApiKey: string) => {
+const sendEmailForSubscription = async (supabase: any, sub: any, client: any, resendApiKey: string) => {
   if (!client?.email) return { skipped: true };
 
   const planName = sub.plan_name || "Assinatura";
@@ -170,7 +172,16 @@ const sendEmailForSubscription = async (sub: any, client: any, resendApiKey: str
     day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo",
   });
 
-  const emailHTML = generateEmailHTML(client.name, planName, formattedAmount, formattedDueDate);
+  const link = await ensurePendingSubscriptionLink(supabase, {
+    id: sub.id,
+    client_id: client.id,
+    value: sub.value,
+    next_payment: sub.next_payment,
+    status: "active",
+  });
+  const paymentUrl = link?.url || CLIENT_AREA_URL;
+
+  const emailHTML = generateEmailHTML(client.name, planName, formattedAmount, formattedDueDate, paymentUrl);
 
   const resendResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -261,7 +272,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       try {
-        const result = await sendEmailForSubscription(sub, client, resendApiKey);
+        const result = await sendEmailForSubscription(supabase, sub, client, resendApiKey);
         if (result.sent) {
           return new Response(
             JSON.stringify({ success: true, results: { emails_sent: 1, skipped_no_email: 0, errors: [], client_name: client.name, client_email: client.email } }),
@@ -381,7 +392,7 @@ const handler = async (req: Request): Promise<Response> => {
       for (const sub of dueSubs) {
         const client = sub.client as any;
         try {
-          const result = await sendEmailForSubscription(sub, client, resendApiKey);
+          const result = await sendEmailForSubscription(supabase, sub, client, resendApiKey);
           if (result.skipped) { results.skipped_no_email++; }
           else if (result.sent) { results.emails_sent++; }
           else { results.errors.push(`${client?.name || 'Desconhecido'}: ${result.error}`); }

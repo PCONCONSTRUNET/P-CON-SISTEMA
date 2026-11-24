@@ -23,6 +23,7 @@ export interface WhatsAppSendParams {
   amount: number;
   description?: string;
   dueDate?: string | null;
+  paymentLink?: string | null;
 }
 
 interface WhatsAppSendModalProps {
@@ -37,14 +38,17 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const buildManualMessage = (params: WhatsAppSendParams): string => {
-  const { clientName, type, amount, description } = params;
+  const { clientName, type, amount, description, paymentLink } = params;
   const formattedAmount = formatCurrency(amount);
+  const accessLine = paymentLink
+    ? `💳 Pague por aqui (PIX ou cartão): ${paymentLink}`
+    : 'Acesse a área do cliente: https://www.pconassinantes.site/cliente';
 
   if (type === 'overdue') {
-    return `Olá ${clientName}! 💈\n\n⚠️ A fatura referente a sua assinatura ativa de *${formattedAmount}*${description ? ` (*${description}*)` : ''} está vencida.\n\nRegularize o pagamento para manter sua assinatura em dia.\n\nAcesse a área do cliente: https://www.pconassinantes.site/cliente\n\nEntre em contato se precisar de ajuda.`;
+    return `Olá ${clientName}! 💈\n\n⚠️ A fatura referente a sua assinatura ativa de *${formattedAmount}*${description ? ` (*${description}*)` : ''} está vencida.\n\nRegularize o pagamento para manter sua assinatura em dia.\n\n${accessLine}\n\nEntre em contato se precisar de ajuda.`;
   }
 
-  return `Olá ${clientName}! 💈\n\nPassando para lembrar que a fatura referente a sua assinatura ativa${description ? ` do *${description}*` : ''} no valor de *${formattedAmount}* está pendente.\n\nAcesse a área do cliente: https://www.pconassinantes.site/cliente\n\nQualquer dúvida, estamos à disposição.`;
+  return `Olá ${clientName}! 💈\n\nPassando para lembrar que a fatura referente a sua assinatura ativa${description ? ` do *${description}*` : ''} no valor de *${formattedAmount}* está pendente.\n\n${accessLine}\n\nQualquer dúvida, estamos à disposição.`;
 };
 
 const WhatsAppSendModal = ({ open, onOpenChange, params, onSendViaApi, sendingId }: WhatsAppSendModalProps) => {

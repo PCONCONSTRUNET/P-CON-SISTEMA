@@ -751,6 +751,7 @@ export type Database = {
           proposal_payment_type: string | null
           status: string
           subscription_id: string | null
+          subscription_link_id: string | null
           transaction_id: string | null
         }
         Insert: {
@@ -767,6 +768,7 @@ export type Database = {
           proposal_payment_type?: string | null
           status?: string
           subscription_id?: string | null
+          subscription_link_id?: string | null
           transaction_id?: string | null
         }
         Update: {
@@ -783,6 +785,7 @@ export type Database = {
           proposal_payment_type?: string | null
           status?: string
           subscription_id?: string | null
+          subscription_link_id?: string | null
           transaction_id?: string | null
         }
         Relationships: [
@@ -1058,6 +1061,73 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_payment_links: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string
+          due_date: string
+          id: string
+          paid_at: string | null
+          payment_id: string | null
+          payment_method: string | null
+          status: string
+          subscription_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          client_id: string
+          created_at?: string
+          due_date: string
+          id?: string
+          paid_at?: string | null
+          payment_id?: string | null
+          payment_method?: string | null
+          status?: string
+          subscription_id: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          paid_at?: string | null
+          payment_id?: string | null
+          payment_method?: string | null
+          status?: string
+          subscription_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_payment_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_payment_links_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_payment_links_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           asaas_id: string | null
@@ -1208,6 +1278,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_subscription_cycle: {
+        Args: {
+          p_paid_at?: string
+          p_payment_id?: string
+          p_payment_method?: string
+          p_subscription_id: string
+          p_subscription_link_id?: string
+        }
+        Returns: Json
+      }
       create_admin_notification: {
         Args: {
           p_category: string

@@ -11,6 +11,7 @@ interface CreatePixPaymentParams {
   clientPhone?: string;
   clientDocument?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }
@@ -25,6 +26,7 @@ interface CreateCardPreferenceParams {
   clientDocument?: string;
   externalReference?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
   maxInstallments?: number;
@@ -40,6 +42,7 @@ interface CreateCardPaymentParams {
   clientPhone?: string;
   clientDocument?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
   externalReference?: string;
@@ -67,6 +70,9 @@ interface PaymentStatusResult {
   status?: string;
   statusDetail?: string;
   paidAt?: string;
+  nextPayment?: string | null;
+  newLinkToken?: string | null;
+  newLinkUrl?: string | null;
   error?: string;
 }
 
@@ -76,12 +82,16 @@ interface CardPaymentResult {
   status?: string;
   statusDetail?: string;
   paidAt?: string;
+  nextPayment?: string | null;
+  newLinkToken?: string | null;
+  newLinkUrl?: string | null;
   error?: string;
 }
 
 interface MercadoPagoGatewayStatus {
   isActive: boolean;
   configured: boolean;
+  publicKey?: string | null;
 }
 
 const MP_GATEWAY_STATUS_EVENT = 'mercadopago-gateway-status-changed';
@@ -101,6 +111,7 @@ export async function fetchMercadoPagoGatewayStatus(): Promise<MercadoPagoGatewa
     return {
       isActive: !!data.isActive,
       configured: !!data.configured,
+      publicKey: data.publicKey || null,
     };
   }
 
@@ -110,11 +121,12 @@ export async function fetchMercadoPagoGatewayStatus(): Promise<MercadoPagoGatewa
 
   if (!settingsError && settingsData?.success) {
     const s = settingsData.settings;
-    if (!s) return { isActive: false, configured: false };
+    if (!s) return { isActive: false, configured: false, publicKey: null };
     const configured = !!s.access_token;
     return {
       isActive: !!s.is_active && configured,
       configured,
+      publicKey: s.public_key || null,
     };
   }
 

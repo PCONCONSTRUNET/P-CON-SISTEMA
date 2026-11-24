@@ -11,6 +11,7 @@ interface CreatePixPaymentParams {
   clientPhone?: string;
   clientDocument?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }
@@ -32,6 +33,9 @@ interface PaymentStatusResult {
   status?: string;
   efiStatus?: string;
   paidAt?: string;
+  nextPayment?: string | null;
+  newLinkToken?: string | null;
+  newLinkUrl?: string | null;
   error?: string;
 }
 

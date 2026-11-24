@@ -10,6 +10,7 @@ interface SendReminderParams {
   amount: number;
   description?: string;
   dueDate?: string | null;
+  paymentLink?: string | null;
 }
 
 // Resolve the correct template key based on type and due date
@@ -46,11 +47,18 @@ const fallbackMessages: Record<string, (name: string, amount: string, desc?: str
     `Ola ${name}! 💈\n\n⚠️ A fatura referente a sua assinatura ativa de *R$ ${amount}*${desc ? ` (*${desc}*)` : ''} esta vencida.\n\nRegularize o pagamento para manter sua assinatura em dia.\n\nAcesse a area do cliente: https://www.pconassinantes.site/cliente\n\nEntre em contato se precisar de ajuda.`,
 };
 
-const replacePlaceholders = (template: string, clientName: string, formattedAmount: string, planName?: string) => {
+const replacePlaceholders = (
+  template: string,
+  clientName: string,
+  formattedAmount: string,
+  planName?: string,
+  paymentLink?: string | null,
+) => {
   return template
     .replace(/\{\{client_name\}\}/g, clientName)
     .replace(/\{\{amount\}\}/g, `R$ ${formattedAmount}`)
-    .replace(/\{\{plan_name\}\}/g, planName || 'Assinatura');
+    .replace(/\{\{plan_name\}\}/g, planName || 'Assinatura')
+    .replace(/\{\{payment_link\}\}/g, paymentLink || 'https://www.pconassinantes.site/cliente');
 };
 
 export const useWhatsAppReminder = () => {
@@ -58,7 +66,7 @@ export const useWhatsAppReminder = () => {
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
 
   const sendReminder = async (params: SendReminderParams): Promise<boolean> => {
-    const { clientId, clientName, clientPhone, type, amount, description, dueDate } = params;
+    const { clientId, clientName, clientPhone, type, amount, description, dueDate, paymentLink } = params;
 
     if (!clientPhone) {
       toast.error('Cliente não possui telefone cadastrado');
@@ -95,17 +103,29 @@ export const useWhatsAppReminder = () => {
 
       if (templateData) {
         // Use template from database
-        message = replacePlaceholders(templateData.message_template, clientName, formattedAmount, description);
+        message = replacePlaceholders(templateData.message_template, clientName, formattedAmount, description, paymentLink);
+        // Se o template não tiver {{payment_link}}, anexa o link de cobrança no final
+        if (paymentLink && !/\{\{payment_link\}\}/i.test(templateData.message_template || '')) {
+          message += `\n\n💳 Pague por aqui (PIX ou cartão): ${paymentLink}`;
+        }
         imageUrl = templateData.image_url || undefined;
         sendImage = !!templateData.image_url;
         sendButton = templateData.button_enabled;
         buttonText = templateData.button_text || undefined;
-        buttonUrl = templateData.button_url || undefined;
+        buttonUrl = templateData.button_url
+          ? replacePlaceholders(templateData.button_url, clientName, formattedAmount, description, paymentLink)
+          : paymentLink || undefined;
         console.log(`Using template "${templateData.name}" for type "${type}"`);
       } else {
         // Use fallback hardcoded message
         const fallback = fallbackMessages[type];
         message = fallback ? fallback(clientName, formattedAmount, description) : '';
+        if (paymentLink) {
+          message = message.replace(
+            /Acesse a area do cliente: https:\/\/www\.pconassinantes\.site\/cliente/,
+            `Pague por aqui (PIX ou cartao): ${paymentLink}`,
+          );
+        }
         console.log(`No template found for key "${templateKey}", using fallback`);
       }
 

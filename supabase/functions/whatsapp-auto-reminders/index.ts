@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ensurePendingSubscriptionLink } from "../_shared/subscription-cycle.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -203,11 +204,22 @@ const handler = async (req: Request): Promise<Response> => {
 
     const uazapiAuthHeaders = { token: apiToken };
 
-    const sendMessageWithImageAndButton = async (phone: string, message: string, template: any) => {
+    const sendMessageWithImageAndButton = async (
+      phone: string,
+      message: string,
+      template: any,
+      paymentUrl?: string,
+    ) => {
       const tImageUrl = template.image_url || DEFAULT_IMAGE_URL;
       const tButtonEnabled = template.button_enabled;
-      const tButtonText = template.button_text || "Acessar Área do Cliente";
-      const tButtonUrl = template.button_url || DEFAULT_CLIENT_AREA_URL;
+      const tButtonText = template.button_text || (paymentUrl ? "Pagar Assinatura (PIX / Cartão)" : "Acessar Área do Cliente");
+      const rawButtonUrl = (template.button_url || "").trim();
+      const isGenericPortalUrl =
+        !rawButtonUrl ||
+        rawButtonUrl === DEFAULT_CLIENT_AREA_URL ||
+        rawButtonUrl === "https://pconassinantes.site/cliente" ||
+        rawButtonUrl.endsWith("/cliente");
+      const tButtonUrl = paymentUrl && isGenericPortalUrl ? paymentUrl : (rawButtonUrl || DEFAULT_CLIENT_AREA_URL);
 
       const finalImageUrl = `${tImageUrl}?v=${Date.now()}`;
 
@@ -262,11 +274,27 @@ const handler = async (req: Request): Promise<Response> => {
         const dueDate = new Date(sub.next_payment);
         const formattedDueDate = `${String(dueDate.getDate()).padStart(2, '0')}/${String(dueDate.getMonth() + 1).padStart(2, '0')}/${dueDate.getFullYear()}`;
 
-        const message = template.message_template
+        // Garante o link único do ciclo para esta assinatura
+        const linkData = await ensurePendingSubscriptionLink(supabase, {
+          id: sub.id,
+          client_id: client.id,
+          value: sub.value,
+          next_payment: sub.next_payment,
+          status: sub.status,
+        });
+        const paymentUrl = linkData?.url || DEFAULT_CLIENT_AREA_URL;
+
+        const hasPlaceholder = /\{\{payment_link\}\}/i.test(template.message_template || "");
+        let message = (template.message_template as string)
           .replace(/\{\{client_name\}\}/g, client.name)
           .replace(/\{\{plan_name\}\}/g, planName)
           .replace(/\{\{amount\}\}/g, formattedValue)
-          .replace(/\{\{due_date\}\}/g, formattedDueDate);
+          .replace(/\{\{due_date\}\}/g, formattedDueDate)
+          .replace(/\{\{payment_link\}\}/g, paymentUrl);
+
+        if (!hasPlaceholder && !template.button_enabled && linkData?.url) {
+          message += `\n\n💳 Pague via PIX ou Cartão: ${paymentUrl}`;
+        }
 
         try {
           let phone = client.phone.replace(/\D/g, "");
@@ -274,7 +302,7 @@ const handler = async (req: Request): Promise<Response> => {
 
           console.log(`Sending ${messageType} reminder to ${client.name} (${phone})`);
 
-          const result = await sendMessageWithImageAndButton(phone, message, template);
+          const result = await sendMessageWithImageAndButton(phone, message, template, linkData?.url);
           const isSuccess = result.httpStatus === 200 && (result.key || result.chatid || result.messageid);
 
           if (isSuccess) {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { completeSubscriptionPaymentCycle } from "../_shared/subscription-cycle.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +87,7 @@ interface CreatePixPaymentRequest {
   clientPhone?: string;
   clientDocument?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: "entry" | "total";
 }
@@ -100,6 +102,7 @@ interface CreatePreferenceRequest {
   clientDocument?: string;
   externalReference?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: "entry" | "total";
   maxInstallments?: number;
@@ -115,6 +118,7 @@ interface CreateCardPaymentRequest {
   clientPhone?: string;
   clientDocument?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: "entry" | "total";
   externalReference?: string;
@@ -488,7 +492,11 @@ serve(async (req: Request) => {
               }
             : undefined,
         },
-        external_reference: body.description, // Shows in bank statement
+        external_reference: body.subscriptionLinkId
+          ? `sublink:${body.subscriptionLinkId}`
+          : body.subscriptionId
+          ? `sub:${body.subscriptionId}`
+          : body.description,
         notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
       };
 
@@ -524,6 +532,8 @@ serve(async (req: Request) => {
             description: body.description,
             amount: body.amount,
             client_id: body.clientId || null,
+            subscription_id: body.subscriptionId || null,
+            subscription_link_id: body.subscriptionLinkId || null,
             proposal_id: body.proposalId || null,
             proposal_payment_type: body.proposalPaymentType || null,
           })
@@ -539,6 +549,7 @@ serve(async (req: Request) => {
         const { error: dbError } = await supabase.from("payments").insert({
           client_id: body.clientId || null,
           subscription_id: body.subscriptionId || null,
+          subscription_link_id: body.subscriptionLinkId || null,
           proposal_id: body.proposalId || null,
           proposal_payment_type: body.proposalPaymentType || null,
           amount: body.amount,
@@ -610,7 +621,7 @@ serve(async (req: Request) => {
               }
             : undefined,
         },
-        external_reference: body.externalReference || body.description,
+        external_reference: body.externalReference || (body.subscriptionLinkId ? `sublink:${body.subscriptionLinkId}` : body.subscriptionId ? `sub:${body.subscriptionId}` : body.description),
         notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
       };
 
@@ -638,6 +649,7 @@ serve(async (req: Request) => {
       const paymentPayload = {
         client_id: body.clientId || null,
         subscription_id: body.subscriptionId || null,
+        subscription_link_id: body.subscriptionLinkId || null,
         proposal_id: body.proposalId || null,
         proposal_payment_type: body.proposalPaymentType || null,
         amount: body.amount,
@@ -649,44 +661,48 @@ serve(async (req: Request) => {
         paid_at: paidAt,
       };
 
+      let savedPaymentId: string | null = null;
       if (existingPayment) {
-        const { error: updateError } = await supabase
+        const { data: updatedRow, error: updateError } = await supabase
           .from("payments")
           .update(paymentPayload)
-          .eq("id", existingPayment.id);
+          .eq("id", existingPayment.id)
+          .select("id")
+          .single();
 
         if (updateError) {
           console.error("Error updating existing card payment:", updateError);
+        } else {
+          savedPaymentId = updatedRow?.id || existingPayment.id;
         }
       } else {
-        const { error: insertError } = await supabase
+        const { data: insertedRow, error: insertError } = await supabase
           .from("payments")
-          .insert(paymentPayload);
+          .insert(paymentPayload)
+          .select("id")
+          .single();
 
         if (insertError) {
           console.error("Error saving card payment to DB:", insertError);
+        } else {
+          savedPaymentId = insertedRow?.id || null;
         }
       }
 
-      if (localStatus === "paid" && body.proposalId) {
-        const { data: proposal } = await supabase
-          .from("proposals")
-          .select("status")
-          .eq("id", body.proposalId)
-          .maybeSingle();
-
-        const nextStatus = body.proposalPaymentType === "entry" && proposal?.status !== "paid"
-          ? "entry_paid"
-          : "paid";
-
-        await supabase
-          .from("proposals")
-          .update(
-            body.proposalPaymentType === "entry"
-              ? { status: nextStatus, entry_paid_at: paidAt }
-              : { status: "paid", paid_at: paidAt }
-          )
-          .eq("id", body.proposalId);
+      let cycleResult: { nextPayment?: string | null; newLinkToken?: string | null; newLinkUrl?: string | null } = {};
+      if (localStatus === "paid" && savedPaymentId) {
+        cycleResult = await completeSubscriptionPaymentCycle(supabase, {
+          paymentId: savedPaymentId,
+          subscriptionId: body.subscriptionId || null,
+          subscriptionLinkId: body.subscriptionLinkId || null,
+          proposalId: body.proposalId || null,
+          proposalPaymentType: body.proposalPaymentType || null,
+          clientId: body.clientId || null,
+          amount: body.amount,
+          description: body.description,
+          paymentMethod: "CREDIT_CARD",
+          paidAt,
+        });
       }
 
       return new Response(
@@ -696,6 +712,9 @@ serve(async (req: Request) => {
           status: result.status,
           statusDetail: result.status_detail,
           paidAt: result.date_approved,
+          nextPayment: cycleResult.nextPayment || null,
+          newLinkToken: cycleResult.newLinkToken || null,
+          newLinkUrl: cycleResult.newLinkUrl || null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -734,69 +753,37 @@ serve(async (req: Request) => {
 
       const { data: paymentRecord } = await supabase
         .from("payments")
-        .select("id, proposal_id, proposal_payment_type, status, subscription_id")
+        .select("id, proposal_id, proposal_payment_type, status, subscription_id, subscription_link_id, client_id, amount, description, payment_method")
         .eq("transaction_id", paymentId)
         .maybeSingle();
 
+      let cycleResult: { nextPayment?: string | null; newLinkToken?: string | null; newLinkUrl?: string | null } = {};
+
       if (paymentRecord && paymentRecord.status !== "paid") {
         const paidAt = localStatus === "paid" ? result.date_approved || new Date().toISOString() : null;
-        await supabase
+        const { data: updatedRows } = await supabase
           .from("payments")
           .update({
             status: localStatus,
             paid_at: paidAt,
           })
-          .eq("id", paymentRecord.id);
+          .eq("id", paymentRecord.id)
+          .neq("status", "paid")
+          .select("id");
 
-        if (localStatus === "paid") {
-          if (paymentRecord.proposal_id) {
-            const { data: proposal } = await supabase
-              .from("proposals")
-              .select("status")
-              .eq("id", paymentRecord.proposal_id)
-              .maybeSingle();
-
-            const nextStatus = paymentRecord.proposal_payment_type === "entry" && proposal?.status !== "paid"
-              ? "entry_paid"
-              : "paid";
-
-            await supabase
-              .from("proposals")
-              .update(
-                paymentRecord.proposal_payment_type === "entry"
-                  ? { status: nextStatus, entry_paid_at: paidAt }
-                  : { status: "paid", paid_at: paidAt }
-              )
-              .eq("id", paymentRecord.proposal_id);
-          }
-
-          if (paymentRecord.subscription_id) {
-            const { data: subscription } = await supabase
-              .from("subscriptions")
-              .select("next_payment, billing_cycle")
-              .eq("id", paymentRecord.subscription_id)
-              .maybeSingle();
-
-            if (subscription?.next_payment) {
-              const nextDate = new Date(subscription.next_payment);
-              const cycle = subscription.billing_cycle || "monthly";
-
-              if (cycle === "monthly") {
-                nextDate.setMonth(nextDate.getMonth() + 1);
-              } else if (cycle === "yearly") {
-                nextDate.setFullYear(nextDate.getFullYear() + 1);
-              } else if (cycle === "quarterly") {
-                nextDate.setMonth(nextDate.getMonth() + 3);
-              } else if (cycle === "weekly") {
-                nextDate.setDate(nextDate.getDate() + 7);
-              }
-
-              await supabase
-                .from("subscriptions")
-                .update({ next_payment: nextDate.toISOString().split("T")[0] })
-                .eq("id", paymentRecord.subscription_id);
-            }
-          }
+        if (localStatus === "paid" && updatedRows && updatedRows.length > 0) {
+          cycleResult = await completeSubscriptionPaymentCycle(supabase, {
+            paymentId: paymentRecord.id,
+            subscriptionId: paymentRecord.subscription_id,
+            subscriptionLinkId: paymentRecord.subscription_link_id,
+            proposalId: paymentRecord.proposal_id,
+            proposalPaymentType: paymentRecord.proposal_payment_type,
+            clientId: paymentRecord.client_id,
+            amount: paymentRecord.amount,
+            description: paymentRecord.description,
+            paymentMethod: paymentRecord.payment_method || "PIX",
+            paidAt,
+          });
         }
       }
 
@@ -806,6 +793,9 @@ serve(async (req: Request) => {
           status: result.status,
           statusDetail: result.status_detail,
           paidAt: result.date_approved,
+          nextPayment: cycleResult.nextPayment || null,
+          newLinkToken: cycleResult.newLinkToken || null,
+          newLinkUrl: cycleResult.newLinkUrl || null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -840,7 +830,7 @@ serve(async (req: Request) => {
           installments: Math.min(Math.max(body.maxInstallments || 1, 1), 4),
           default_installments: Math.min(Math.max(body.maxInstallments || 1, 1), 4),
         },
-        external_reference: body.externalReference,
+        external_reference: body.externalReference || (body.subscriptionLinkId ? `sublink:${body.subscriptionLinkId}` : body.subscriptionId ? `sub:${body.subscriptionId}` : undefined),
         notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
         back_urls: body.returnUrl
           ? {
@@ -849,7 +839,7 @@ serve(async (req: Request) => {
               pending: body.returnUrl,
             }
           : undefined,
-        auto_return: "approved",
+        auto_return: body.returnUrl ? "approved" : undefined,
       };
 
       const response = await fetch(`${MERCADOPAGO_API_URL}/checkout/preferences`, {
@@ -875,6 +865,7 @@ serve(async (req: Request) => {
       const paymentPayload = {
         client_id: body.clientId || null,
         subscription_id: body.subscriptionId || null,
+        subscription_link_id: body.subscriptionLinkId || null,
         proposal_id: body.proposalId || null,
         proposal_payment_type: body.proposalPaymentType || null,
         amount: body.amount,

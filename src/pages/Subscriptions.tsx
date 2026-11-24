@@ -46,9 +46,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { differenceInCalendarDays, isPast, isToday, format, addDays } from 'date-fns';
 import { formatBrazilDate, formatDateForInput, inputDateToISO, normalizeInputDate, toBrazilTime } from '@/utils/dateUtils';
 import { toast } from 'sonner';
-import { usePaymentGateway } from '@/hooks/usePaymentGateway';
 import { useWhatsAppReminder } from '@/hooks/useWhatsAppReminder';
 import { useSubscriptionReminder } from '@/hooks/useSubscriptionReminder';
+import {
+  advanceSubscriptionCycleClient,
+  buildSubscriptionPaymentUrl,
+  ensureSubscriptionPaymentLink,
+} from '@/utils/subscriptionLinks';
+
+const PUBLIC_APP_URL = 'https://www.pconassinantes.site';
 
 const Subscriptions = () => {
   const [search, setSearch] = useState('');
@@ -84,9 +90,8 @@ const Subscriptions = () => {
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [whatsappParams, setWhatsappParams] = useState<WhatsAppSendParams | null>(null);
 
-  const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription } = useGlobalData();
+  const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription, refetchSubscriptions } = useGlobalData();
 
-  const { createPixPayment, isGatewayDisabled } = usePaymentGateway();
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
   const { sendReminderIfNeeded } = useSubscriptionReminder();
 
@@ -296,47 +301,63 @@ const Subscriptions = () => {
     await deleteSubscription(subscriptionId);
   };
 
-  const handleGenerateCharge = async (subscription: Subscription) => {
-    if (isGatewayDisabled) {
-      toast.error('Nenhum gateway de pagamento está ativo. Ative EFI Bank ou Mercado Pago nas configurações para gerar cobranças PIX.');
-      return;
-    }
+  // Retorna a URL do link de cobrança do ciclo atual (cria se ainda não existir)
+  const getSubscriptionPaymentUrl = async (subscription: Subscription): Promise<string | null> => {
+    const link = await ensureSubscriptionPaymentLink({
+      id: subscription.id,
+      client_id: subscription.client_id,
+      value: Number(subscription.value),
+      next_payment: subscription.next_payment,
+      status: subscription.status,
+    });
+    return link?.token ? buildSubscriptionPaymentUrl(link.token, PUBLIC_APP_URL) : null;
+  };
 
-    if (!subscription.clients) {
-      toast.error('Cliente não encontrado para esta assinatura.');
+  const handleGenerateCharge = async (subscription: Subscription) => {
+    if (subscription.status !== 'active') {
+      toast.error('Ative a assinatura para gerar o link de cobrança.');
       return;
     }
 
     setGeneratingChargeId(subscription.id);
-
     try {
-      // Create PIX payment via Mercado Pago
-      const pixResult = await createPixPayment({
-        amount: Number(subscription.value),
-        description: `Cobrança - ${subscription.plan_name}`,
-        clientId: subscription.client_id,
-        clientEmail: subscription.clients?.email || '',
-        clientName: subscription.clients?.name || 'Cliente',
-        subscriptionId: subscription.id,
-      });
-
-      if (pixResult?.success) {
-        toast.success('Cobrança PIX criada com sucesso!');
-        
-        // Update subscription next_payment to next month
-        const newNextPayment = new Date(subscription.next_payment);
-        newNextPayment.setMonth(newNextPayment.getMonth() + 1);
-        
-        await updateSubscription(subscription.id, {
-          next_payment: newNextPayment.toISOString(),
-        });
+      const url = await getSubscriptionPaymentUrl(subscription);
+      if (!url) {
+        toast.error('Não foi possível gerar o link de cobrança.');
+        return;
       }
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      toast.success('Link de cobrança copiado! O cliente pode pagar via PIX ou cartão.', {
+        description: url,
+      });
     } catch (error: any) {
-      console.error('Error generating charge:', error);
-      toast.error(error.message || 'Erro ao gerar cobrança.');
+      console.error('Error generating payment link:', error);
+      toast.error(error.message || 'Erro ao gerar link de cobrança.');
     } finally {
       setGeneratingChargeId(null);
     }
+  };
+
+  const openWhatsAppForSubscription = async (subscription: Subscription) => {
+    let paymentLink: string | null = null;
+    if (subscription.status === 'active') {
+      try {
+        paymentLink = await getSubscriptionPaymentUrl(subscription);
+      } catch (err) {
+        console.error('Error loading payment link for WhatsApp:', err);
+      }
+    }
+    setWhatsappParams({
+      clientId: subscription.client_id,
+      clientName: subscription.clients?.name || 'Cliente',
+      clientPhone: subscription.clients?.phone || null,
+      type: 'subscription',
+      amount: Number(subscription.value),
+      description: subscription.plan_name,
+      dueDate: subscription.next_payment,
+      paymentLink,
+    });
+    setWhatsappModalOpen(true);
   };
 
   const handleMarkSubscriptionPaid = async (subscription: Subscription) => {
@@ -363,34 +384,16 @@ const Subscriptions = () => {
         .limit(1)
         .maybeSingle();
 
+      const paidAt = new Date().toISOString();
+      let paidPaymentId: string | null = null;
+
       if (pendingPayment) {
-        // Mark existing payment as paid
         await supabase
           .from('payments')
-          .update({ status: 'paid', paid_at: new Date().toISOString() })
+          .update({ status: 'paid', paid_at: paidAt })
           .eq('id', pendingPayment.id);
-
-        // Create invoice for the paid payment
-        const year = new Date().getFullYear();
-        const month = String(new Date().getMonth() + 1).padStart(2, '0');
-        const invoiceNumber = `NF-${year}${month}-${pendingPayment.id.slice(-4).toUpperCase()}`;
-        const invoiceDescription = `Valor pago referente ao plano ativo: ${planName}`;
-
-        await supabase
-          .from('invoices')
-          .insert({
-            payment_id: pendingPayment.id,
-            client_id: subscription.client_id,
-            number: invoiceNumber,
-            amount: pendingPayment.amount,
-            status: 'issued',
-            description: invoiceDescription,
-          });
+        paidPaymentId = pendingPayment.id;
       } else {
-        // No pending payment found, create a paid payment record
-        const year = new Date().getFullYear();
-        const month = String(new Date().getMonth() + 1).padStart(2, '0');
-        
         const { data: newPayment } = await supabase
           .from('payments')
           .insert({
@@ -398,48 +401,49 @@ const Subscriptions = () => {
             client_id: subscription.client_id,
             amount,
             status: 'paid',
-            paid_at: new Date().toISOString(),
+            paid_at: paidAt,
             payment_method: 'manual',
             description: `Pagamento manual - ${planName}`,
           })
           .select()
           .single();
+        paidPaymentId = newPayment?.id || null;
+      }
 
-        if (newPayment) {
-          const invoiceNumber = `NF-${year}${month}-${newPayment.id.slice(-4).toUpperCase()}`;
-          await supabase
-            .from('invoices')
-            .insert({
-              payment_id: newPayment.id,
-              client_id: subscription.client_id,
-              number: invoiceNumber,
-              amount,
-              status: 'issued',
-              description: `Valor pago referente ao plano ativo: ${planName}`,
-            });
+      // 2. Dá baixa no link do ciclo, emite NF, avança para o próximo mês e gera o novo link
+      const cycle = await advanceSubscriptionCycleClient({
+        subscriptionId: subscription.id,
+        paymentId: paidPaymentId,
+        paymentMethod: pendingPayment?.payment_method || 'manual',
+        paidAt,
+      });
+
+      // Garante NF caso o fallback (sem RPC) tenha sido usado
+      if (paidPaymentId) {
+        const { data: existingInvoice } = await supabase
+          .from('invoices')
+          .select('id')
+          .eq('payment_id', paidPaymentId)
+          .maybeSingle();
+
+        if (!existingInvoice) {
+          const year = new Date().getFullYear();
+          const month = String(new Date().getMonth() + 1).padStart(2, '0');
+          await supabase.from('invoices').insert({
+            payment_id: paidPaymentId,
+            client_id: subscription.client_id,
+            number: `NF-${year}${month}-${paidPaymentId.slice(-4).toUpperCase()}`,
+            amount: pendingPayment?.amount ?? amount,
+            status: 'issued',
+            description: `Valor pago referente ao plano ativo: ${planName}`,
+          });
         }
       }
 
-      // 2. Advance next_payment to next month
-      const currentNext = new Date(subscription.next_payment);
-      const nextDay = currentNext.getDate();
-      const nextMonth = currentNext.getMonth() + 1;
-      const nextYear = currentNext.getFullYear();
-      
-      let newDate: Date;
-      if (nextMonth > 11) {
-        newDate = new Date(nextYear + 1, 0, 1);
-      } else {
-        newDate = new Date(nextYear, nextMonth, 1);
-      }
-      // Set to the same day, clamping to last day of month
-      const lastDay = new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0).getDate();
-      newDate.setDate(Math.min(nextDay, lastDay));
-      newDate.setHours(12, 0, 0, 0);
-
-      await updateSubscription(subscription.id, {
-        next_payment: newDate.toISOString(),
-      });
+      await refetchSubscriptions();
+      const nextLinkUrl = cycle.newLinkToken
+        ? buildSubscriptionPaymentUrl(cycle.newLinkToken, PUBLIC_APP_URL)
+        : null;
 
       // 4. Send WhatsApp confirmation if client has phone
       if (clientPhone) {
@@ -463,7 +467,8 @@ const Subscriptions = () => {
             message = templateData.message_template
               .replace(/\{\{client_name\}\}/g, clientName)
               .replace(/\{\{amount\}\}/g, `R$ ${formattedAmount}`)
-              .replace(/\{\{plan_name\}\}/g, planName);
+              .replace(/\{\{plan_name\}\}/g, planName)
+              .replace(/\{\{payment_link\}\}/g, nextLinkUrl || `${PUBLIC_APP_URL}/cliente`);
             imageUrl = templateData.image_url || undefined;
             sendImage = !!templateData.image_url;
             sendButton = templateData.button_enabled;
@@ -494,7 +499,7 @@ const Subscriptions = () => {
         }
       }
 
-      toast.success('Pagamento confirmado! Vencimento atualizado para o próximo mês.');
+      toast.success('Pagamento confirmado! Vencimento atualizado e novo link do próximo mês gerado.');
 
     } catch (error) {
       console.error('Error marking subscription as paid:', error);
@@ -614,48 +619,23 @@ const Subscriptions = () => {
                 {markingPaidId === item.id ? 'Processando...' : 'Marcar como paga'}
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem 
-              onClick={() => handleGenerateCharge(item)}
-              disabled={generatingChargeId === item.id || isGatewayDisabled}
-            >
-              {generatingChargeId === item.id ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <CreditCard className="w-4 h-4 mr-2" />
-              )}
-              {generatingChargeId === item.id
-                ? 'Gerando...'
-                : isGatewayDisabled
-                ? 'Gerar cobrança (PIX desativado)'
-                : 'Gerar cobrança'}
-            </DropdownMenuItem>
             {item.status === 'active' && (
               <DropdownMenuItem 
-                onClick={() => {
-                  const firstName = item.clients?.name ? item.clients.name.split(' ')[0] : item.id;
-                  const url = `${window.location.origin}/pagar-assinatura/${firstName}`;
-                  navigator.clipboard.writeText(url);
-                  toast.success('Link copiado!');
-                }}
+                onClick={() => handleGenerateCharge(item)}
+                disabled={generatingChargeId === item.id}
               >
-                <Link className="w-4 h-4 mr-2" />
-                Copiar link de pagamento
+                {generatingChargeId === item.id ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Link className="w-4 h-4 mr-2" />
+                )}
+                {generatingChargeId === item.id ? 'Gerando...' : 'Copiar link de cobrança'}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem 
               onSelect={() => {
-                const p: WhatsAppSendParams = {
-                  clientId: item.client_id,
-                  clientName: item.clients?.name || 'Cliente',
-                  clientPhone: item.clients?.phone || null,
-                  type: 'subscription',
-                  amount: Number(item.value),
-                  description: item.plan_name,
-                  dueDate: item.next_payment,
-                };
                 setTimeout(() => {
-                  setWhatsappParams(p);
-                  setWhatsappModalOpen(true);
+                  void openWhatsAppForSubscription(item);
                 }, 100);
               }}
               disabled={sendingReminderId === item.client_id || !item.clients?.phone}
@@ -1126,7 +1106,7 @@ const Subscriptions = () => {
                     setIsDetailsDialogOpen(false);
                     handleGenerateCharge(selectedSubscription);
                   }}
-                  disabled={generatingChargeId === selectedSubscription.id || isGatewayDisabled}
+                  disabled={generatingChargeId === selectedSubscription.id || selectedSubscription.status !== 'active'}
                 >
                   {generatingChargeId === selectedSubscription.id ? (
                     <>
@@ -1135,8 +1115,8 @@ const Subscriptions = () => {
                     </>
                   ) : (
                     <>
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      {isGatewayDisabled ? 'PIX Desativado' : 'Gerar Cobrança'}
+                      <Link className="w-4 h-4 mr-2" />
+                      Copiar link de cobrança
                     </>
                   )}
                 </Button>

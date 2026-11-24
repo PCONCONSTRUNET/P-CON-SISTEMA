@@ -19,6 +19,7 @@ export interface UnifiedPixParams {
   clientPhone?: string;
   clientDocument?: string;
   subscriptionId?: string;
+  subscriptionLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }
@@ -41,6 +42,7 @@ export function usePaymentGateway() {
 
   const [efiActive, setEfiActive] = useState<boolean | null>(null);
   const [mercadoPagoActive, setMercadoPagoActive] = useState<boolean | null>(null);
+  const [mercadoPagoPublicKey, setMercadoPagoPublicKey] = useState<string | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [lastGatewayUsed, setLastGatewayUsed] = useState<PaymentGatewayId>('efi');
 
@@ -57,6 +59,7 @@ export function usePaymentGateway() {
 
       setEfiActive(nextEfi);
       setMercadoPagoActive(nextMp);
+      setMercadoPagoPublicKey(mpStatus?.publicKey || null);
 
       return { efiActive: nextEfi, mercadoPagoActive: nextMp };
     } finally {
@@ -72,8 +75,13 @@ export function usePaymentGateway() {
       if (detail !== undefined) setEfiActive(detail.isActive);
     };
     const onMpChanged = (event: Event) => {
-      const detail = (event as CustomEvent<{ isActive: boolean }>).detail;
-      if (detail !== undefined) setMercadoPagoActive(detail.isActive);
+      const detail = (event as CustomEvent<{ isActive: boolean; publicKey?: string | null }>).detail;
+      if (detail !== undefined) {
+        setMercadoPagoActive(detail.isActive);
+        if (detail.publicKey !== undefined) {
+          setMercadoPagoPublicKey(detail.publicKey || null);
+        }
+      }
     };
 
     if (typeof window !== 'undefined') {
@@ -157,12 +165,15 @@ export function usePaymentGateway() {
     statusLoading,
     efiActive,
     mercadoPagoActive,
+    mercadoPagoPublicKey,
     activeGateways,
     hasAnyActiveGateway,
     defaultGateway,
     isGatewayDisabled,
     refreshStatuses,
     createPixPayment,
+    createCardPayment: mp.createCardPayment,
+    createCardPreference: mp.createPreference,
     checkPaymentStatus,
     lastGatewayUsed,
   };

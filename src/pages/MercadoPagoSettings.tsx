@@ -113,6 +113,7 @@ const MercadoPagoSettings = () => {
       notifyMercadoPagoGatewayStatusChanged({
         isActive: appliedActive && isConfigured,
         configured: isConfigured,
+        publicKey: settings.public_key.trim() || null,
       });
 
       toast.success(
