@@ -8,7 +8,7 @@
  *  - Banco ANTIGO: anon key (para leitura pública)
  *  - Banco NOVO:   service_role key (para escrita ignorando RLS)
  *
- * Execute: node scripts/migrate-old-to-new.mjs
+ * Execute: node scripts/migrations/migrate-old-to-new.mjs
  * ============================================================
  */
 

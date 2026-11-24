@@ -11,17 +11,14 @@ import {
   X,
   FileSignature,
   Gift,
-  
-  Rocket,
   Ticket,
-  MessageSquare,
   BellRing,
   BarChart3,
   Wallet2,
   Mail,
   Building2,
   Send,
-  Link2,
+  Wallet,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,17 +35,16 @@ const navItems = [
   { icon: Users, label: 'Clientes', path: '/clients' },
   { icon: CreditCard, label: 'Assinaturas', path: '/subscriptions' },
   { icon: Receipt, label: 'Pagamentos', path: '/payments' },
-  { icon: Link2, label: 'Links de Pagamento', path: '/payment-links' },
   { icon: FileSignature, label: 'Contratos', path: '/contracts' },
   { icon: FileText, label: 'Notas Fiscais', path: '/invoices' },
   { icon: WhatsAppIcon, label: 'WhatsApp', path: '/whatsapp' },
   { icon: BellRing, label: 'Lembretes', path: '/whatsapp/lembretes' },
   { icon: Send, label: 'Disparos', path: '/whatsapp/disparo' },
   { icon: Mail, label: 'Email', path: '/email' },
-  { icon: Rocket, label: 'Implantações', path: '/implementations' },
   { icon: Ticket, label: 'Cupons', path: '/coupons' },
   { icon: Gift, label: 'Indicações', path: '/referrals' },
   { icon: Building2, label: 'EFI Bank', path: '/efi-settings' },
+  { icon: Wallet, label: 'Mercado Pago', path: '/mercado-pago-settings' },
 ];
 
 interface SidebarProps {

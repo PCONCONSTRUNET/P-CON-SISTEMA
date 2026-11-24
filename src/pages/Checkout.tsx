@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useClientAuth } from '@/contexts/ClientAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useEfiPay } from '@/hooks/useEfiPay';
+import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
 import { useContracts, Contract } from '@/hooks/useContracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,6 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { 
   ChevronDown, 
-  Rocket, 
   LogOut, 
   CheckCircle, 
   AlertCircle, 
@@ -65,7 +64,7 @@ interface Payment {
 const Checkout = () => {
   const { client, isAuthenticated, isLoading: authLoading, logout } = useClientAuth();
   const navigate = useNavigate();
-  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useEfiPay();
+  const { createPixPayment, loading: mpLoading, activeGateways, isGatewayDisabled } = usePaymentGateway();
   const { contracts, loading: contractsLoading } = useContracts(client?.id);
   
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -194,8 +193,14 @@ const Checkout = () => {
     setIsPaidDetailsOpen(true);
   };
 
-  const handlePayment = async (method: 'PIX') => {
+  const handlePayment = async (method: 'PIX', gateway?: PaymentGatewayId) => {
     if (!client) return;
+
+    if (isGatewayDisabled) {
+      toast.error('Pagamentos via PIX estão temporariamente desativados.');
+      setPaymentStep('error');
+      return;
+    }
     
     // Determina se é assinatura ou cobrança única
     const isSubscription = !!selectedSubscription;
@@ -211,7 +216,7 @@ const Checkout = () => {
     setPixData(null);
 
     try {
-      // Criar pagamento PIX via Mistic Pay
+      // Criar pagamento PIX via gateway ativo (EFI Bank / Mercado Pago)
       const pixResult = await createPixPayment({
         amount: paymentValue,
         description: paymentDescription,
@@ -220,10 +225,10 @@ const Checkout = () => {
         clientName: client.name,
         clientDocument: client.document || undefined,
         subscriptionId: isSubscription ? selectedSubscription!.id : undefined,
-      });
+      }, gateway);
 
       if (pixResult?.success && pixResult.qrCode) {
-        // qrCodeBase64 já vem com prefixo 'data:image/png;base64,' da Mistic Pay
+        // qrCodeBase64 já vem com prefixo 'data:image/png;base64,'
         // qrCode = copyPaste (código copia e cola)
         setPixData({
           qrCode: pixResult.qrCodeBase64 || '',   // base64 completo com prefixo
@@ -327,22 +332,6 @@ const Checkout = () => {
         <div className="px-4 py-3 sm:px-6 sm:py-3 flex items-center justify-between">
           <img src={logo} alt="Logo P-CON" className="w-auto h-14 sm:h-16 max-w-[12rem] sm:max-w-[16rem] drop-shadow-[0_12px_36px_hsl(var(--primary)/0.35)] brightness-0 invert opacity-90" />
           <div className="flex items-center gap-4">
-            <motion.div 
-              whileHover={{ scale: 1.05 }} 
-              whileTap={{ scale: 0.95 }}
-              className="relative"
-            >
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-              <Button 
-                size="sm" 
-                onClick={() => navigate('/cliente/implantacoes')}
-                className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/30 font-semibold"
-              >
-                <Rocket className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Implantações</span>
-                <span className="sm:hidden">Novo</span>
-              </Button>
-            </motion.div>
             <span className="text-sm text-muted-foreground hidden sm:block">
               {client?.name?.split(' ')[0]}
             </span>
@@ -378,6 +367,15 @@ const Checkout = () => {
               Gerencie e realize pagamentos com segurança
             </p>
           </motion.div>
+
+          {isGatewayDisabled && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-400 flex-shrink-0" />
+              <span>
+                Os pagamentos online via PIX estão temporariamente desativados. Entre em contato com o suporte caso precise de atendimento.
+              </span>
+            </div>
+          )}
 
           {/* Contracts Section */}
           {contracts.length > 0 && (
@@ -548,10 +546,10 @@ const Checkout = () => {
                             <Button
                               className="w-full h-11 btn-blue text-sm font-bold gap-2"
                               onClick={() => openPaymentModal(subscription)}
-                              disabled={isProcessing || mpLoading}
+                              disabled={isProcessing || mpLoading || isGatewayDisabled}
                             >
-                              Pagar Agora
-                              <ArrowRight className="h-4 w-4" />
+                              {isGatewayDisabled ? 'PIX indisponível' : 'Pagar Agora'}
+                              {!isGatewayDisabled && <ArrowRight className="h-4 w-4" />}
                             </Button>
                           </motion.div>
                           
@@ -642,11 +640,11 @@ const Checkout = () => {
                         size="default"
                         className="w-full h-10 btn-blue text-sm"
                         onClick={() => openChargePaymentModal(charge)}
-                        disabled={isProcessing || mpLoading}
+                        disabled={isProcessing || mpLoading || isGatewayDisabled}
                       >
                         <span className="flex items-center justify-center gap-2">
-                          Pagar Agora
-                          <ArrowRight className="h-4 w-4" />
+                          {isGatewayDisabled ? 'PIX indisponível' : 'Pagar Agora'}
+                          {!isGatewayDisabled && <ArrowRight className="h-4 w-4" />}
                         </span>
                       </Button>
                     </motion.div>
@@ -856,7 +854,11 @@ const Checkout = () => {
           <div className="flex flex-col items-center gap-4">
             <p className="text-xs text-gray-neutral">Pagamentos processados por</p>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-primary">Mistic Pay</span>
+              <span className="text-lg font-bold text-primary">
+                {activeGateways.length > 0
+                  ? activeGateways.map(g => GATEWAY_LABELS[g]).join(' • ')
+                  : 'EFI Bank • Mercado Pago'}
+              </span>
             </div>
             <div className="flex items-center gap-3 mt-2 flex-wrap justify-center">
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary/30 border border-border/30">
@@ -911,15 +913,34 @@ const Checkout = () => {
                     </div>
 
                     <div className="space-y-3">
-                      <motion.button
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => handlePayment('PIX')}
-                        className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-base text-white border-none cursor-pointer btn-pix"
-                      >
-                        <img src={pixIcon} alt="Pix" className="w-6 h-6" />
-                        Pagar com Pix
-                      </motion.button>
+                      {isGatewayDisabled ? (
+                        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-center text-xs text-amber-200">
+                          Pagamentos via PIX estão temporariamente desativados.
+                        </div>
+                      ) : activeGateways.length > 1 ? (
+                        activeGateways.map((gateway) => (
+                          <motion.button
+                            key={gateway}
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handlePayment('PIX', gateway)}
+                            className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white border-none cursor-pointer btn-pix"
+                          >
+                            <img src={pixIcon} alt="Pix" className="w-5 h-5" />
+                            Pix ({GATEWAY_LABELS[gateway]})
+                          </motion.button>
+                        ))
+                      ) : (
+                        <motion.button
+                          whileHover={{ scale: 1.02, y: -2 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handlePayment('PIX')}
+                          className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-base text-white border-none cursor-pointer btn-pix"
+                        >
+                          <img src={pixIcon} alt="Pix" className="w-6 h-6" />
+                          Pagar com Pix
+                        </motion.button>
+                      )}
                     </div>
                   </motion.div>
                 )}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -12,7 +12,6 @@ interface CreatePixPaymentParams {
   clientDocument?: string;
   subscriptionId?: string;
   proposalId?: string;
-  checkoutLinkId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }
 
@@ -36,12 +35,103 @@ interface PaymentStatusResult {
   error?: string;
 }
 
-export function useEfiPay() {
+interface GatewayStatusResult {
+  isActive: boolean;
+  configured: boolean;
+}
+
+const GATEWAY_STATUS_EVENT = 'efi-gateway-status-changed';
+
+export function notifyEfiGatewayStatusChanged(status: GatewayStatusResult) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<GatewayStatusResult>(GATEWAY_STATUS_EVENT, { detail: status }));
+  }
+}
+
+export async function fetchEfiGatewayStatus(): Promise<GatewayStatusResult | null> {
+  const { data, error } = await supabase.functions.invoke('efi-pay', {
+    body: { _action: 'get-status' },
+  });
+
+  if (!error && data?.success) {
+    return {
+      isActive: !!data.isActive,
+      configured: !!data.configured,
+    };
+  }
+
+  // Fallback caso a Edge Function deployada ainda não possua a action get-status
+  const { data: settingsData, error: settingsError } = await supabase.functions.invoke('efi-pay', {
+    body: { _action: 'get-settings' },
+  });
+
+  if (!settingsError && settingsData?.success) {
+    const s = settingsData.settings;
+    if (!s) return { isActive: false, configured: false };
+    const configured = !!(s.client_id && s.client_secret && s.pix_key && s.certificate_pem);
+    return {
+      isActive: !!s.is_active && configured,
+      configured,
+    };
+  }
+
+  return null;
+}
+
+export function useEfiPay(options: { checkStatusOnMount?: boolean } = {}) {
+  const { checkStatusOnMount = true } = options;
   const [loading, setLoading] = useState(false);
+  const [gatewayActive, setGatewayActive] = useState<boolean | null>(null);
+  const [gatewayConfigured, setGatewayConfigured] = useState<boolean | null>(null);
+  const [gatewayStatusLoading, setGatewayStatusLoading] = useState(checkStatusOnMount);
+
+  const refreshGatewayStatus = useCallback(async (): Promise<boolean | null> => {
+    setGatewayStatusLoading(true);
+    try {
+      const status = await fetchEfiGatewayStatus();
+      if (status) {
+        setGatewayActive(status.isActive);
+        setGatewayConfigured(status.configured);
+        return status.isActive;
+      }
+      return null;
+    } catch (err) {
+      console.error('[useEfiPay] Error checking gateway status:', err);
+      return null;
+    } finally {
+      setGatewayStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (checkStatusOnMount) {
+      void refreshGatewayStatus();
+    }
+
+    const handleStatusChanged = (event: Event) => {
+      const detail = (event as CustomEvent<GatewayStatusResult>).detail;
+      if (detail) {
+        setGatewayActive(detail.isActive);
+        setGatewayConfigured(detail.configured);
+        setGatewayStatusLoading(false);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener(GATEWAY_STATUS_EVENT, handleStatusChanged);
+      return () => window.removeEventListener(GATEWAY_STATUS_EVENT, handleStatusChanged);
+    }
+  }, [checkStatusOnMount, refreshGatewayStatus]);
 
   const createPixPayment = async (params: CreatePixPaymentParams): Promise<PixPaymentResult | null> => {
     setLoading(true);
     try {
+      const currentActive = await refreshGatewayStatus();
+      if (currentActive === false) {
+        toast.error('Gateway de pagamento EFI Bank está desativado no momento.');
+        return null;
+      }
+
       console.log('[useEfiPay] createPixPayment called with:', params);
 
       const { data, error } = await supabase.functions.invoke('efi-pay', {
@@ -54,6 +144,9 @@ export function useEfiPay() {
         try {
           const ctx = await (error as any).context?.json?.();
           msg = ctx?.error || error.message || msg;
+          if (ctx?.gatewayDisabled) {
+            setGatewayActive(false);
+          }
         } catch (_) {
           msg = error.message || msg;
         }
@@ -63,6 +156,9 @@ export function useEfiPay() {
 
       if (!data || data.error) {
         console.error('[useEfiPay] Data error:', data?.error);
+        if (data?.gatewayDisabled) {
+          setGatewayActive(false);
+        }
         toast.error(data?.error || 'Erro ao criar pagamento PIX');
         return null;
       }
@@ -117,5 +213,14 @@ export function useEfiPay() {
     return null;
   };
 
-  return { loading, createPixPayment, createCardPayment, checkPaymentStatus };
+  return {
+    loading,
+    gatewayActive,
+    gatewayConfigured,
+    gatewayStatusLoading,
+    refreshGatewayStatus,
+    createPixPayment,
+    createCardPayment,
+    checkPaymentStatus,
+  };
 }

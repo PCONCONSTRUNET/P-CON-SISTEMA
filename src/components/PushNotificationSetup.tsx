@@ -109,7 +109,7 @@ export const PushNotificationSetup = () => {
           <p className="text-xs text-muted-foreground">
             {isSubscribed
               ? 'Alertas ativos — mesmo com o app em segundo plano.'
-              : 'Receba alertas de pagamentos, indicações e implantações.'}
+              : 'Receba alertas de pagamentos e indicações.'}
           </p>
         </div>
       </div>

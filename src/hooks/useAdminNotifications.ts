@@ -53,7 +53,6 @@ const showWebPushNotification = async (title: string, message: string, category:
   if (!hasPermission) return;
   
   const categoryIcons: Record<string, string> = {
-    implementations: '🚀',
     referrals: '🎁',
     affiliates: '👥',
     payments: '💰'
@@ -205,7 +204,6 @@ export const useAdminNotifications = () => {
   // Show toast for new notifications
   const showNewNotificationToast = useCallback((notification: AdminNotification) => {
     const categoryIcons: Record<string, string> = {
-      implementations: '🚀',
       referrals: '🎁',
       affiliates: '👥',
       payments: '💰'

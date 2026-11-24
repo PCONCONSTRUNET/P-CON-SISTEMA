@@ -14,7 +14,17 @@ serve(async (req: Request) => {
   }
 
   try {
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data: gatewayData } = await supabase
+      .from("payment_gateway_settings")
+      .select("client_secret")
+      .eq("gateway_name", "mercadopago")
+      .maybeSingle();
+
+    const accessToken = gatewayData?.client_secret?.trim() || Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
     if (!accessToken) {
       console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
       return new Response("OK", { status: 200 });
@@ -83,10 +93,6 @@ serve(async (req: Request) => {
         dbStatus = "refunded";
         break;
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const externalReference = paymentData.external_reference as string | undefined;
 

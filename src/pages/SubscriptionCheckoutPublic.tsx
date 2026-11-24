@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ShieldCheck, XCircle, Loader2, CheckCircle, Clock } from 'lucide-react';
+import { ShieldCheck, XCircle, Loader2, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import BlueBackground from '@/components/BlueBackground';
 import PixQRCode from '@/components/PixQRCode';
 import { supabase } from '@/integrations/supabase/client';
-import { useEfiPay } from '@/hooks/useEfiPay';
+import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
 import pixIcon from '@/assets/pix-icon.svg';
 
 interface SubscriptionData {
@@ -37,7 +37,8 @@ const SubscriptionCheckoutPublic = () => {
   const [loading, setLoading] = useState(true);
   const [creatingPix, setCreatingPix] = useState(false);
   const hasLoaded = useRef(false);
-  const { createPixPayment, checkPaymentStatus } = useEfiPay();
+  const { createPixPayment, checkPaymentStatus, activeGateways, defaultGateway, statusLoading: gatewayStatusLoading, isGatewayDisabled } = usePaymentGateway();
+  const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayId | null>(null);
   const [clientDocument, setClientDocument] = useState('');
 
   const [pixPayment, setPixPayment] = useState<{
@@ -47,6 +48,7 @@ const SubscriptionCheckoutPublic = () => {
     ticketUrl?: string;
     expirationDate?: string;
     amount: number;
+    gatewayUsed?: PaymentGatewayId;
   } | null>(null);
 
   const [isPaidLocally, setIsPaidLocally] = useState(false);
@@ -93,10 +95,13 @@ const SubscriptionCheckoutPublic = () => {
   }, [id]);
 
   const isActive = subData?.status === 'active';
-  const isPaid = isPaidLocally; 
+  const isPaid = isPaidLocally;
+  const activeGatewayChoice = (selectedGateway && activeGateways.includes(selectedGateway))
+    ? selectedGateway
+    : defaultGateway;
 
   const handlePixPayment = async () => {
-    if (!subData || !isActive) return;
+    if (!subData || !isActive || isGatewayDisabled) return;
 
     if (!clientDocument || clientDocument.replace(/\D/g, '').length < 11) {
       toast.error('Informe um CPF ou CNPJ válido para gerar o PIX.');
@@ -113,7 +118,7 @@ const SubscriptionCheckoutPublic = () => {
         clientEmail: subData.clients.email,
         clientDocument: clientDocument,
         subscriptionId: subData.id,
-      });
+      }, activeGatewayChoice || undefined);
 
       if (result?.success && result.paymentId) {
         setPixPayment({
@@ -122,7 +127,8 @@ const SubscriptionCheckoutPublic = () => {
           qrCodeBase64: result.qrCodeBase64,
           ticketUrl: result.ticketUrl,
           expirationDate: result.expirationDate,
-          amount: Number(subData.value)
+          amount: Number(subData.value),
+          gatewayUsed: result.gatewayUsed,
         });
       }
     } catch (err) {
@@ -135,8 +141,8 @@ const SubscriptionCheckoutPublic = () => {
 
   const handleCheckPixStatus = async () => {
     if (!pixPayment) return null;
-    const result = await checkPaymentStatus(pixPayment.paymentId);
-    if (result?.success && result.status === 'paid') {
+    const result = await checkPaymentStatus(pixPayment.paymentId, pixPayment.gatewayUsed);
+    if (result?.success && (result.status === 'paid' || result.status === 'approved')) {
       setIsPaidLocally(true);
     }
     return result;
@@ -237,7 +243,7 @@ const SubscriptionCheckoutPublic = () => {
                       </div>
                     )}
 
-                    {!isPaid && isActive && !pixPayment && (
+                    {!isPaid && isActive && !pixPayment && !isGatewayDisabled && (
                       <div className="space-y-2">
                         <label className="text-xs text-muted-foreground ml-1">CPF ou CNPJ (Obrigatório)</label>
                         <Input
@@ -281,12 +287,45 @@ const SubscriptionCheckoutPublic = () => {
                       </div>
                     )}
 
+                    {isGatewayDisabled && !isPaid && isActive && !pixPayment && (
+                      <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-2">
+                        <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto" />
+                        <p className="font-semibold text-amber-300">
+                          Pagamentos via PIX temporariamente desativados
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          O gateway de pagamento está desativado no momento. Entre em contato com o suporte para mais informações.
+                        </p>
+                      </div>
+                    )}
+
                     {/* PIX Generation */}
-                    {!isPaid && isActive && !pixPayment && (
-                      <div className="pt-4 border-t border-border/30">
+                    {!isPaid && isActive && !pixPayment && !isGatewayDisabled && (
+                      <div className="pt-4 border-t border-border/30 space-y-3">
+                        {activeGateways.length > 1 && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-muted-foreground text-center">Escolha o gateway de pagamento:</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {activeGateways.map((gw) => (
+                                <button
+                                  key={gw}
+                                  type="button"
+                                  onClick={() => setSelectedGateway(gw)}
+                                  className={`py-2 px-3 rounded-lg text-xs font-medium border transition-colors ${
+                                    activeGatewayChoice === gw
+                                      ? 'border-primary bg-primary/20 text-foreground'
+                                      : 'border-border/50 bg-secondary/30 text-muted-foreground hover:text-foreground'
+                                  }`}
+                                >
+                                  {GATEWAY_LABELS[gw]}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         <Button
                           onClick={handlePixPayment}
-                          disabled={creatingPix}
+                          disabled={creatingPix || gatewayStatusLoading}
                           className="w-full h-12 sm:h-14 text-sm sm:text-base font-semibold bg-[#00B4D8] hover:bg-[#0096C7] text-white shadow-[0_0_20px_rgba(0,180,216,0.3)] border-0"
                         >
                           {creatingPix ? (

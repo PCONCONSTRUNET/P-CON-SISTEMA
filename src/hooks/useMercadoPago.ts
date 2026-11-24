@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CreatePixPaymentParams {
   amount: number;
@@ -78,36 +79,145 @@ interface CardPaymentResult {
   error?: string;
 }
 
-export function useMercadoPago() {
+interface MercadoPagoGatewayStatus {
+  isActive: boolean;
+  configured: boolean;
+}
+
+const MP_GATEWAY_STATUS_EVENT = 'mercadopago-gateway-status-changed';
+
+export function notifyMercadoPagoGatewayStatusChanged(status: MercadoPagoGatewayStatus) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<MercadoPagoGatewayStatus>(MP_GATEWAY_STATUS_EVENT, { detail: status }));
+  }
+}
+
+export async function fetchMercadoPagoGatewayStatus(): Promise<MercadoPagoGatewayStatus | null> {
+  const { data, error } = await supabase.functions.invoke('mercadopago', {
+    body: { _action: 'get-status' },
+  });
+
+  if (!error && data?.success) {
+    return {
+      isActive: !!data.isActive,
+      configured: !!data.configured,
+    };
+  }
+
+  const { data: settingsData, error: settingsError } = await supabase.functions.invoke('mercadopago', {
+    body: { _action: 'get-settings' },
+  });
+
+  if (!settingsError && settingsData?.success) {
+    const s = settingsData.settings;
+    if (!s) return { isActive: false, configured: false };
+    const configured = !!s.access_token;
+    return {
+      isActive: !!s.is_active && configured,
+      configured,
+    };
+  }
+
+  return null;
+}
+
+async function extractInvokeError(error: any, fallback: string): Promise<{ message: string; gatewayDisabled?: boolean }> {
+  let msg = fallback;
+  let gatewayDisabled = false;
+  try {
+    const ctx = await error?.context?.json?.();
+    msg = ctx?.error || error?.message || fallback;
+    gatewayDisabled = !!ctx?.gatewayDisabled;
+  } catch {
+    msg = error?.message || fallback;
+  }
+  return { message: msg, gatewayDisabled };
+}
+
+export function useMercadoPago(options: { checkStatusOnMount?: boolean } = {}) {
+  const { checkStatusOnMount = true } = options;
   const [loading, setLoading] = useState(false);
+  const [gatewayActive, setGatewayActive] = useState<boolean | null>(null);
+  const [gatewayConfigured, setGatewayConfigured] = useState<boolean | null>(null);
+  const [gatewayStatusLoading, setGatewayStatusLoading] = useState(checkStatusOnMount);
+
+  const refreshGatewayStatus = useCallback(async (): Promise<boolean | null> => {
+    setGatewayStatusLoading(true);
+    try {
+      const status = await fetchMercadoPagoGatewayStatus();
+      if (status) {
+        setGatewayActive(status.isActive);
+        setGatewayConfigured(status.configured);
+        return status.isActive;
+      }
+      return null;
+    } catch (err) {
+      console.error('[useMercadoPago] Error checking gateway status:', err);
+      return null;
+    } finally {
+      setGatewayStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (checkStatusOnMount) {
+      void refreshGatewayStatus();
+    }
+
+    const handleStatusChanged = (event: Event) => {
+      const detail = (event as CustomEvent<MercadoPagoGatewayStatus>).detail;
+      if (detail) {
+        setGatewayActive(detail.isActive);
+        setGatewayConfigured(detail.configured);
+        setGatewayStatusLoading(false);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener(MP_GATEWAY_STATUS_EVENT, handleStatusChanged);
+      return () => window.removeEventListener(MP_GATEWAY_STATUS_EVENT, handleStatusChanged);
+    }
+  }, [checkStatusOnMount, refreshGatewayStatus]);
 
   const createPixPayment = async (params: CreatePixPaymentParams): Promise<PixPaymentResult | null> => {
     setLoading(true);
     try {
-      console.log('Creating PIX payment via Mercado Pago:', params);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago?action=create-pix`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify(params),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        console.error('Error creating PIX payment:', result.error);
-        toast.error(result.error || 'Erro ao criar pagamento PIX');
+      const currentActive = await refreshGatewayStatus();
+      if (currentActive === false) {
+        toast.error('Gateway Mercado Pago está desativado no momento.');
         return null;
       }
 
+      console.log('Creating PIX payment via Mercado Pago:', params);
+
+      const { data, error } = await supabase.functions.invoke('mercadopago', {
+        body: { ...params, _action: 'create-pix' },
+      });
+
+      if (error) {
+        const parsed = await extractInvokeError(error, 'Erro ao criar pagamento PIX');
+        if (parsed.gatewayDisabled) setGatewayActive(false);
+        toast.error(parsed.message);
+        return null;
+      }
+
+      if (!data || data.error) {
+        if (data?.gatewayDisabled) setGatewayActive(false);
+        toast.error(data?.error || 'Erro ao criar pagamento PIX');
+        return null;
+      }
+
+      let qrCodeBase64 = data.qrCodeBase64 || '';
+      if (qrCodeBase64 && !qrCodeBase64.startsWith('data:')) {
+        qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
+      }
+
       toast.success('QR Code PIX gerado com sucesso!');
-      return result;
+      return {
+        ...data,
+        paymentId: data.paymentId ? String(data.paymentId) : undefined,
+        qrCodeBase64,
+      } as PixPaymentResult;
     } catch (error: any) {
       console.error('Error in createPixPayment:', error);
       toast.error('Erro ao criar pagamento PIX');
@@ -119,24 +229,16 @@ export function useMercadoPago() {
 
   const checkPaymentStatus = async (paymentId: string): Promise<PaymentStatusResult | null> => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago?action=check-status&paymentId=${paymentId}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('mercadopago', {
+        body: { _action: 'check-status', paymentId },
+      });
 
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        console.error('Error checking payment status:', result.error);
+      if (error || !data || data.error) {
+        console.error('Error checking payment status:', error || data?.error);
         return null;
       }
 
-      return result;
+      return data as PaymentStatusResult;
     } catch (error: any) {
       console.error('Error in checkPaymentStatus:', error);
       return null;
@@ -146,27 +248,30 @@ export function useMercadoPago() {
   const createPreference = async (params: CreateCardPreferenceParams) => {
     setLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago?action=create-preference`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify(params),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        console.error('Error creating preference:', result.error);
-        toast.error(result.error || 'Erro ao criar preferência');
+      const currentActive = await refreshGatewayStatus();
+      if (currentActive === false) {
+        toast.error('Gateway Mercado Pago está desativado no momento.');
         return null;
       }
 
-      return result;
+      const { data, error } = await supabase.functions.invoke('mercadopago', {
+        body: { ...params, _action: 'create-preference' },
+      });
+
+      if (error) {
+        const parsed = await extractInvokeError(error, 'Erro ao criar preferência');
+        if (parsed.gatewayDisabled) setGatewayActive(false);
+        toast.error(parsed.message);
+        return null;
+      }
+
+      if (!data || data.error) {
+        if (data?.gatewayDisabled) setGatewayActive(false);
+        toast.error(data?.error || 'Erro ao criar preferência');
+        return null;
+      }
+
+      return data;
     } catch (error: any) {
       console.error('Error in createPreference:', error);
       toast.error('Erro ao criar preferência');
@@ -179,27 +284,30 @@ export function useMercadoPago() {
   const createCardPayment = async (params: CreateCardPaymentParams): Promise<CardPaymentResult | null> => {
     setLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadopago?action=create-card-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify(params),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        console.error('Error creating card payment:', result.error);
-        toast.error(result.error || 'Erro ao processar pagamento no cartão');
+      const currentActive = await refreshGatewayStatus();
+      if (currentActive === false) {
+        toast.error('Gateway Mercado Pago está desativado no momento.');
         return null;
       }
 
-      return result;
+      const { data, error } = await supabase.functions.invoke('mercadopago', {
+        body: { ...params, _action: 'create-card-payment' },
+      });
+
+      if (error) {
+        const parsed = await extractInvokeError(error, 'Erro ao processar pagamento no cartão');
+        if (parsed.gatewayDisabled) setGatewayActive(false);
+        toast.error(parsed.message);
+        return null;
+      }
+
+      if (!data || data.error) {
+        if (data?.gatewayDisabled) setGatewayActive(false);
+        toast.error(data?.error || 'Erro ao processar pagamento no cartão');
+        return null;
+      }
+
+      return data as CardPaymentResult;
     } catch (error: any) {
       console.error('Error in createCardPayment:', error);
       toast.error('Erro ao processar pagamento no cartão');
@@ -211,6 +319,10 @@ export function useMercadoPago() {
 
   return {
     loading,
+    gatewayActive,
+    gatewayConfigured,
+    gatewayStatusLoading,
+    refreshGatewayStatus,
     createPixPayment,
     checkPaymentStatus,
     createPreference,

@@ -83,7 +83,7 @@ export const usePushNotifications = () => {
                   type: 'push',
                   autoPrompt: false,
                   text: {
-                    actionMessage: 'Receba alertas de pagamentos, indicações e implantações em tempo real.',
+                    actionMessage: 'Receba alertas de pagamentos e indicações em tempo real.',
                     acceptButton: 'Ativar',
                     cancelButton: 'Agora não',
                   },

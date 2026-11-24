@@ -17,7 +17,6 @@ const CORS_HEADERS = {
 
 // ── Emoji por categoria ────────────────────────────────────────
 const categoryEmojis: Record<string, string> = {
-  implementations: '🚀',
   referrals:       '🎁',
   payments:        '💰',
   affiliates:      '👥',
@@ -26,7 +25,6 @@ const categoryEmojis: Record<string, string> = {
 
 // ── URL de destino por categoria ──────────────────────────────
 const categoryUrls: Record<string, string> = {
-  implementations: '/implementations',
   referrals:       '/referrals',
   payments:        '/payments',
 };

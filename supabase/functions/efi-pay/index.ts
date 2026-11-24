@@ -16,8 +16,42 @@ const getSupabaseAdmin = () => {
   return createClient(supabaseUrl, supabaseKey);
 };
 
+const EFI_DISABLED_MESSAGE =
+  "Gateway de pagamento EFI Bank está desativado no momento. Ative-o nas configurações de EFI Bank para processar pagamentos.";
+
+class GatewayDisabledError extends Error {
+  statusCode = 403;
+  gatewayDisabled = true;
+
+  constructor(message = EFI_DISABLED_MESSAGE) {
+    super(message);
+    this.name = "GatewayDisabledError";
+  }
+}
+
+function isRowConfigured(
+  data: {
+    client_id?: string | null;
+    client_secret?: string | null;
+    certificate_pem?: string | null;
+    pix_key?: string | null;
+  } | null,
+): boolean {
+  return !!(
+    data?.client_id?.trim() &&
+    data?.client_secret?.trim() &&
+    data?.certificate_pem?.trim() &&
+    data?.pix_key?.trim()
+  );
+}
+
 // ─── Carrega configurações do banco ─────────────────────────────────────────
-async function loadEfiSettings(supabase: ReturnType<typeof getSupabaseAdmin>) {
+async function loadEfiSettings(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  options: { requireActive?: boolean } = {},
+) {
+  const { requireActive = true } = options;
+
   const { data, error } = await supabase
     .from("payment_gateway_settings")
     .select("*")
@@ -36,7 +70,11 @@ async function loadEfiSettings(supabase: ReturnType<typeof getSupabaseAdmin>) {
     return { clientId, clientSecret, certPem, pixKey };
   }
 
-  if (!data.client_id || !data.client_secret || !data.certificate_pem || !data.pix_key) {
+  if (requireActive && !data.is_active) {
+    throw new GatewayDisabledError();
+  }
+
+  if (!isRowConfigured(data)) {
     throw new Error("Configurações EFI Bank incompletas. Verifique o certificado e as chaves na aba EFI Bank.");
   }
 
@@ -122,7 +160,6 @@ const findExistingPendingPayment = async (
     clientId?: string;
     subscriptionId?: string;
     proposalId?: string;
-    checkoutLinkId?: string;
     proposalPaymentType?: "entry" | "total";
     amount: number;
   },
@@ -199,6 +236,109 @@ serve(async (req: Request) => {
 
     console.log("[efi-pay] action:", action, "| body keys:", Object.keys(requestBody));
 
+    // ─── GET STATUS (público, sem segredos) ────────────────────────────────
+    if (action === "get-status") {
+      const { data, error } = await supabase
+        .from("payment_gateway_settings")
+        .select("is_active, client_id, client_secret, pix_key, certificate_pem, updated_at")
+        .eq("gateway_name", "efi")
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Erro ao verificar status do gateway: ${error.message}`);
+      }
+
+      if (!data) {
+        const hasEnvFallback = !!(
+          Deno.env.get("EFI_CLIENT_ID") &&
+          Deno.env.get("EFI_CLIENT_SECRET") &&
+          Deno.env.get("EFI_CERTIFICATE_PEM") &&
+          Deno.env.get("EFI_PIX_KEY")
+        );
+        return new Response(
+          JSON.stringify({
+            success: true,
+            gateway: "efi",
+            isActive: hasEnvFallback,
+            enabled: hasEnvFallback,
+            configured: hasEnvFallback,
+            updatedAt: null,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const configured = isRowConfigured(data);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          gateway: "efi",
+          isActive: !!data.is_active && configured,
+          enabled: !!data.is_active,
+          configured,
+          updatedAt: data.updated_at,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ─── TOGGLE STATUS ───────────────────────────────────────────────────────
+    if (action === "toggle-status") {
+      const nextActive = !!requestBody.is_active;
+      const { data: existing, error: fetchErr } = await supabase
+        .from("payment_gateway_settings")
+        .select("id, client_id, client_secret, pix_key, certificate_pem")
+        .eq("gateway_name", "efi")
+        .maybeSingle();
+
+      if (fetchErr) {
+        throw new Error(`Erro ao buscar configurações: ${fetchErr.message}`);
+      }
+
+      if (!existing) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Salve as credenciais do EFI Bank antes de alterar o status do gateway.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      if (nextActive && !isRowConfigured(existing)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Preencha Client ID, Client Secret, Chave PIX e Certificado antes de ativar o gateway EFI Bank.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const updatedAt = new Date().toISOString();
+      const { error: updateErr } = await supabase
+        .from("payment_gateway_settings")
+        .update({ is_active: nextActive, updated_at: updatedAt })
+        .eq("id", existing.id);
+
+      if (updateErr) {
+        throw new Error(`Erro ao atualizar status do gateway: ${updateErr.message}`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          is_active: nextActive,
+          configured: isRowConfigured(existing),
+          updated_at: updatedAt,
+          message: nextActive
+            ? "Gateway EFI Bank ativado com sucesso!"
+            : "Gateway EFI Bank desativado com sucesso!",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // ─── GET SETTINGS ────────────────────────────────────────────────────────
     if (action === "get-settings") {
       console.log("[efi-pay] Fetching masked settings");
@@ -242,16 +382,17 @@ serve(async (req: Request) => {
 
       const { data: existing } = await supabase
         .from("payment_gateway_settings")
-        .select("id, client_secret, certificate_pem")
+        .select("id, client_id, client_secret, pix_key, certificate_pem")
         .eq("gateway_name", "efi")
         .maybeSingle();
 
+      const updatedAt = new Date().toISOString();
       const payload: Record<string, any> = {
         gateway_name: "efi",
         client_id: client_id?.trim() || null,
         pix_key: pix_key?.trim().replace(/[^0-9]/g, "") || null,
         is_active: !!is_active,
-        updated_at: new Date().toISOString(),
+        updated_at: updatedAt,
       };
 
       if (client_secret && client_secret !== "••••••••••••••••••••••••••••••••") {
@@ -260,6 +401,23 @@ serve(async (req: Request) => {
 
       if (certificate_pem) {
         payload.certificate_pem = certificate_pem.trim();
+      }
+
+      const effectiveConfig = {
+        client_id: payload.client_id ?? existing?.client_id ?? null,
+        client_secret: payload.client_secret ?? existing?.client_secret ?? null,
+        pix_key: payload.pix_key ?? existing?.pix_key ?? null,
+        certificate_pem: payload.certificate_pem ?? existing?.certificate_pem ?? null,
+      };
+
+      if (payload.is_active && !isRowConfigured(effectiveConfig)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Preencha Client ID, Client Secret, Chave PIX e Certificado antes de ativar o gateway EFI Bank.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
 
       let resError;
@@ -281,17 +439,22 @@ serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, message: "Configurações salvas com sucesso!" }),
+        JSON.stringify({
+          success: true,
+          is_active: payload.is_active,
+          configured: isRowConfigured(effectiveConfig),
+          updated_at: updatedAt,
+          message: "Configurações salvas com sucesso!",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Ações abaixo exigem configurações e mTLS configurados
-    const settings = await loadEfiSettings(supabase);
     const proxyUrl = getProxyUrl(req);
 
-    // ─── TEST CONNECTION (OAuth + mTLS apenas) ─────────────────────────────
+    // ─── TEST CONNECTION (OAuth + mTLS, mesmo com gateway desativado) ──────
     if (action === "test-connection") {
+      const settings = await loadEfiSettings(supabase, { requireActive: false });
       console.log("[efi-pay] Testing EFI connection (OAuth + mTLS)");
       const accessToken = await getAccessToken(
         settings.clientId,
@@ -309,8 +472,9 @@ serve(async (req: Request) => {
       );
     }
 
-    // ─── CREATE PIX ──────────────────────────────────────────────────────────
+    // ─── CREATE PIX (exige gateway ativo) ────────────────────────────────────
     if (action === "create-pix") {
+      const settings = await loadEfiSettings(supabase, { requireActive: true });
       const {
         amount,
         description,
@@ -321,11 +485,10 @@ serve(async (req: Request) => {
         subscriptionId,
         proposalId,
         proposalPaymentType,
-        checkoutLinkId,
       } = requestBody;
 
-      if (!bodyClientId && !proposalId && !checkoutLinkId) {
-        throw new Error("clientId, proposalId ou checkoutLinkId é obrigatório");
+      if (!bodyClientId && !proposalId) {
+        throw new Error("clientId ou proposalId é obrigatório");
       }
 
       console.log("[efi-pay] Creating PIX:", { amount, clientName, description });
@@ -368,8 +531,6 @@ serve(async (req: Request) => {
       const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const infoAdicionais = proposalId
         ? `proposal:${proposalId}:${proposalPaymentType || "total"}:${uniqueSuffix}`
-        : checkoutLinkId
-        ? `chk:${checkoutLinkId}:${uniqueSuffix}`
         : subscriptionId
         ? `sub:${subscriptionId}:${uniqueSuffix}`
         : `cl:${bodyClientId}:${uniqueSuffix}`;
@@ -421,7 +582,6 @@ serve(async (req: Request) => {
         clientId: bodyClientId,
         subscriptionId,
         proposalId,
-        checkoutLinkId,
         proposalPaymentType,
         amount,
       });
@@ -482,8 +642,9 @@ serve(async (req: Request) => {
       );
     }
 
-    // ─── SETUP WEBHOOK ───────────────────────────────────────────────────────
+    // ─── SETUP WEBHOOK (exige gateway ativo) ─────────────────────────────────
     if (action === "setup-webhook") {
+      const settings = await loadEfiSettings(supabase, { requireActive: true });
       console.log("[efi-pay] Setting up webhook for key:", settings.pixKey);
       const accessToken = await getAccessToken(settings.clientId, settings.clientSecret, proxyUrl, settings.certPem);
       
@@ -516,6 +677,7 @@ serve(async (req: Request) => {
 
     // ─── CHECK STATUS ────────────────────────────────────────────────────────
     if (action === "check-status") {
+      const settings = await loadEfiSettings(supabase, { requireActive: false });
       const paymentId = url.searchParams.get("paymentId") || requestBody?.paymentId;
       if (!paymentId) throw new Error("paymentId é obrigatório");
 
@@ -626,6 +788,12 @@ serve(async (req: Request) => {
     throw new Error(`Ação desconhecida: "${action}". Passe _action no body ou ?action= na URL.`);
   } catch (error: any) {
     console.error("[efi-pay] Error:", error.message);
+    if (error instanceof GatewayDisabledError) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message, gatewayDisabled: true }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     return new Response(
       JSON.stringify({ error: error.message || "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

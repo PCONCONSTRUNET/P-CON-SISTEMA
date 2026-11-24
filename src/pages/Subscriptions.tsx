@@ -46,6 +46,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { differenceInCalendarDays, isPast, isToday, format, addDays } from 'date-fns';
 import { formatBrazilDate, formatDateForInput, inputDateToISO, normalizeInputDate, toBrazilTime } from '@/utils/dateUtils';
 import { toast } from 'sonner';
+import { usePaymentGateway } from '@/hooks/usePaymentGateway';
 import { useWhatsAppReminder } from '@/hooks/useWhatsAppReminder';
 import { useSubscriptionReminder } from '@/hooks/useSubscriptionReminder';
 
@@ -85,6 +86,7 @@ const Subscriptions = () => {
 
   const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription } = useGlobalData();
 
+  const { createPixPayment, isGatewayDisabled } = usePaymentGateway();
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
   const { sendReminderIfNeeded } = useSubscriptionReminder();
 
@@ -295,6 +297,11 @@ const Subscriptions = () => {
   };
 
   const handleGenerateCharge = async (subscription: Subscription) => {
+    if (isGatewayDisabled) {
+      toast.error('Nenhum gateway de pagamento está ativo. Ative EFI Bank ou Mercado Pago nas configurações para gerar cobranças PIX.');
+      return;
+    }
+
     if (!subscription.clients) {
       toast.error('Cliente não encontrado para esta assinatura.');
       return;
@@ -609,14 +616,18 @@ const Subscriptions = () => {
             )}
             <DropdownMenuItem 
               onClick={() => handleGenerateCharge(item)}
-              disabled={generatingChargeId === item.id}
+              disabled={generatingChargeId === item.id || isGatewayDisabled}
             >
               {generatingChargeId === item.id ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <CreditCard className="w-4 h-4 mr-2" />
               )}
-              {generatingChargeId === item.id ? 'Gerando...' : 'Gerar cobrança'}
+              {generatingChargeId === item.id
+                ? 'Gerando...'
+                : isGatewayDisabled
+                ? 'Gerar cobrança (PIX desativado)'
+                : 'Gerar cobrança'}
             </DropdownMenuItem>
             {item.status === 'active' && (
               <DropdownMenuItem 
@@ -1115,7 +1126,7 @@ const Subscriptions = () => {
                     setIsDetailsDialogOpen(false);
                     handleGenerateCharge(selectedSubscription);
                   }}
-                  disabled={generatingChargeId === selectedSubscription.id}
+                  disabled={generatingChargeId === selectedSubscription.id || isGatewayDisabled}
                 >
                   {generatingChargeId === selectedSubscription.id ? (
                     <>
@@ -1125,7 +1136,7 @@ const Subscriptions = () => {
                   ) : (
                     <>
                       <CreditCard className="w-4 h-4 mr-2" />
-                      Gerar Cobrança
+                      {isGatewayDisabled ? 'PIX Desativado' : 'Gerar Cobrança'}
                     </>
                   )}
                 </Button>

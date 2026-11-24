@@ -4,9 +4,78 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
 const MERCADOPAGO_API_URL = "https://api.mercadopago.com";
+
+const MP_DISABLED_MESSAGE =
+  "Gateway Mercado Pago está desativado no momento. Ative-o nas configurações do Mercado Pago para processar pagamentos.";
+
+class GatewayDisabledError extends Error {
+  statusCode = 403;
+  gatewayDisabled = true;
+
+  constructor(message = MP_DISABLED_MESSAGE) {
+    super(message);
+    this.name = "GatewayDisabledError";
+  }
+}
+
+function isMercadoPagoConfigured(
+  data: {
+    client_secret?: string | null;
+  } | null,
+): boolean {
+  return !!data?.client_secret?.trim();
+}
+
+async function loadMercadoPagoSettings(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  options: { requireActive?: boolean } = {},
+) {
+  const { requireActive = true } = options;
+
+  const { data, error } = await supabase
+    .from("payment_gateway_settings")
+    .select("*")
+    .eq("gateway_name", "mercadopago")
+    .maybeSingle();
+
+  if (error || !data) {
+    const envToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+    if (!envToken) {
+      throw new Error("Configurações do Mercado Pago não encontradas. Configure na aba Mercado Pago do sistema.");
+    }
+    return {
+      accessToken: envToken,
+      publicKey: Deno.env.get("MERCADOPAGO_PUBLIC_KEY") || "",
+      webhookToken: "",
+    };
+  }
+
+  if (requireActive && !data.is_active) {
+    throw new GatewayDisabledError();
+  }
+
+  if (!isMercadoPagoConfigured(data)) {
+    const envToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+    if (envToken && (!requireActive || data.is_active)) {
+      return {
+        accessToken: envToken,
+        publicKey: data.client_id || "",
+        webhookToken: data.webhook_token || "",
+      };
+    }
+    throw new Error("Access Token do Mercado Pago não configurado. Preencha na aba Mercado Pago.");
+  }
+
+  return {
+    accessToken: data.client_secret.trim(),
+    publicKey: data.client_id?.trim() || "",
+    webhookToken: data.webhook_token?.trim() || "",
+  };
+}
 
 interface CreatePixPaymentRequest {
   amount: number;
@@ -129,20 +198,259 @@ serve(async (req: Request) => {
   }
 
   try {
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    if (!accessToken) {
-      console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
-      throw new Error("Mercado Pago não configurado");
+    const supabase = getSupabaseAdmin();
+
+    let requestBody: Record<string, any> = {};
+    if (req.method !== "GET") {
+      try {
+        requestBody = await req.json();
+      } catch (_) {
+        // body vazio ok
+      }
     }
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action");
+    const action = url.searchParams.get("action") || requestBody._action || "";
 
     console.log("Mercado Pago action:", action);
 
-    // Create PIX payment
+    // ─── GET STATUS (público, sem segredos) ────────────────────────────────
+    if (action === "get-status") {
+      const { data, error } = await supabase
+        .from("payment_gateway_settings")
+        .select("is_active, client_id, client_secret, updated_at")
+        .eq("gateway_name", "mercadopago")
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Erro ao verificar status do Mercado Pago: ${error.message}`);
+      }
+
+      if (!data) {
+        const hasEnvFallback = !!Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+        return new Response(
+          JSON.stringify({
+            success: true,
+            gateway: "mercadopago",
+            isActive: hasEnvFallback,
+            enabled: hasEnvFallback,
+            configured: hasEnvFallback,
+            publicKey: Deno.env.get("MERCADOPAGO_PUBLIC_KEY") || null,
+            updatedAt: null,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const configured = isMercadoPagoConfigured(data) || !!Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          gateway: "mercadopago",
+          isActive: !!data.is_active && configured,
+          enabled: !!data.is_active,
+          configured,
+          publicKey: data.client_id || null,
+          updatedAt: data.updated_at,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ─── GET SETTINGS (mascarado para admin) ─────────────────────────────────
+    if (action === "get-settings") {
+      const { data, error } = await supabase
+        .from("payment_gateway_settings")
+        .select("*")
+        .eq("gateway_name", "mercadopago")
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Erro ao buscar configurações do Mercado Pago: ${error.message}`);
+      }
+
+      if (!data) {
+        return new Response(
+          JSON.stringify({ success: true, settings: null }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          settings: {
+            public_key: data.client_id || "",
+            access_token: data.client_secret ? "••••••••••••••••••••••••••••••••" : "",
+            webhook_token: data.webhook_token ? "••••••••••••••••••••••••••••••••" : "",
+            is_active: !!data.is_active,
+            updated_at: data.updated_at,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ─── SAVE SETTINGS ───────────────────────────────────────────────────────
+    if (action === "save-settings") {
+      const { public_key, access_token, webhook_token, is_active } = requestBody;
+
+      const { data: existing } = await supabase
+        .from("payment_gateway_settings")
+        .select("id, client_id, client_secret, webhook_token")
+        .eq("gateway_name", "mercadopago")
+        .maybeSingle();
+
+      const updatedAt = new Date().toISOString();
+      const payload: Record<string, any> = {
+        gateway_name: "mercadopago",
+        client_id: public_key !== undefined ? (public_key?.trim() || null) : (existing?.client_id ?? null),
+        is_active: !!is_active,
+        updated_at: updatedAt,
+      };
+
+      if (access_token && access_token !== "••••••••••••••••••••••••••••••••") {
+        payload.client_secret = access_token.trim();
+      }
+
+      if (webhook_token !== undefined && webhook_token !== "••••••••••••••••••••••••••••••••") {
+        payload.webhook_token = webhook_token?.trim() || null;
+      }
+
+      const effectiveSecret = payload.client_secret ?? existing?.client_secret ?? null;
+      const configuredNow = !!effectiveSecret?.trim() || !!Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+
+      if (payload.is_active && !configuredNow) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Informe o Access Token antes de ativar o gateway Mercado Pago.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      let resError;
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("payment_gateway_settings")
+          .update(payload)
+          .eq("id", existing.id);
+        resError = error;
+      } else {
+        const { error } = await supabase
+          .from("payment_gateway_settings")
+          .insert(payload);
+        resError = error;
+      }
+
+      if (resError) {
+        throw new Error(`Erro ao salvar no banco: ${resError.message}`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          is_active: payload.is_active,
+          configured: configuredNow,
+          updated_at: updatedAt,
+          message: "Configurações do Mercado Pago salvas com sucesso!",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ─── TOGGLE STATUS ───────────────────────────────────────────────────────
+    if (action === "toggle-status") {
+      const nextActive = !!requestBody.is_active;
+      const { data: existing, error: fetchErr } = await supabase
+        .from("payment_gateway_settings")
+        .select("id, client_secret")
+        .eq("gateway_name", "mercadopago")
+        .maybeSingle();
+
+      if (fetchErr) {
+        throw new Error(`Erro ao buscar configurações: ${fetchErr.message}`);
+      }
+
+      const configuredNow = isMercadoPagoConfigured(existing) || !!Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+
+      if (!existing) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Salve as credenciais do Mercado Pago antes de alterar o status do gateway.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      if (nextActive && !configuredNow) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Informe e salve o Access Token antes de ativar o gateway Mercado Pago.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const updatedAt = new Date().toISOString();
+      const { error: updateErr } = await supabase
+        .from("payment_gateway_settings")
+        .update({ is_active: nextActive, updated_at: updatedAt })
+        .eq("id", existing.id);
+
+      if (updateErr) {
+        throw new Error(`Erro ao atualizar status do gateway: ${updateErr.message}`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          is_active: nextActive,
+          configured: configuredNow,
+          updated_at: updatedAt,
+          message: nextActive
+            ? "Gateway Mercado Pago ativado com sucesso!"
+            : "Gateway Mercado Pago desativado com sucesso!",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ─── TEST CONNECTION (funciona mesmo com gateway desativado) ─────────────
+    if (action === "test-connection") {
+      const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: false });
+      const response = await fetch(`${MERCADOPAGO_API_URL}/users/me`, {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+        },
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || `Falha na autenticação Mercado Pago (HTTP ${response.status})`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Conexão com Mercado Pago OK! Conta: ${result.nickname || result.email || result.id}`,
+          account: {
+            id: result.id,
+            nickname: result.nickname,
+            email: result.email,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Create PIX payment (exige gateway ativo)
     if (action === "create-pix") {
-      const body: CreatePixPaymentRequest = await req.json();
+      const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: true });
+      const body = requestBody as CreatePixPaymentRequest;
 
       if (!body.clientId && !body.proposalId) {
         throw new Error("clientId ou proposalId é obrigatório");
@@ -155,25 +463,30 @@ serve(async (req: Request) => {
         clientPhone: body.clientPhone,
       });
 
+      const cleanDoc = (body.clientDocument || "").replace(/[^\d]/g, "");
+      const cleanPhone = (body.clientPhone || "").replace(/\D/g, "");
+
       // Create payment via Mercado Pago API
       const paymentData = {
-        transaction_amount: body.amount,
+        transaction_amount: Number(body.amount),
         description: body.description,
         payment_method_id: "pix",
         payer: {
-          email: body.clientEmail,
+          email: body.clientEmail || "cliente@pconassinantes.site",
           first_name: body.clientName?.split(" ")[0] || "Cliente",
           last_name: body.clientName?.split(" ").slice(1).join(" ") || "",
-          phone: body.clientPhone
+          phone: cleanPhone.length >= 10
             ? {
-                area_code: body.clientPhone.replace(/\D/g, "").slice(0, 2),
-                number: body.clientPhone.replace(/\D/g, "").slice(2),
+                area_code: cleanPhone.slice(0, 2),
+                number: cleanPhone.slice(2),
               }
             : undefined,
-          identification: body.clientDocument ? {
-            type: body.clientDocument.length <= 11 ? "CPF" : "CNPJ",
-            number: body.clientDocument.replace(/[^\d]/g, ""),
-          } : undefined,
+          identification: cleanDoc.length === 11 || cleanDoc.length === 14
+            ? {
+                type: cleanDoc.length === 11 ? "CPF" : "CNPJ",
+                number: cleanDoc,
+              }
+            : undefined,
         },
         external_reference: body.description, // Shows in bank statement
         notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
@@ -199,7 +512,6 @@ serve(async (req: Request) => {
       console.log("PIX payment created:", result.id);
 
       // Save to local database
-      const supabase = getSupabaseAdmin();
       const existingPayment = await findExistingPendingPayment(supabase, body);
 
       if (existingPayment) {
@@ -257,7 +569,8 @@ serve(async (req: Request) => {
     }
 
     if (action === "create-card-payment") {
-      const body: CreateCardPaymentRequest = await req.json();
+      const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: true });
+      const body = requestBody as CreateCardPaymentRequest;
 
       if (!body.clientId && !body.proposalId) {
         throw new Error("clientId ou proposalId é obrigatório");
@@ -318,7 +631,6 @@ serve(async (req: Request) => {
         throw new Error(result.message || "Erro ao processar pagamento no cartão");
       }
 
-      const supabase = getSupabaseAdmin();
       const existingPayment = await findExistingPendingPayment(supabase, body);
       const localStatus = mapMercadoPagoStatus(result.status);
       const paidAt = localStatus === "paid" ? result.date_approved || new Date().toISOString() : null;
@@ -391,7 +703,8 @@ serve(async (req: Request) => {
 
     // Check payment status
     if (action === "check-status") {
-      const paymentId = url.searchParams.get("paymentId");
+      const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: false });
+      const paymentId = url.searchParams.get("paymentId") || requestBody?.paymentId;
       if (!paymentId) {
         throw new Error("paymentId é obrigatório");
       }
@@ -410,8 +723,6 @@ serve(async (req: Request) => {
         console.error("Mercado Pago status check error:", result);
         throw new Error(result.message || "Erro ao verificar status");
       }
-
-      const supabase = getSupabaseAdmin();
 
       const localStatus = result.status === "approved"
         ? "paid"
@@ -502,7 +813,8 @@ serve(async (req: Request) => {
 
     // Create preference (for Checkout Bricks)
     if (action === "create-preference") {
-      const body: CreatePreferenceRequest = await req.json();
+      const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: true });
+      const body = requestBody as CreatePreferenceRequest;
       console.log("Creating preference:", body);
 
       const preferenceData = {
@@ -558,7 +870,6 @@ serve(async (req: Request) => {
 
       console.log("Preference created:", result.id);
 
-      const supabase = getSupabaseAdmin();
       const existingPayment = await findExistingPendingPayment(supabase, body);
 
       const paymentPayload = {
@@ -606,6 +917,12 @@ serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error("Mercado Pago function error:", error);
+    if (error instanceof GatewayDisabledError) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message, gatewayDisabled: true }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     return new Response(
       JSON.stringify({ error: error.message || "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

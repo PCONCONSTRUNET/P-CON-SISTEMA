@@ -9,9 +9,7 @@ import {
   AlertTriangle, 
   Trash2, 
   X,
-  Rocket,
   Gift,
-  
   CreditCard,
   CheckCheck,
   Trash,
@@ -45,13 +43,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const categoryConfig: Record<string, { icon: typeof Rocket; label: string; bgClass: string; iconClass: string }> = {
-  implementations: {
-    icon: Rocket,
-    label: 'Implantações',
-    bgClass: 'bg-primary/10',
-    iconClass: 'text-primary',
-  },
+const categoryConfig: Record<string, { icon: typeof Bell; label: string; bgClass: string; iconClass: string }> = {
   referrals: {
     icon: Gift,
     label: 'Indicações',
@@ -141,9 +133,6 @@ const Notifications = () => {
     // Navigate based on category
     const metadata = notification.metadata as Record<string, unknown>;
     switch (notification.category) {
-      case 'implementations':
-        navigate('/implementations');
-        break;
       case 'referrals':
         navigate('/referrals');
         break;
@@ -158,7 +147,6 @@ const Notifications = () => {
   const stats = {
     total: notifications.length,
     unread: unreadCount,
-    implementations: notifications.filter(n => n.category === 'implementations').length,
     referrals: notifications.filter(n => n.category === 'referrals').length,
     payments: notifications.filter(n => n.category === 'payments').length,
   };
@@ -224,13 +212,6 @@ const Notifications = () => {
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-xs text-muted-foreground">Categorias</DropdownMenuLabel>
               <DropdownMenuCheckboxItem
-                checked={categoryFilter.includes('implementations')}
-                onCheckedChange={() => toggleCategoryFilter('implementations')}
-              >
-                <Rocket className="w-4 h-4 mr-2 text-primary" />
-                Implantações
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
                 checked={categoryFilter.includes('referrals')}
                 onCheckedChange={() => toggleCategoryFilter('referrals')}
               >
@@ -294,7 +275,7 @@ const Notifications = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
         <div className="glass-card p-3 sm:p-4 text-center">
           <p className="text-xl sm:text-2xl font-bold text-foreground">{stats.total}</p>
           <p className="text-xs sm:text-sm text-muted-foreground">Total</p>
@@ -302,10 +283,6 @@ const Notifications = () => {
         <div className="glass-card p-3 sm:p-4 text-center">
           <p className="text-xl sm:text-2xl font-bold text-destructive">{stats.unread}</p>
           <p className="text-xs sm:text-sm text-muted-foreground">Não lidas</p>
-        </div>
-        <div className="glass-card p-3 sm:p-4 text-center">
-          <p className="text-xl sm:text-2xl font-bold text-primary">{stats.implementations}</p>
-          <p className="text-xs sm:text-sm text-muted-foreground">Implant.</p>
         </div>
         <div className="glass-card p-3 sm:p-4 text-center">
           <p className="text-xl sm:text-2xl font-bold text-amber-500">{stats.referrals}</p>
@@ -326,7 +303,7 @@ const Notifications = () => {
       ) : (
         <div className="space-y-2 sm:space-y-3">
           {filteredNotifications.map((notification) => {
-            const catConfig = categoryConfig[notification.category] || categoryConfig.implementations;
+            const catConfig = categoryConfig[notification.category] || categoryConfig.payments;
             const tConfig = typeConfig[notification.type] || typeConfig.new_request;
             const Icon = catConfig.icon;
             

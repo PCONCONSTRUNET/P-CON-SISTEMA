@@ -17,7 +17,6 @@ import Invoices from "./pages/Invoices";
 import Notifications from "./pages/Notifications";
 import Contracts from "./pages/Contracts";
 import Referrals from "./pages/Referrals";
-import Implementations from "./pages/Implementations";
 import ClientCoupons from "./pages/ClientCoupons";
 import ReferralForm from "./pages/ReferralForm";
 import WhatsAppMessages from "./pages/WhatsAppMessages";
@@ -28,15 +27,13 @@ import Expenses from "./pages/Expenses";
 import EmailSettings from "./pages/EmailSettings";
 import ContractPublic from "./pages/ContractPublic";
 import EfiSettings from "./pages/EfiSettings";
+import MercadoPagoSettings from "./pages/MercadoPagoSettings";
 
 import ClientLogin from "./pages/ClientLogin";
 import ClientRegister from "./pages/ClientRegister";
-import ClientImplementations from "./pages/ClientImplementations";
 import ClientForgotPassword from "./pages/ClientForgotPassword";
 import ClientResetPassword from "./pages/ClientResetPassword";
 import Checkout from "./pages/Checkout";
-import PaymentLinks from "./pages/PaymentLinks";
-import PaymentLinkPublic from "./pages/PaymentLinkPublic";
 import SubscriptionCheckoutPublic from "./pages/SubscriptionCheckoutPublic";
 
 import NotFound from "./pages/NotFound";
@@ -69,17 +66,15 @@ const App = () => (
                  <Route path="/whatsapp/disparo" element={<ProtectedRoute><WhatsAppBroadcast /></ProtectedRoute>} />
                  <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
                  <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
-                 <Route path="/implementations" element={<ProtectedRoute><Implementations /></ProtectedRoute>} />
                  <Route path="/coupons" element={<ProtectedRoute><ClientCoupons /></ProtectedRoute>} />
                  <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
                  <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
                  <Route path="/email" element={<ProtectedRoute><EmailSettings /></ProtectedRoute>} />
-                 <Route path="/payment-links" element={<ProtectedRoute><PaymentLinks /></ProtectedRoute>} />
                  <Route path="/efi-settings" element={<ProtectedRoute><EfiSettings /></ProtectedRoute>} />
+                 <Route path="/mercado-pago-settings" element={<ProtectedRoute><MercadoPagoSettings /></ProtectedRoute>} />
                 {/* Referral Form (Public) */}
                 <Route path="/indicar" element={<ReferralForm />} />
                 <Route path="/r/:slug" element={<ReferralForm />} />
-                 <Route path="/pay/:slug" element={<PaymentLinkPublic />} />
                  <Route path="/pagar-assinatura/:id" element={<SubscriptionCheckoutPublic />} />
                  <Route path="/contrato/:id" element={<ContractPublic />} />
                 
@@ -89,7 +84,6 @@ const App = () => (
                 <Route path="/cliente/cadastro" element={<ClientRegister />} />
                 <Route path="/cliente/recuperar-senha" element={<ClientForgotPassword />} />
                 <Route path="/cliente/nova-senha" element={<ClientResetPassword />} />
-                <Route path="/cliente/implantacoes" element={<ClientImplementations />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/area-cliente" element={<Checkout />} />
                 

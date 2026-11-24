@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag, FolderArchive } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag, FolderArchive, AlertTriangle } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { useEfiPay } from '@/hooks/useEfiPay';
+import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
 import { useContracts } from '@/hooks/useContracts';
 import PixQRCode from '@/components/PixQRCode';
 import ClientVault from '@/components/ClientVault';
@@ -81,7 +81,11 @@ const ClientProfile = () => {
   const [isChargeDialogOpen, setIsChargeDialogOpen] = useState(false);
   const [newCharge, setNewCharge] = useState({ value: '', description: '' });
   const [isCreatingCharge, setIsCreatingCharge] = useState(false);
-  const { createPixPayment, checkPaymentStatus, loading: mpLoading } = useEfiPay();
+  const { createPixPayment, checkPaymentStatus, loading: mpLoading, activeGateways, defaultGateway, isGatewayDisabled } = usePaymentGateway();
+  const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayId | null>(null);
+  const activeGatewayChoice = (selectedGateway && activeGateways.includes(selectedGateway))
+    ? selectedGateway
+    : defaultGateway;
   
   // PIX QR Code state
   const [pixData, setPixData] = useState<{
@@ -91,6 +95,7 @@ const ClientProfile = () => {
     ticketUrl?: string;
     expirationDate?: string;
     amount?: number;
+    gatewayUsed?: PaymentGatewayId;
   } | null>(null);
   const [showPixModal, setShowPixModal] = useState(false);
   
@@ -250,7 +255,6 @@ const ClientProfile = () => {
 
     setIsCreatingCharge(true);
     try {
-      // Create PIX payment via Mercado Pago
       const result = await createPixPayment({
         amount: parseFloat(newCharge.value),
         description: newCharge.description || `Cobrança para ${client.name}`,
@@ -258,7 +262,7 @@ const ClientProfile = () => {
         clientEmail: client.email,
         clientName: client.name,
         clientDocument: client.document || undefined,
-      });
+      }, activeGatewayChoice || undefined);
 
       if (result?.success && result.qrCode) {
         // Show PIX QR Code modal
@@ -269,6 +273,7 @@ const ClientProfile = () => {
           ticketUrl: result.ticketUrl,
           expirationDate: result.expirationDate,
           amount: parseFloat(newCharge.value),
+          gatewayUsed: result.gatewayUsed,
         });
         setShowPixModal(true);
         setIsChargeDialogOpen(false);
@@ -305,7 +310,7 @@ const ClientProfile = () => {
 
   const handleCheckPixStatus = async () => {
     if (!pixData?.paymentId) return null;
-    return await checkPaymentStatus(pixData.paymentId);
+    return await checkPaymentStatus(pixData.paymentId, pixData.gatewayUsed);
   };
 
   const handlePixPaymentConfirmed = () => {
@@ -739,13 +744,44 @@ const ClientProfile = () => {
                       
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Método de Pagamento</label>
-                        <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/30 rounded-md">
-                          <QrCode className="w-4 h-4 text-success" />
-                          <span className="text-success font-medium">PIX via EFI Bank</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          O QR Code PIX será gerado automaticamente
-                        </p>
+                        {isGatewayDisabled ? (
+                          <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-md text-xs text-destructive">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>Nenhum gateway de pagamento ativo. Ative EFI Bank ou Mercado Pago nas configurações para gerar cobranças PIX.</span>
+                          </div>
+                        ) : (
+                          <>
+                            {activeGateways.length > 1 ? (
+                              <div className="grid grid-cols-2 gap-2">
+                                {activeGateways.map((gw) => (
+                                  <button
+                                    key={gw}
+                                    type="button"
+                                    onClick={() => setSelectedGateway(gw)}
+                                    className={`flex items-center justify-center gap-2 p-2.5 rounded-md border text-xs font-medium transition-colors ${
+                                      activeGatewayChoice === gw
+                                        ? 'bg-success/15 border-success/50 text-success'
+                                        : 'bg-secondary/40 border-border/50 text-muted-foreground hover:text-foreground'
+                                    }`}
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                    PIX ({GATEWAY_LABELS[gw]})
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/30 rounded-md">
+                                <QrCode className="w-4 h-4 text-success" />
+                                <span className="text-success font-medium">
+                                  PIX via {activeGatewayChoice ? GATEWAY_LABELS[activeGatewayChoice] : 'Gateway'}
+                                </span>
+                              </div>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              O QR Code PIX será gerado automaticamente
+                            </p>
+                          </>
+                        )}
                       </div>
                       
                       <div className="space-y-2">
@@ -770,7 +806,7 @@ const ClientProfile = () => {
                         <Button 
                           className="flex-1" 
                           onClick={handleCreateCharge}
-                          disabled={isCreatingCharge}
+                          disabled={isCreatingCharge || isGatewayDisabled}
                         >
                           {isCreatingCharge ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Cobrança'}
                         </Button>

@@ -43,7 +43,7 @@ const PixQRCode = ({
     setChecking(true);
     try {
       const result = await onCheckStatus();
-      if (result?.status === 'approved') {
+      if (result?.status === 'approved' || result?.status === 'paid') {
         setStatus('approved');
         toast.success('Pagamento confirmado!');
         onPaymentConfirmed?.();
@@ -62,7 +62,7 @@ const PixQRCode = ({
 
     const interval = setInterval(async () => {
       const result = await onCheckStatus();
-      if (result?.status === 'approved') {
+      if (result?.status === 'approved' || result?.status === 'paid') {
         setStatus('approved');
         toast.success('Pagamento confirmado!');
         onPaymentConfirmed?.();

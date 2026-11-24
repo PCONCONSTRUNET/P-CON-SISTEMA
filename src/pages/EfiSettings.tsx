@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Key, Shield, CheckCircle2, AlertTriangle, Loader2, Save, Upload, Eye, EyeOff, Info, Copy, ExternalLink } from 'lucide-react';
+import { Building2, Key, Shield, CheckCircle2, AlertTriangle, Loader2, Save, Upload, Eye, EyeOff, Info, Copy, ExternalLink, Power, PowerOff } from 'lucide-react';
 import { p12ToPem } from '@/utils/p12ToPem';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { notifyEfiGatewayStatusChanged } from '@/hooks/useEfiPay';
 import { toast } from 'sonner';
 
 interface EfiSettings {
@@ -30,6 +32,7 @@ const getApiOrigin = () => {
 const EfiSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [testing, setTesting] = useState(false);
   const [settings, setSettings] = useState<EfiSettings>({
     client_id: '',
@@ -42,6 +45,13 @@ const EfiSettings = () => {
   const [showPem, setShowPem] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isConfigured = !!(
+    settings.client_id.trim() &&
+    settings.client_secret.trim() &&
+    settings.pix_key.trim() &&
+    settings.certificate_pem.trim()
+  );
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -79,9 +89,77 @@ const EfiSettings = () => {
     fetchSettings();
   }, []);
 
+  const handleToggleActive = async (nextActive: boolean) => {
+    if (nextActive && !isConfigured) {
+      toast.error('Preencha Client ID, Client Secret, Chave PIX e Certificado antes de ativar o gateway.');
+      return;
+    }
+
+    setToggling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('efi-pay', {
+        body: {
+          _action: 'save-settings',
+          client_id: settings.client_id.trim(),
+          client_secret: settings.client_secret.trim(),
+          pix_key: settings.pix_key.trim(),
+          certificate_pem: settings.certificate_pem.trim(),
+          is_active: nextActive,
+        },
+      });
+
+      if (error) {
+        let errMsg = error.message || 'Erro ao alterar status do gateway';
+        const ctx = (error as { context?: Response }).context;
+        if (ctx) {
+          try {
+            const body = await ctx.json();
+            errMsg = body?.error || errMsg;
+          } catch {
+            /* ignore parse error */
+          }
+        }
+        throw new Error(errMsg);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro desconhecido ao atualizar status');
+      }
+
+      const appliedActive = data.is_active !== undefined ? !!data.is_active : nextActive;
+      const updatedAt = data.updated_at || new Date().toISOString();
+
+      setSettings(prev => ({
+        ...prev,
+        is_active: appliedActive,
+        updated_at: updatedAt,
+      }));
+      notifyEfiGatewayStatusChanged({
+        isActive: appliedActive && isConfigured,
+        configured: isConfigured,
+      });
+
+      toast.success(
+        appliedActive
+          ? 'Gateway EFI Bank ativado! Pagamentos PIX liberados no sistema.'
+          : 'Gateway EFI Bank desativado! Pagamentos PIX bloqueados no sistema.'
+      );
+    } catch (err: any) {
+      console.error('[EfiSettings] toggle error:', err);
+      toast.error('Erro ao alterar gateway: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setToggling(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!settings.client_id || !settings.client_secret || !settings.pix_key) {
       toast.error('Preencha Client ID, Client Secret e Chave PIX');
+      return;
+    }
+
+    if (settings.is_active && !settings.certificate_pem.trim()) {
+      toast.error('Adicione o certificado mTLS antes de manter o gateway ativo (ou desative-o para salvar as credenciais).');
       return;
     }
 
@@ -100,12 +178,17 @@ const EfiSettings = () => {
 
       if (error) throw error;
       if (data?.success) {
+        const appliedActive = data.is_active !== undefined ? !!data.is_active : settings.is_active;
         toast.success('Configurações salvas com sucesso!');
-        setSettings(prev => ({ 
-          ...prev, 
-          is_active: !!settings.certificate_pem,
-          updated_at: new Date().toISOString()
+        setSettings(prev => ({
+          ...prev,
+          is_active: appliedActive,
+          updated_at: data.updated_at || new Date().toISOString(),
         }));
+        notifyEfiGatewayStatusChanged({
+          isActive: appliedActive && isConfigured,
+          configured: isConfigured,
+        });
       } else {
         throw new Error(data?.error || 'Erro desconhecido');
       }
@@ -238,18 +321,54 @@ const EfiSettings = () => {
 
         {/* Status Card */}
         <Card className="glass-card border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              {settings.is_active && settings.certificate_pem ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1">
+              <CardTitle className="text-lg flex items-center gap-2">
+                {settings.is_active && isConfigured ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                ) : !settings.is_active ? (
+                  <PowerOff className="w-5 h-5 text-red-400" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                )}
+                Status da Integração
+              </CardTitle>
+              <CardDescription>
+                {settings.is_active
+                  ? 'Gateway ativo: cobranças PIX estão liberadas no sistema.'
+                  : 'Gateway desativado: cobranças PIX estão bloqueadas em todo o sistema.'}
+              </CardDescription>
+            </div>
+
+            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-secondary/40 px-4 py-2.5 self-start sm:self-auto">
+              <div className="flex items-center gap-2">
+                {settings.is_active ? (
+                  <Power className="w-4 h-4 text-green-400" />
+                ) : (
+                  <PowerOff className="w-4 h-4 text-red-400" />
+                )}
+                <span className="text-sm font-medium">
+                  {settings.is_active ? 'Gateway Ativo' : 'Gateway Desativado'}
+                </span>
+              </div>
+              {toggling ? (
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
               ) : (
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                <Switch
+                  id="efi-gateway-toggle"
+                  checked={settings.is_active}
+                  onCheckedChange={handleToggleActive}
+                  disabled={toggling || saving}
+                  aria-label="Ativar ou desativar gateway EFI Bank"
+                />
               )}
-              Status da Integração
-            </CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
+              <Badge className={settings.is_active ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}>
+                Gateway {settings.is_active ? 'Ativo' : 'Desativado'}
+              </Badge>
               <Badge className={settings.client_id ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}>
                 Client ID {settings.client_id ? '✓' : '✗'}
               </Badge>
@@ -263,8 +382,18 @@ const EfiSettings = () => {
                 Certificado {settings.certificate_pem ? '✓ Configurado' : '⚠ Pendente'}
               </Badge>
             </div>
+
+            {!settings.is_active && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 flex items-center gap-2">
+                <PowerOff className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  Enquanto desativado, clientes não podem gerar novos pagamentos PIX e cobranças automáticas via EFI Bank ficam bloqueadas.
+                </span>
+              </div>
+            )}
+
             {settings.updated_at && (
-              <p className="text-xs text-muted-foreground mt-3">
+              <p className="text-xs text-muted-foreground">
                 Última atualização: {new Date(settings.updated_at).toLocaleString('pt-BR')}
               </p>
             )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, MoreHorizontal, Mail, Phone, Trash2, RefreshCw, CreditCard, QrCode, FileText, Loader2, Link2, Send, Eye, EyeOff, Pencil, Download, User, Receipt, Calendar, Gift, Copy, Lock, Flag } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Mail, Phone, Trash2, RefreshCw, CreditCard, QrCode, FileText, Loader2, Link2, Send, Eye, EyeOff, Pencil, Download, User, Receipt, Calendar, Gift, Copy, Lock, Flag, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
@@ -34,7 +34,7 @@ import { useClients, Client } from '@/hooks/useClients';
 import { useReferrals } from '@/hooks/useReferrals';
 import { useAllClientFlags, FLAG_COLOR_MAP } from '@/hooks/useClientFlags';
 import { supabase } from '@/integrations/supabase/client';
-import { useEfiPay } from '@/hooks/useEfiPay';
+import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -79,7 +79,11 @@ const Clients = () => {
 
   const { clients, loading, addClient, updateClient, deleteClient } = useClients();
   const { links, clicks, leads, rewards } = useReferrals();
-  const { createPixPayment, loading: mpLoading } = useEfiPay();
+  const { createPixPayment, loading: mpLoading, activeGateways, defaultGateway, isGatewayDisabled } = usePaymentGateway();
+  const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayId | null>(null);
+  const activeGatewayChoice = (selectedGateway && activeGateways.includes(selectedGateway))
+    ? selectedGateway
+    : defaultGateway;
   const { flagCounts } = useAllClientFlags();
 
   const referralData = { links, clicks, leads, rewards };
@@ -179,7 +183,6 @@ const Clients = () => {
 
     setIsCreatingCharge(true);
     try {
-      // Create PIX payment via Mercado Pago
       const pixResult = await createPixPayment({
         amount: parseFloat(newCharge.value),
         description: newCharge.description || `Cobrança para ${selectedClient.name}`,
@@ -187,7 +190,7 @@ const Clients = () => {
         clientEmail: selectedClient.email,
         clientName: selectedClient.name,
         clientDocument: selectedClient.document?.replace(/[^\d]/g, '') || undefined,
-      });
+      }, activeGatewayChoice || undefined);
 
       if (pixResult?.success) {
         toast.success('Cobrança PIX criada com sucesso!');
@@ -722,10 +725,35 @@ const Clients = () => {
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Método de Pagamento *</label>
-                <div className="flex items-center gap-2 p-3 bg-secondary/50 border border-border/50 rounded-md">
-                  <QrCode className="w-4 h-4" />
-                  <span>PIX</span>
-                </div>
+                {isGatewayDisabled ? (
+                  <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-md text-xs text-destructive">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>Nenhum gateway de pagamento ativo. Ative EFI Bank ou Mercado Pago nas configurações para gerar cobranças PIX.</span>
+                  </div>
+                ) : activeGateways.length > 1 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeGateways.map((gw) => (
+                      <button
+                        key={gw}
+                        type="button"
+                        onClick={() => setSelectedGateway(gw)}
+                        className={`flex items-center justify-center gap-2 p-2.5 rounded-md border text-xs font-medium transition-colors ${
+                          activeGatewayChoice === gw
+                            ? 'bg-primary/20 border-primary text-foreground'
+                            : 'bg-secondary/50 border-border/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        PIX ({GATEWAY_LABELS[gw]})
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 bg-secondary/50 border border-border/50 rounded-md">
+                    <QrCode className="w-4 h-4" />
+                    <span>PIX {activeGatewayChoice ? `via ${GATEWAY_LABELS[activeGatewayChoice]}` : ''}</span>
+                  </div>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -750,7 +778,7 @@ const Clients = () => {
                 <Button 
                   className="flex-1" 
                   onClick={handleCreateCharge}
-                  disabled={isCreatingCharge}
+                  disabled={isCreatingCharge || isGatewayDisabled}
                 >
                   {isCreatingCharge ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Cobrança'}
                 </Button>
