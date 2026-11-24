@@ -97,6 +97,8 @@ const App = () => (
                     {/* Referral Form (Public) */}
                     <Route path="/indicar" element={<ReferralForm />} />
                     <Route path="/r/:slug" element={<ReferralForm />} />
+                    <Route path="/pagar/:id" element={<SubscriptionCheckoutPublic />} />
+                    <Route path="/p/:id" element={<SubscriptionCheckoutPublic />} />
                     <Route path="/pagar-assinatura/:id" element={<SubscriptionCheckoutPublic />} />
                     <Route path="/contrato/:id" element={<ContractPublic />} />
 

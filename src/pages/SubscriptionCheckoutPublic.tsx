@@ -621,7 +621,7 @@ const SubscriptionCheckoutPublic = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => navigate(`/pagar-assinatura/${nextCycleLink.token}`)}
+                              onClick={() => navigate(`/pagar/${nextCycleLink.token}`)}
                               className="gap-2 border-primary/40 hover:bg-primary/20"
                             >
                               Acessar link do próximo mês

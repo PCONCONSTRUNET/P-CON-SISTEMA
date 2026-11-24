@@ -21,7 +21,7 @@ export function buildSubscriptionPaymentUrl(token: string, origin?: string): str
     (typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
       : 'https://www.pconassinantes.site');
-  return `${base}/pagar-assinatura/${token}`;
+  return `${base}/pagar/${token}`;
 }
 
 export function getPendingLinkFromList(

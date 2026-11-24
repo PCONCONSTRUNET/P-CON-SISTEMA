@@ -3,7 +3,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 export const PUBLIC_APP_URL = "https://www.pconassinantes.site";
 
 export function buildSubscriptionPaymentUrl(token: string): string {
-  return `${PUBLIC_APP_URL}/pagar-assinatura/${token}`;
+  return `${PUBLIC_APP_URL}/pagar/${token}`;
 }
 
 export function computeNextMonthlyDueDateISO(currentNextPayment: string): string {
