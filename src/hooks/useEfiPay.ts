@@ -45,41 +45,68 @@ interface GatewayStatusResult {
 }
 
 const GATEWAY_STATUS_EVENT = 'efi-gateway-status-changed';
+const STATUS_CACHE_TTL_MS = 20_000;
+let cachedEfiStatus: { value: GatewayStatusResult; expiresAt: number } | null = null;
+let inFlightEfiStatus: Promise<GatewayStatusResult | null> | null = null;
 
 export function notifyEfiGatewayStatusChanged(status: GatewayStatusResult) {
+  cachedEfiStatus = { value: status, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent<GatewayStatusResult>(GATEWAY_STATUS_EVENT, { detail: status }));
   }
 }
 
-export async function fetchEfiGatewayStatus(): Promise<GatewayStatusResult | null> {
-  const { data, error } = await supabase.functions.invoke('efi-pay', {
-    body: { _action: 'get-status' },
-  });
-
-  if (!error && data?.success) {
-    return {
-      isActive: !!data.isActive,
-      configured: !!data.configured,
-    };
+export async function fetchEfiGatewayStatus(forceRefresh = false): Promise<GatewayStatusResult | null> {
+  if (!forceRefresh && cachedEfiStatus && cachedEfiStatus.expiresAt > Date.now()) {
+    return cachedEfiStatus.value;
+  }
+  if (!forceRefresh && inFlightEfiStatus) {
+    return inFlightEfiStatus;
   }
 
-  // Fallback caso a Edge Function deployada ainda não possua a action get-status
-  const { data: settingsData, error: settingsError } = await supabase.functions.invoke('efi-pay', {
-    body: { _action: 'get-settings' },
-  });
+  inFlightEfiStatus = (async () => {
+    const { data, error } = await supabase.functions.invoke('efi-pay', {
+      body: { _action: 'get-status' },
+    });
 
-  if (!settingsError && settingsData?.success) {
-    const s = settingsData.settings;
-    if (!s) return { isActive: false, configured: false };
-    const configured = !!(s.client_id && s.client_secret && s.pix_key && s.certificate_pem);
-    return {
-      isActive: !!s.is_active && configured,
-      configured,
-    };
+    if (!error && data?.success) {
+      const result: GatewayStatusResult = {
+        isActive: !!data.isActive,
+        configured: !!data.configured,
+      };
+      cachedEfiStatus = { value: result, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
+      return result;
+    }
+
+    // Fallback caso a Edge Function deployada ainda não possua a action get-status
+    const { data: settingsData, error: settingsError } = await supabase.functions.invoke('efi-pay', {
+      body: { _action: 'get-settings' },
+    });
+
+    if (!settingsError && settingsData?.success) {
+      const s = settingsData.settings;
+      if (!s) {
+        const empty = { isActive: false, configured: false };
+        cachedEfiStatus = { value: empty, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
+        return empty;
+      }
+      const configured = !!(s.client_id && s.client_secret && s.pix_key && s.certificate_pem);
+      const result: GatewayStatusResult = {
+        isActive: !!s.is_active && configured,
+        configured,
+      };
+      cachedEfiStatus = { value: result, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
+      return result;
+    }
+
+    return null;
+  })();
+
+  try {
+    return await inFlightEfiStatus;
+  } finally {
+    inFlightEfiStatus = null;
   }
-
-  return null;
 }
 
 export function useEfiPay(options: { checkStatusOnMount?: boolean } = {}) {

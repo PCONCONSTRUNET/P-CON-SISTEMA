@@ -95,42 +95,69 @@ interface MercadoPagoGatewayStatus {
 }
 
 const MP_GATEWAY_STATUS_EVENT = 'mercadopago-gateway-status-changed';
+const MP_STATUS_CACHE_TTL_MS = 20_000;
+let cachedMpStatus: { value: MercadoPagoGatewayStatus; expiresAt: number } | null = null;
+let inFlightMpStatus: Promise<MercadoPagoGatewayStatus | null> | null = null;
 
 export function notifyMercadoPagoGatewayStatusChanged(status: MercadoPagoGatewayStatus) {
+  cachedMpStatus = { value: status, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent<MercadoPagoGatewayStatus>(MP_GATEWAY_STATUS_EVENT, { detail: status }));
   }
 }
 
-export async function fetchMercadoPagoGatewayStatus(): Promise<MercadoPagoGatewayStatus | null> {
-  const { data, error } = await supabase.functions.invoke('mercadopago', {
-    body: { _action: 'get-status' },
-  });
-
-  if (!error && data?.success) {
-    return {
-      isActive: !!data.isActive,
-      configured: !!data.configured,
-      publicKey: data.publicKey || null,
-    };
+export async function fetchMercadoPagoGatewayStatus(forceRefresh = false): Promise<MercadoPagoGatewayStatus | null> {
+  if (!forceRefresh && cachedMpStatus && cachedMpStatus.expiresAt > Date.now()) {
+    return cachedMpStatus.value;
+  }
+  if (!forceRefresh && inFlightMpStatus) {
+    return inFlightMpStatus;
   }
 
-  const { data: settingsData, error: settingsError } = await supabase.functions.invoke('mercadopago', {
-    body: { _action: 'get-settings' },
-  });
+  inFlightMpStatus = (async () => {
+    const { data, error } = await supabase.functions.invoke('mercadopago', {
+      body: { _action: 'get-status' },
+    });
 
-  if (!settingsError && settingsData?.success) {
-    const s = settingsData.settings;
-    if (!s) return { isActive: false, configured: false, publicKey: null };
-    const configured = !!s.access_token;
-    return {
-      isActive: !!s.is_active && configured,
-      configured,
-      publicKey: s.public_key || null,
-    };
+    if (!error && data?.success) {
+      const result: MercadoPagoGatewayStatus = {
+        isActive: !!data.isActive,
+        configured: !!data.configured,
+        publicKey: data.publicKey || null,
+      };
+      cachedMpStatus = { value: result, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
+      return result;
+    }
+
+    const { data: settingsData, error: settingsError } = await supabase.functions.invoke('mercadopago', {
+      body: { _action: 'get-settings' },
+    });
+
+    if (!settingsError && settingsData?.success) {
+      const s = settingsData.settings;
+      if (!s) {
+        const empty = { isActive: false, configured: false, publicKey: null };
+        cachedMpStatus = { value: empty, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
+        return empty;
+      }
+      const configured = !!s.access_token;
+      const result: MercadoPagoGatewayStatus = {
+        isActive: !!s.is_active && configured,
+        configured,
+        publicKey: s.public_key || null,
+      };
+      cachedMpStatus = { value: result, expiresAt: Date.now() + MP_STATUS_CACHE_TTL_MS };
+      return result;
+    }
+
+    return null;
+  })();
+
+  try {
+    return await inFlightMpStatus;
+  } finally {
+    inFlightMpStatus = null;
   }
-
-  return null;
 }
 
 async function extractInvokeError(error: any, fallback: string): Promise<{ message: string; gatewayDisabled?: boolean }> {

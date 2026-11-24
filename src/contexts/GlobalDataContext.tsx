@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 // Types
@@ -10,6 +11,7 @@ export interface Client {
   phone: string | null;
   document: string | null;
   status: string;
+  license_token?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +74,7 @@ export interface Invoice {
   number: string;
   amount: number;
   status: string;
+  description?: string | null;
   issued_at: string;
   clients?: {
     name: string;
@@ -164,105 +167,203 @@ interface GlobalDataContextType {
 const GlobalDataContext = createContext<GlobalDataContextType | undefined>(undefined);
 
 export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
-  // State
+  const { isAuthenticated } = useAuth();
+
+  // Raw state (sem joins pesados no banco)
   const [clients, setClients] = useState<Client[]>([]);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [rawSubscriptions, setRawSubscriptions] = useState<Subscription[]>([]);
+  const [rawPayments, setRawPayments] = useState<Payment[]>([]);
+  const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([]);
   const [whatsappSettings, setWhatsappSettings] = useState<WhatsAppSettings | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
-  
-  const [loadingClients, setLoadingClients] = useState(true);
-  const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
-  const [loadingPayments, setLoadingPayments] = useState(true);
-  const [loadingInvoices, setLoadingInvoices] = useState(true);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
-  const [loadingAppSettings, setLoadingAppSettings] = useState(true);
 
-  // Fetch functions
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [loadingAppSettings, setLoadingAppSettings] = useState(false);
+
+  const inFlightRef = useRef<Record<string, boolean>>({});
+
+  // Lookup maps em memória (evita JOINs triplos no PostgreSQL)
+  const clientsById = useMemo(() => {
+    const map = new Map<string, Client>();
+    for (const c of clients) map.set(c.id, c);
+    return map;
+  }, [clients]);
+
+  const subscriptions = useMemo<Subscription[]>(() => {
+    return rawSubscriptions.map((sub) => {
+      const client = clientsById.get(sub.client_id);
+      return {
+        ...sub,
+        clients: client
+          ? {
+              name: client.name,
+              email: client.email,
+              phone: client.phone || undefined,
+              document: client.document,
+            }
+          : sub.clients,
+        clientName: client?.name || sub.clients?.name || 'N/A',
+      };
+    });
+  }, [rawSubscriptions, clientsById]);
+
+  const subscriptionsById = useMemo(() => {
+    const map = new Map<string, Subscription>();
+    for (const s of subscriptions) map.set(s.id, s);
+    return map;
+  }, [subscriptions]);
+
+  const payments = useMemo<Payment[]>(() => {
+    return rawPayments.map((payment) => {
+      const directClient = payment.client_id ? clientsById.get(payment.client_id) : undefined;
+      const sub = payment.subscription_id ? subscriptionsById.get(payment.subscription_id) : undefined;
+      const subClient = sub ? clientsById.get(sub.client_id) : undefined;
+      const resolvedName = sub?.clientName || subClient?.name || directClient?.name || 'N/A';
+
+      return {
+        ...payment,
+        due_date: payment.due_date || null,
+        clientName: resolvedName,
+        clients: directClient
+          ? {
+              name: directClient.name,
+              email: directClient.email,
+              phone: directClient.phone,
+              document: directClient.document,
+            }
+          : payment.clients,
+        subscriptions: sub
+          ? {
+              plan_name: sub.plan_name,
+              clients: subClient
+                ? {
+                    name: subClient.name,
+                    email: subClient.email,
+                    phone: subClient.phone,
+                    document: subClient.document,
+                  }
+                : sub.clients
+                ? {
+                    name: sub.clients.name,
+                    email: sub.clients.email,
+                    phone: sub.clients.phone ?? null,
+                    document: sub.clients.document ?? null,
+                  }
+                : undefined,
+            }
+          : payment.subscriptions,
+      };
+    });
+  }, [rawPayments, clientsById, subscriptionsById]);
+
+  const invoices = useMemo<Invoice[]>(() => {
+    return rawInvoices.map((inv) => {
+      const client = clientsById.get(inv.client_id);
+      return {
+        ...inv,
+        clients: client
+          ? {
+              name: client.name,
+              email: client.email,
+              phone: client.phone,
+              document: client.document,
+            }
+          : inv.clients,
+      };
+    });
+  }, [rawInvoices, clientsById]);
+
+  // Fetch functions (consultas planas sem JOINs pesados + dedup de chamadas em voo)
   const fetchClients = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.clients) return;
+    inFlightRef.current.clients = true;
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('id, name, email, phone, document, status, license_token, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setClients(data || []);
+      setClients((data || []) as Client[]);
     } catch (error) {
       console.error('Error fetching clients:', error);
     } finally {
+      inFlightRef.current.clients = false;
       setLoadingClients(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchSubscriptions = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.subscriptions) return;
+    inFlightRef.current.subscriptions = true;
     try {
       const { data, error } = await supabase
         .from('subscriptions')
-        .select('*, clients(name, email, phone, document)')
+        .select('id, client_id, plan_name, value, status, start_date, next_payment, created_at, updated_at, asaas_id')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      const subscriptionsWithClientName = (data || []).map(sub => ({
-        ...sub,
-        clientName: sub.clients?.name || 'N/A'
-      }));
-      
-      setSubscriptions(subscriptionsWithClientName);
+      setRawSubscriptions((data || []) as Subscription[]);
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
     } finally {
+      inFlightRef.current.subscriptions = false;
       setLoadingSubscriptions(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchPayments = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.payments) return;
+    inFlightRef.current.payments = true;
     try {
       const { data, error } = await supabase
         .from('payments')
-        .select('*, subscriptions(clients(name, email, phone, document), plan_name), clients(name, email, phone, document)')
+        .select('id, subscription_id, client_id, amount, status, payment_method, transaction_id, paid_at, created_at, due_date, description, asaas_id')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      const paymentsWithClientName = (data || []).map(payment => ({
-        ...payment,
-        due_date: (payment as any).due_date || null,
-        clientName: payment.subscriptions?.clients?.name || payment.clients?.name || 'N/A'
-      })) as Payment[];
-      
-      setPayments(paymentsWithClientName);
+      setRawPayments((data || []) as Payment[]);
     } catch (error) {
       console.error('Error fetching payments:', error);
     } finally {
+      inFlightRef.current.payments = false;
       setLoadingPayments(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchInvoices = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.invoices) return;
+    inFlightRef.current.invoices = true;
     try {
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, clients(name, email, phone, document)')
+        .select('id, payment_id, client_id, number, amount, status, description, issued_at')
         .order('issued_at', { ascending: false });
 
       if (error) throw error;
-      setInvoices(data || []);
+      setRawInvoices((data || []) as Invoice[]);
     } catch (error) {
       console.error('Error fetching invoices:', error);
     } finally {
+      inFlightRef.current.invoices = false;
       setLoadingInvoices(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchWhatsApp = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.whatsapp) return;
+    inFlightRef.current.whatsapp = true;
     try {
       const [templatesRes, settingsRes] = await Promise.all([
-        supabase.from('whatsapp_templates').select('*'),
-        supabase.from('whatsapp_settings').select('*').maybeSingle()
+        supabase
+          .from('whatsapp_templates')
+          .select('id, template_key, name, message_template, is_active, image_url, button_enabled, button_text, button_url, created_at, updated_at'),
+        (supabase as any).from('whatsapp_settings').select('id, send_hour, send_minute, admin_phone').maybeSingle(),
       ]);
 
       if (templatesRes.error) throw templatesRes.error;
@@ -271,34 +372,55 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Error fetching WhatsApp data:', error);
     } finally {
+      inFlightRef.current.whatsapp = false;
       setLoadingTemplates(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchAppSettings = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.appSettings) return;
+    inFlightRef.current.appSettings = true;
     try {
-      const { data, error } = await supabase.from('app_settings').select('*').maybeSingle();
+      const { data, error } = await (supabase as any)
+        .from('app_settings')
+        .select('id, pro_labore_mode, pro_labore_percent, pro_labore_fixed')
+        .maybeSingle();
       if (error) throw error;
       setAppSettings(data);
     } catch (error) {
       console.error('Error fetching app settings:', error);
     } finally {
+      inFlightRef.current.appSettings = false;
       setLoadingAppSettings(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const refetchAll = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setLoadingClients(true);
+    setLoadingSubscriptions(true);
+    setLoadingPayments(true);
+    setLoadingInvoices(true);
+    setLoadingTemplates(true);
+    setLoadingAppSettings(true);
+
     try {
-      await fetchClients();
-      await fetchSubscriptions();
-      await fetchPayments();
-      await fetchInvoices();
-      await fetchWhatsApp();
-      await fetchAppSettings();
+      // Fase 1: dados essenciais para o Dashboard carregam em paralelo (1 round-trip)
+      await Promise.all([
+        fetchClients(),
+        fetchSubscriptions(),
+        fetchPayments(),
+        fetchAppSettings(),
+      ]);
+      // Fase 2: dados secundários carregam em seguida sem travar a tela inicial
+      await Promise.all([
+        fetchInvoices(),
+        fetchWhatsApp(),
+      ]);
     } catch (e) {
-      console.error('Error in sequential refetchAll:', e);
+      console.error('Error in batched refetchAll:', e);
     }
-  }, [fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
+  }, [isAuthenticated, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
 
   // CRUD - Clients
   const addClient = async (client: Omit<Client, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<Client | null> => {
@@ -306,12 +428,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('clients')
         .insert([{ ...client, status: 'active' }])
-        .select()
+        .select('id, name, email, phone, document, status, license_token, created_at, updated_at')
         .single();
 
       if (error) throw error;
+      const created = data as Client;
+      setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
       toast.success('Cliente adicionado com sucesso!');
-      return data;
+      return created;
     } catch (error) {
       console.error('Error adding client:', error);
       toast.error('Erro ao adicionar cliente');
@@ -325,12 +449,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .from('clients')
         .update(updates)
         .eq('id', id)
-        .select()
+        .select('id, name, email, phone, document, status, license_token, created_at, updated_at')
         .single();
 
       if (error) throw error;
+      const updated = data as Client;
+      setClients((prev) => prev.map((c) => (c.id === id ? updated : c)));
       toast.success('Cliente atualizado com sucesso!');
-      return data;
+      return updated;
     } catch (error) {
       console.error('Error updating client:', error);
       toast.error('Erro ao atualizar cliente');
@@ -346,6 +472,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', id);
 
       if (error) throw error;
+      setClients((prev) => prev.filter((c) => c.id !== id));
       toast.success('Cliente removido com sucesso!');
       return true;
     } catch (error) {
@@ -361,12 +488,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('subscriptions')
         .insert([subscription])
-        .select('*, clients(name, email, phone)')
+        .select('id, client_id, plan_name, value, status, start_date, next_payment, created_at, updated_at, asaas_id')
         .single();
 
       if (error) throw error;
+      const created = data as Subscription;
+      setRawSubscriptions((prev) => [created, ...prev.filter((s) => s.id !== created.id)]);
       toast.success('Assinatura adicionada com sucesso!');
-      return data;
+      return created;
     } catch (error) {
       console.error('Error adding subscription:', error);
       toast.error('Erro ao adicionar assinatura');
@@ -380,12 +509,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .from('subscriptions')
         .update(updates)
         .eq('id', id)
-        .select('*, clients(name, email, phone)')
+        .select('id, client_id, plan_name, value, status, start_date, next_payment, created_at, updated_at, asaas_id, clients(name, email, phone)')
         .single();
 
       if (error) throw error;
+      const updated = data as Subscription;
+      setRawSubscriptions((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
       toast.success('Assinatura atualizada com sucesso!');
-      return data;
+      return updated;
     } catch (error) {
       console.error('Error updating subscription:', error);
       toast.error('Erro ao atualizar assinatura');
@@ -401,6 +532,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', id);
 
       if (error) throw error;
+      setRawSubscriptions((prev) => prev.filter((s) => s.id !== id));
       toast.success('Assinatura removida com sucesso!');
       return true;
     } catch (error) {
@@ -582,6 +714,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', id);
 
       if (error) throw error;
+      setRawPayments((prev) => prev.filter((p) => p.id !== id));
       toast.success('Pagamento removido com sucesso!');
       return true;
     } catch (error) {
@@ -597,12 +730,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('invoices')
         .insert([invoice])
-        .select('*, clients(name, email, phone)')
+        .select('id, payment_id, client_id, number, amount, status, description, issued_at')
         .single();
 
       if (error) throw error;
+      const created = data as Invoice;
+      setRawInvoices((prev) => [created, ...prev.filter((i) => i.id !== created.id)]);
       toast.success('Nota fiscal emitida com sucesso!');
-      return data;
+      return created;
     } catch (error) {
       console.error('Error adding invoice:', error);
       toast.error('Erro ao emitir nota fiscal');
@@ -618,6 +753,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', id);
 
       if (error) throw error;
+      setRawInvoices((prev) => prev.filter((i) => i.id !== id));
       toast.success('Nota fiscal removida com sucesso!');
       return true;
     } catch (error) {
@@ -735,54 +871,47 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       clearTimeout(debounceTimers.current[key]);
     }
     debounceTimers.current[key] = setTimeout(() => {
-      fetchFn();
-    }, 600);
+      void fetchFn();
+    }, 1200);
   }, []);
 
-  // Initialize and set up realtime subscriptions
+  // Initialize and set up a single multiplexed realtime channel ONLY when admin is authenticated
   useEffect(() => {
-    refetchAll();
+    if (!isAuthenticated) {
+      Object.values(debounceTimers.current).forEach(clearTimeout);
+      setClients([]);
+      setRawSubscriptions([]);
+      setRawPayments([]);
+      setRawInvoices([]);
+      setWhatsappTemplates([]);
+      setWhatsappSettings(null);
+      setAppSettings(null);
+      setLoadingClients(false);
+      setLoadingSubscriptions(false);
+      setLoadingPayments(false);
+      setLoadingInvoices(false);
+      setLoadingTemplates(false);
+      setLoadingAppSettings(false);
+      return;
+    }
 
-    const clientsChannel = supabase
-      .channel('global-clients-changes')
+    void refetchAll();
+
+    const adminSyncChannel = supabase
+      .channel('global-admin-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => debouncedFetch('clients', fetchClients))
-      .subscribe();
-
-    const subscriptionsChannel = supabase
-      .channel('global-subscriptions-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => debouncedFetch('subscriptions', fetchSubscriptions))
-      .subscribe();
-
-    const paymentsChannel = supabase
-      .channel('global-payments-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => debouncedFetch('payments', fetchPayments))
-      .subscribe();
-
-    const invoicesChannel = supabase
-      .channel('global-invoices-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => debouncedFetch('invoices', fetchInvoices))
-      .subscribe();
-
-    const whatsappChannel = supabase
-      .channel('global-whatsapp-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => debouncedFetch('whatsapp', fetchWhatsApp))
-      .subscribe();
-
-    const appSettingsChannel = supabase
-      .channel('global-app-settings-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => debouncedFetch('appSettings', fetchAppSettings))
       .subscribe();
 
     return () => {
       Object.values(debounceTimers.current).forEach(clearTimeout);
-      supabase.removeChannel(clientsChannel);
-      supabase.removeChannel(subscriptionsChannel);
-      supabase.removeChannel(paymentsChannel);
-      supabase.removeChannel(invoicesChannel);
-      supabase.removeChannel(whatsappChannel);
-      supabase.removeChannel(appSettingsChannel);
+      supabase.removeChannel(adminSyncChannel);
     };
-  }, [refetchAll, debouncedFetch, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
+  }, [isAuthenticated, refetchAll, debouncedFetch, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
 
   return (
     <GlobalDataContext.Provider
@@ -824,6 +953,10 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </GlobalDataContext.Provider>
   );
+};
+
+export const useOptionalGlobalData = () => {
+  return useContext(GlobalDataContext);
 };
 
 export const useGlobalData = () => {

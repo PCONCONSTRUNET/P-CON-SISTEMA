@@ -10,9 +10,12 @@ import {
   Clock,
   AlertTriangle,
   CreditCard,
-  QrCode,
   ArrowRight,
   RefreshCw,
+  Calendar,
+  User,
+  Lock,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +31,7 @@ import {
   SubscriptionPaymentLinkRecord,
 } from '@/utils/subscriptionLinks';
 import pixIcon from '@/assets/pix-icon.svg';
+import mercadoPagoIcon from '@/assets/mercado-pago-icon.png';
 
 interface SubscriptionData {
   id: string;
@@ -46,6 +50,21 @@ interface SubscriptionData {
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+
+const formatDocumentInput = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+};
 
 const SubscriptionCheckoutPublic = () => {
   const { id } = useParams();
@@ -121,7 +140,7 @@ const SubscriptionCheckoutPublic = () => {
         setSubData(sub);
         setPaidMethodLabel(link.payment_method || null);
         if (sub?.clients?.document) {
-          setClientDocument(sub.clients.document);
+          setClientDocument(formatDocumentInput(sub.clients.document));
         }
 
         // Se este link já foi pago, procura se há um link pendente para o próximo mês
@@ -164,7 +183,7 @@ const SubscriptionCheckoutPublic = () => {
       const typedSub = data as unknown as SubscriptionData;
       setSubData(typedSub);
       if (typedSub.clients?.document) {
-        setClientDocument(typedSub.clients.document);
+        setClientDocument(formatDocumentInput(typedSub.clients.document));
       }
 
       const ensuredLink = await ensureSubscriptionPaymentLink({
@@ -413,24 +432,35 @@ const SubscriptionCheckoutPublic = () => {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="min-h-screen relative overflow-x-hidden flex flex-col">
       <BlueBackground />
-      <div className="relative z-10">
-        {/* Header */}
-        <header className="border-b border-border/30 bg-background/50 backdrop-blur-xl">
-          <div className="container mx-auto px-4 py-5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src="/images/logo-pcon-white.png" alt="P-CON CONSTRUNET" className="h-14 sm:h-16 w-auto object-contain" />
-            </div>
+      <div className="relative z-10 flex-1 flex flex-col">
+        {/* Slim Header / Navbar */}
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#06142e]/80 backdrop-blur-xl">
+          <div className="container mx-auto max-w-lg px-4 py-2 flex items-center justify-between gap-3">
+            <img
+              src="/images/logo-pcon-white.png"
+              alt="P-CON CONSTRUNET"
+              className="h-7 sm:h-8 w-auto object-contain"
+            />
             <Badge
-              className={`border ${
+              className={`border px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5 ${
                 isPaid
-                  ? 'bg-success/20 text-success border-success/30'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                   : !isSubscriptionActive || isLinkCancelled
-                  ? 'bg-destructive/20 text-destructive border-destructive/30'
-                  : 'bg-orange-500/15 text-orange-500 border-orange-500/30'
+                  ? 'bg-destructive/15 text-red-300 border-destructive/30'
+                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
               }`}
             >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isPaid
+                    ? 'bg-emerald-400'
+                    : !isSubscriptionActive || isLinkCancelled
+                    ? 'bg-red-400'
+                    : 'bg-amber-400 animate-pulse'
+                }`}
+              />
               {isPaid
                 ? 'Pago'
                 : !isSubscriptionActive
@@ -443,71 +473,88 @@ const SubscriptionCheckoutPublic = () => {
         </header>
 
         {/* Main Content */}
-        <main className="container mx-auto px-4 py-6 sm:py-10 flex flex-col items-center">
-          <div className="w-full max-w-lg space-y-6">
-            {/* Title Card */}
+        <main className="container mx-auto px-4 py-5 sm:py-8 flex-1 flex flex-col items-center justify-start">
+          <div className="w-full max-w-lg space-y-4">
+            {/* Unified Premium Checkout Card */}
             <motion.div
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="glass-card overflow-hidden rounded-2xl flex flex-col"
+              transition={{ duration: 0.35, ease: 'easeOut' }}
             >
-              <div className="p-6 space-y-4 text-center sm:text-left">
-                <span className="inline-flex mx-auto sm:mx-0 items-center gap-2 rounded-full border border-emerald-500/50 bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-500 shadow-[var(--shadow-glow)] backdrop-blur-md w-fit">
-                  <ShieldCheck className="h-4 w-4" />
-                  Pagamento seguro
-                </span>
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-heading font-bold leading-tight text-foreground">
-                    Pagamento de Assinatura
-                  </h1>
-                  <p className="text-base sm:text-lg text-foreground/90 font-medium leading-relaxed mt-1">
-                    {subData.plan_name}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+              <Card className="glass-card overflow-hidden border-white/15 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.65)]">
+                {/* Top vibrant accent bar */}
+                <div className="h-1 w-full bg-gradient-to-r from-[#32BCAD] via-[#1E4FA3] to-[#009EE3]" />
 
-            {/* Amount Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="glass-card overflow-hidden">
                 <CardContent className="p-0">
-                  <div className="bg-primary/15 border-b border-border/40 p-5 sm:p-6 text-center sm:text-left">
-                    <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-primary">Valor da Mensalidade</p>
-                    <div className="mt-2 text-3xl sm:text-4xl font-heading font-bold">
-                      {formatCurrency(chargeAmount)}
+                  {/* Hero / Plan & Amount Header */}
+                  <div className="relative overflow-hidden bg-gradient-to-br from-[#1E4FA3]/30 via-[#0e2550]/60 to-[#091836]/80 border-b border-white/10 p-5">
+                    <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#32BCAD]/15 blur-2xl" />
+                    <div className="pointer-events-none absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-[#009EE3]/15 blur-2xl" />
+
+                    <div className="relative flex items-center justify-between gap-2 mb-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Pagamento seguro
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-blue-100/80">
+                        <Sparkles className="h-3 w-3 text-sky-300" />
+                        Mensalidade
+                      </span>
+                    </div>
+
+                    <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-sky-300/80 font-medium">
+                          Assinatura
+                        </p>
+                        <h1 className="text-lg sm:text-xl font-heading font-bold text-white truncate">
+                          {subData.plan_name}
+                        </h1>
+                      </div>
+                      <div className="sm:text-right">
+                        <p className="text-[11px] text-blue-100/60">Valor a pagar</p>
+                        <div className="flex items-baseline sm:justify-end gap-1">
+                          <span className="text-3xl sm:text-4xl font-heading font-extrabold tracking-tight text-white">
+                            {formatCurrency(chargeAmount)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-5 sm:p-6 space-y-4">
-                    {subData.clients?.name && (
-                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm">
-                        <span className="text-muted-foreground">Cliente</span>
-                        <span className="font-semibold">{subData.clients.name}</span>
+                  {/* Body */}
+                  <div className="p-4 sm:p-5 space-y-4">
+                    {/* Compact Client & Due Date Row */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                          <User className="h-3 w-3 text-sky-400 shrink-0" />
+                          Cliente
+                        </p>
+                        <p className="text-xs sm:text-sm font-semibold text-foreground truncate mt-0.5">
+                          {subData.clients?.name || 'Cliente'}
+                        </p>
                       </div>
-                    )}
 
-                    {chargeDueDate && (
-                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm">
-                        <span className="text-muted-foreground flex items-center gap-2">
-                          <Clock className="h-4 w-4" /> Vencimento
-                        </span>
-                        <span className="font-semibold">
-                          {new Date(chargeDueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
-                        </span>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                          <Calendar className="h-3 w-3 text-emerald-400 shrink-0" />
+                          Vencimento
+                        </p>
+                        <p className="text-xs sm:text-sm font-semibold text-foreground mt-0.5">
+                          {chargeDueDate
+                            ? new Date(chargeDueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                            : '—'}
+                        </p>
                       </div>
-                    )}
+                    </div>
 
                     {/* Pagamento Confirmado */}
                     {isPaid && (
                       <div className="space-y-4">
-                        <div className="rounded-xl border-2 border-success/40 bg-success/10 p-5 text-center space-y-2">
-                          <CheckCircle className="h-10 w-10 text-success mx-auto" />
-                          <p className="text-lg font-semibold text-success">Pagamento confirmado!</p>
+                        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-5 text-center space-y-2">
+                          <CheckCircle className="h-10 w-10 text-emerald-400 mx-auto" />
+                          <p className="text-lg font-semibold text-emerald-300">Pagamento confirmado!</p>
                           <p className="text-sm text-muted-foreground">
                             Sua assinatura foi renovada automaticamente para o próximo mês
                             {paidMethodLabel ? ` (${paidMethodLabel === 'CREDIT_CARD' ? 'Cartão de Crédito' : paidMethodLabel})` : ''}.
@@ -542,7 +589,7 @@ const SubscriptionCheckoutPublic = () => {
                     )}
 
                     {(!isSubscriptionActive || isLinkCancelled) && !isPaid && (
-                      <div className="rounded-xl border-2 border-destructive/40 bg-destructive/10 p-4 text-center space-y-2">
+                      <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-center space-y-2">
                         <XCircle className="h-8 w-8 text-destructive mx-auto" />
                         <p className="font-semibold text-destructive">
                           {isLinkCancelled ? 'Link de Pagamento Cancelado' : 'Assinatura Inativa'}
@@ -554,7 +601,7 @@ const SubscriptionCheckoutPublic = () => {
                     )}
 
                     {isGatewayDisabled && !isPaid && isSubscriptionActive && !isLinkCancelled && !pixPayment && (
-                      <div className="rounded-xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-2">
+                      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-center space-y-2">
                         <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto" />
                         <p className="font-semibold text-amber-300">
                           Pagamentos online temporariamente desativados
@@ -586,62 +633,99 @@ const SubscriptionCheckoutPublic = () => {
                       </div>
                     )}
 
-                    {/* Seletor PIX vs Cartão */}
+                    {/* Seletor PIX vs Cartão com ícones do sistema */}
                     {!isPaid &&
                       isSubscriptionActive &&
                       !isLinkCancelled &&
                       !pixPayment &&
                       !pendingCardPaymentId &&
                       !isGatewayDisabled && (
-                        <div className="space-y-4 pt-2">
-                          {/* Abas PIX / Cartão */}
+                        <div className="space-y-4">
                           {(canUsePix || canUseCard) && (
-                            <div className="grid grid-cols-2 gap-2 rounded-xl bg-secondary/30 p-1.5 border border-border/40">
-                              <button
-                                type="button"
-                                disabled={!canUsePix}
-                                onClick={() => setPaymentTab('pix')}
-                                className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-sm font-semibold transition-all ${
-                                  paymentTab === 'pix'
-                                    ? 'bg-primary text-primary-foreground shadow-md'
-                                    : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
-                                }`}
-                              >
-                                <QrCode className="h-4 w-4" />
-                                PIX
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!canUseCard}
-                                onClick={() => setPaymentTab('card')}
-                                className={`flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-sm font-semibold transition-all ${
-                                  paymentTab === 'card'
-                                    ? 'bg-primary text-primary-foreground shadow-md'
-                                    : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
-                                }`}
-                              >
-                                <CreditCard className="h-4 w-4" />
-                                Cartão
-                              </button>
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Escolha como deseja pagar
+                              </p>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <button
+                                  type="button"
+                                  disabled={!canUsePix}
+                                  onClick={() => setPaymentTab('pix')}
+                                  className={`group relative flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all ${
+                                    paymentTab === 'pix'
+                                      ? 'border-[#32BCAD]/70 bg-gradient-to-br from-[#32BCAD]/20 to-[#1E4FA3]/25 shadow-[0_0_24px_rgba(50,188,173,0.2)]'
+                                      : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed'
+                                  }`}
+                                >
+                                  <div
+                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                                      paymentTab === 'pix'
+                                        ? 'border-[#32BCAD]/40 bg-[#32BCAD]/15'
+                                        : 'border-white/10 bg-white/5'
+                                    }`}
+                                  >
+                                    <img src={pixIcon} alt="PIX" className="h-5 w-5 object-contain" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-white leading-tight">PIX</p>
+                                    <p className="text-[11px] text-emerald-300/90 truncate">Na hora</p>
+                                  </div>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={!canUseCard}
+                                  onClick={() => setPaymentTab('card')}
+                                  className={`group relative flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all ${
+                                    paymentTab === 'card'
+                                      ? 'border-[#009EE3]/70 bg-gradient-to-br from-[#009EE3]/20 to-[#1E4FA3]/30 shadow-[0_0_24px_rgba(0,158,227,0.22)]'
+                                      : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06] disabled:opacity-45 disabled:cursor-not-allowed'
+                                  }`}
+                                >
+                                  <div
+                                    className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                                      paymentTab === 'card'
+                                        ? 'border-[#009EE3]/50 bg-[#009EE3]/20'
+                                        : 'border-white/10 bg-white/5'
+                                    }`}
+                                  >
+                                    <CreditCard className="h-4.5 w-4.5 text-sky-300" />
+                                    <img
+                                      src={mercadoPagoIcon}
+                                      alt="Mercado Pago"
+                                      className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-[#0a1d3d] bg-white object-contain p-[1px]"
+                                    />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-white leading-tight">Cartão</p>
+                                    <p className="text-[11px] text-sky-200/80 truncate">
+                                      {canUseCard ? 'Até 4x' : 'Indisponível'}
+                                    </p>
+                                  </div>
+                                </button>
+                              </div>
                             </div>
                           )}
 
                           {/* Aba PIX */}
                           {paymentTab === 'pix' && canUsePix && (
-                            <div className="space-y-4 pt-1">
-                              <div className="space-y-2">
-                                <label className="text-xs text-muted-foreground ml-1">CPF ou CNPJ (Obrigatório)</label>
+                            <div className="space-y-3.5 pt-1">
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-muted-foreground ml-0.5">
+                                  CPF ou CNPJ do pagador (Obrigatório)
+                                </label>
                                 <Input
                                   placeholder="000.000.000-00"
                                   value={clientDocument}
-                                  onChange={(e) => setClientDocument(e.target.value)}
-                                  className="bg-secondary/20 border-border/60 h-11"
+                                  onChange={(e) => setClientDocument(formatDocumentInput(e.target.value))}
+                                  inputMode="numeric"
+                                  className="bg-white/[0.04] border-white/15 h-11 text-sm tracking-wide focus:border-[#32BCAD]/70"
                                 />
                               </div>
 
                               {activeGateways.length > 1 && (
                                 <div className="space-y-1.5">
-                                  <p className="text-xs text-muted-foreground text-center">Escolha o gateway PIX:</p>
+                                  <p className="text-[11px] text-muted-foreground text-center">Gateway PIX:</p>
                                   <div className="grid grid-cols-2 gap-2">
                                     {activeGateways.map((gw) => (
                                       <button
@@ -664,14 +748,14 @@ const SubscriptionCheckoutPublic = () => {
                               <Button
                                 onClick={handlePixPayment}
                                 disabled={creatingPix || gatewayStatusLoading}
-                                className="w-full h-12 sm:h-14 text-sm sm:text-base font-semibold bg-[#00B4D8] hover:bg-[#0096C7] text-white shadow-[0_0_20px_rgba(0,180,216,0.3)] border-0"
+                                className="w-full h-12 text-sm sm:text-base font-bold text-white border-0 btn-pix rounded-xl shadow-[0_8px_28px_rgba(5,186,218,0.35)] gap-2.5"
                               >
                                 {creatingPix ? (
-                                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                  <Loader2 className="h-5 w-5 animate-spin" />
                                 ) : (
-                                  <img src={pixIcon} alt="PIX" className="h-5 w-5 mr-2 object-contain filter brightness-0 invert" />
+                                  <img src={pixIcon} alt="PIX" className="h-5 w-5 object-contain brightness-0 invert" />
                                 )}
-                                Pagar com PIX
+                                {creatingPix ? 'Gerando QR Code PIX...' : 'Pagar com PIX'}
                               </Button>
                             </div>
                           )}
@@ -700,10 +784,10 @@ const SubscriptionCheckoutPublic = () => {
 
                     {/* PIX QR Code */}
                     {pixPayment && !isPaid && (
-                      <div className="pt-4 border-t border-border/30 space-y-4">
+                      <div className="pt-3 border-t border-white/10 space-y-4">
                         <div className="text-center">
                           <p className="font-semibold text-foreground">Pagamento via PIX</p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs sm:text-sm text-muted-foreground">
                             Use o QR Code ou código copia e cola abaixo. A confirmação é automática.
                           </p>
                         </div>
@@ -722,12 +806,13 @@ const SubscriptionCheckoutPublic = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="w-full text-xs text-muted-foreground"
+                            className="w-full text-xs text-muted-foreground hover:text-white gap-2"
                             onClick={() => {
                               setPixPayment(null);
                               setPaymentTab('card');
                             }}
                           >
+                            <CreditCard className="h-3.5 w-3.5" />
                             Prefere pagar no Cartão de Crédito? Clique aqui
                           </Button>
                         )}
@@ -737,6 +822,28 @@ const SubscriptionCheckoutPublic = () => {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Trust & Payment Methods Footer */}
+            <div className="flex flex-col items-center gap-2.5 pt-1 pb-4">
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Lock className="h-3 w-3 text-emerald-400" />
+                Ambiente criptografado • Pagamento processado com segurança
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-blue-100/85">
+                  <img src={pixIcon} alt="PIX" className="h-4 w-4 object-contain" />
+                  <span>PIX</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-blue-100/85">
+                  <CreditCard className="h-4 w-4 text-sky-400" />
+                  <span>Cartão de Crédito</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-blue-100/85">
+                  <img src={mercadoPagoIcon} alt="Mercado Pago" className="h-4 w-4 rounded-full object-contain" />
+                  <span>Mercado Pago</span>
+                </div>
+              </div>
+            </div>
           </div>
         </main>
       </div>

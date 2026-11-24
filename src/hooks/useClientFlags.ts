@@ -142,7 +142,7 @@ export const useAllClientFlags = () => {
       try {
         const { data, error } = await supabase
           .from('client_flags' as any)
-          .select('*')
+          .select('id, client_id')
           .order('created_at', { ascending: false });
 
         if (error) throw error;

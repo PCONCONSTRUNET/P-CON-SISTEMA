@@ -4,6 +4,7 @@ import { CreditCard, ExternalLink, Loader2, Lock, ShieldCheck, Sparkles } from '
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { calculateCardPricing } from '@/utils/cardFees';
+import mercadoPagoIcon from '@/assets/mercado-pago-icon.png';
 
 let initializedPublicKey: string | null = null;
 
@@ -78,23 +79,28 @@ const SubscriptionCardPayment = ({
   return (
     <div className="relative isolate space-y-3 overflow-hidden rounded-2xl border border-primary/20 bg-card/80 p-3 shadow-lg backdrop-blur-sm">
       <div className="rounded-xl bg-gradient-to-r from-primary/20 via-primary/10 to-secondary/40 px-3 py-2.5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-2.5">
-            <div className="rounded-lg border border-primary/30 bg-primary/15 p-2">
-              <CreditCard className="h-4 w-4 text-primary" />
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 shadow-inner">
+              <CreditCard className="h-4 w-4 text-sky-300" />
+              <img
+                src={mercadoPagoIcon}
+                alt="Mercado Pago"
+                className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border border-[#0a1d3d] bg-white object-contain p-[1px]"
+              />
             </div>
             <div>
               <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                Cartão de Crédito (Mercado Pago)
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Cartão de Crédito
+                <Sparkles className="h-3.5 w-3.5 text-sky-400" />
               </p>
-              <p className="text-xs text-muted-foreground">
-                Parcele em até 4x com aprovação imediata.
+              <p className="text-[11px] text-muted-foreground">
+                Até 4x via Mercado Pago • Aprovação imediata
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-400">
+          <div className="flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
             <ShieldCheck className="h-3 w-3" />
             Seguro
           </div>

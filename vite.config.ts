@@ -28,6 +28,17 @@ export default defineConfig(({ mode }) => ({
         entryFileNames: `assets/[name]-[hash]-${buildHash}.js`,
         chunkFileNames: `assets/[name]-[hash]-${buildHash}.js`,
         assetFileNames: `assets/[name]-[hash]-${buildHash}.[ext]`,
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+            if (id.includes('jspdf') || id.includes('html2canvas')) return 'vendor-pdf';
+            if (id.includes('xlsx')) return 'vendor-xlsx';
+            if (id.includes('@mercadopago')) return 'vendor-mp';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+            if (id.includes('framer-motion')) return 'vendor-motion';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+          }
+        },
       },
     },
   },

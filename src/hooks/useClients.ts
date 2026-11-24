@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useOptionalGlobalData } from '@/contexts/GlobalDataContext';
 import { toast } from 'sonner';
 
 export interface Client {
@@ -9,31 +10,65 @@ export interface Client {
   phone: string | null;
   document: string | null;
   status: string;
-  license_token?: string;
+  license_token?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export const useClients = () => {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const globalData = useOptionalGlobalData();
+  const [fallbackClients, setFallbackClients] = useState<Client[]>([]);
+  const [fallbackLoading, setFallbackLoading] = useState(!globalData);
 
-  const fetchClients = async () => {
+  const fetchFallbackClients = async () => {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('id, name, email, phone, document, status, license_token, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setClients(data || []);
+      setFallbackClients((data || []) as Client[]);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast.error('Erro ao carregar clientes');
     } finally {
-      setLoading(false);
+      setFallbackLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (globalData) return;
+
+    void fetchFallbackClients();
+
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    const channel = supabase
+      .channel('clients-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          void fetchFallbackClients();
+        }, 1000);
+      })
+      .subscribe();
+
+    return () => {
+      clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [Boolean(globalData)]);
+
+  if (globalData) {
+    return {
+      clients: globalData.clients as Client[],
+      loading: globalData.loadingClients,
+      addClient: globalData.addClient,
+      updateClient: globalData.updateClient,
+      deleteClient: globalData.deleteClient,
+      refetch: globalData.refetchClients,
+    };
+  }
 
   const addClient = async (client: Omit<Client, 'id' | 'created_at' | 'updated_at' | 'status'>) => {
     try {
@@ -44,7 +79,7 @@ export const useClients = () => {
         .single();
 
       if (error) throw error;
-      setClients(prev => [data, ...prev]);
+      setFallbackClients((prev) => [data as Client, ...prev]);
       toast.success('Cliente cadastrado com sucesso!');
       return data;
     } catch (error) {
@@ -64,7 +99,7 @@ export const useClients = () => {
         .single();
 
       if (error) throw error;
-      setClients(prev => prev.map(c => c.id === id ? data : c));
+      setFallbackClients((prev) => prev.map((c) => (c.id === id ? (data as Client) : c)));
       toast.success('Cliente atualizado com sucesso!');
       return data;
     } catch (error) {
@@ -82,7 +117,7 @@ export const useClients = () => {
         .eq('id', id);
 
       if (error) throw error;
-      setClients(prev => prev.filter(c => c.id !== id));
+      setFallbackClients((prev) => prev.filter((c) => c.id !== id));
       toast.success('Cliente removido com sucesso!');
     } catch (error) {
       console.error('Error deleting client:', error);
@@ -90,25 +125,12 @@ export const useClients = () => {
     }
   };
 
-  useEffect(() => {
-    fetchClients();
-
-    let debounceTimer: ReturnType<typeof setTimeout>;
-    const channel = supabase
-      .channel('clients-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          fetchClients();
-        }, 800);
-      })
-      .subscribe();
-
-    return () => {
-      clearTimeout(debounceTimer);
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  return { clients, loading, addClient, updateClient, deleteClient, refetch: fetchClients };
+  return {
+    clients: fallbackClients,
+    loading: fallbackLoading,
+    addClient,
+    updateClient,
+    deleteClient,
+    refetch: fetchFallbackClients,
+  };
 };
