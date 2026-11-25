@@ -19,6 +19,7 @@ import {
   Building2,
   Send,
   Wallet,
+  Link2,
 } from 'lucide-react';
 import { startTransition, MouseEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +37,7 @@ const navItems = [
   { icon: Users, label: 'Clientes', path: '/clients' },
   { icon: CreditCard, label: 'Assinaturas', path: '/subscriptions' },
   { icon: Receipt, label: 'Pagamentos', path: '/payments' },
+  { icon: Link2, label: 'Links Pagamento', path: '/links-pagamento' },
   { icon: FileSignature, label: 'Contratos', path: '/contracts' },
   { icon: FileText, label: 'Notas Fiscais', path: '/invoices' },
   { icon: WhatsAppIcon, label: 'WhatsApp', path: '/whatsapp' },

@@ -99,7 +99,7 @@ serve(async (req: Request) => {
 
     let paymentQuery = supabase
       .from("payments")
-      .select("id, subscription_id, subscription_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
+      .select("id, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
       .eq("transaction_id", paymentId.toString())
       .maybeSingle();
 
@@ -110,7 +110,7 @@ serve(async (req: Request) => {
 
       const { data } = await supabase
         .from("payments")
-        .select("id, subscription_id, subscription_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
+        .select("id, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
         .eq("proposal_id", proposalId)
         .eq("proposal_payment_type", paymentType === "entry" ? "entry" : "total")
         .eq("payment_method", "CREDIT_CARD")
@@ -122,12 +122,28 @@ serve(async (req: Request) => {
       paymentRecord = data;
     }
 
+    if (!paymentRecord && externalReference?.startsWith("paylink:")) {
+      const [, linkId] = externalReference.split(":");
+      if (linkId) {
+        const { data } = await supabase
+          .from("payments")
+          .select("id, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
+          .eq("payment_link_id", linkId)
+          .in("status", ["pending", "cancelled"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        paymentRecord = data;
+      }
+    }
+
     if (!paymentRecord && externalReference?.startsWith("sublink:")) {
       const [, linkId] = externalReference.split(":");
       if (linkId) {
         const { data } = await supabase
           .from("payments")
-          .select("id, subscription_id, subscription_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
+          .select("id, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
           .eq("subscription_link_id", linkId)
           .in("status", ["pending", "cancelled"])
           .order("created_at", { ascending: false })
@@ -143,7 +159,7 @@ serve(async (req: Request) => {
       if (subId) {
         const { data } = await supabase
           .from("payments")
-          .select("id, subscription_id, subscription_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
+          .select("id, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, status, proposal_id, proposal_payment_type, payment_method")
           .eq("subscription_id", subId)
           .in("status", ["pending", "cancelled"])
           .order("created_at", { ascending: false })
@@ -190,6 +206,7 @@ serve(async (req: Request) => {
         paymentId: paymentRecord.id,
         subscriptionId: paymentRecord.subscription_id,
         subscriptionLinkId: paymentRecord.subscription_link_id,
+        paymentLinkId: paymentRecord.payment_link_id,
         proposalId: paymentRecord.proposal_id,
         proposalPaymentType: paymentRecord.proposal_payment_type,
         clientId: paymentRecord.client_id,

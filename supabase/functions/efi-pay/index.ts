@@ -485,11 +485,12 @@ serve(async (req: Request) => {
         clientDocument,
         subscriptionId,
         subscriptionLinkId,
+        paymentLinkId,
         proposalId,
         proposalPaymentType,
       } = requestBody;
 
-      if (!bodyClientId && !proposalId) {
+      if (!bodyClientId && !proposalId && !paymentLinkId) {
         throw new Error("clientId ou proposalId é obrigatório");
       }
 
@@ -531,7 +532,9 @@ serve(async (req: Request) => {
       
       // Sufixo único para referência interna
       const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const infoAdicionais = proposalId
+      const infoAdicionais = paymentLinkId
+        ? `paylink:${paymentLinkId}:${uniqueSuffix}`
+        : proposalId
         ? `proposal:${proposalId}:${proposalPaymentType || "total"}:${uniqueSuffix}`
         : subscriptionId
         ? `sub:${subscriptionId}:${uniqueSuffix}`
@@ -592,6 +595,7 @@ serve(async (req: Request) => {
         client_id: bodyClientId || null,
         subscription_id: subscriptionId || null,
         subscription_link_id: subscriptionLinkId || null,
+        payment_link_id: paymentLinkId || null,
         proposal_id: proposalId || null,
         proposal_payment_type: proposalPaymentType || null,
         amount,
@@ -722,7 +726,7 @@ serve(async (req: Request) => {
       if (dbStatus !== "pending") {
         const { data: paymentRecord } = await supabase
           .from("payments")
-          .select("id, proposal_id, proposal_payment_type, status, subscription_id, subscription_link_id, client_id, amount, description")
+          .select("id, proposal_id, proposal_payment_type, status, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description")
           .eq("transaction_id", paymentId)
           .maybeSingle();
 
@@ -739,6 +743,7 @@ serve(async (req: Request) => {
               paymentId: paymentRecord.id,
               subscriptionId: paymentRecord.subscription_id,
               subscriptionLinkId: paymentRecord.subscription_link_id,
+              paymentLinkId: paymentRecord.payment_link_id,
               proposalId: paymentRecord.proposal_id,
               proposalPaymentType: paymentRecord.proposal_payment_type,
               clientId: paymentRecord.client_id,

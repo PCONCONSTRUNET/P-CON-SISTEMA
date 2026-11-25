@@ -21,6 +21,7 @@ export interface UnifiedPixParams {
   clientDocument?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }

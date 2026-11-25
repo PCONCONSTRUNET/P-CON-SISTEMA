@@ -54,7 +54,7 @@ serve(async (req: Request) => {
       // Busca o pagamento pelo transaction_id (txid da EFI)
       const { data: paymentRecord, error: fetchError } = await supabase
         .from("payments")
-        .select("id, proposal_id, proposal_payment_type, subscription_id, subscription_link_id, client_id, amount, description, status")
+        .select("id, proposal_id, proposal_payment_type, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, status")
         .eq("transaction_id", txid)
         .maybeSingle();
 
@@ -99,6 +99,7 @@ serve(async (req: Request) => {
         paymentId: paymentRecord.id,
         subscriptionId: paymentRecord.subscription_id,
         subscriptionLinkId: paymentRecord.subscription_link_id,
+        paymentLinkId: paymentRecord.payment_link_id,
         proposalId: paymentRecord.proposal_id,
         proposalPaymentType: paymentRecord.proposal_payment_type,
         clientId: paymentRecord.client_id,

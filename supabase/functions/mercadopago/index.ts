@@ -88,6 +88,7 @@ interface CreatePixPaymentRequest {
   clientDocument?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: "entry" | "total";
 }
@@ -103,6 +104,7 @@ interface CreatePreferenceRequest {
   externalReference?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: "entry" | "total";
   maxInstallments?: number;
@@ -119,6 +121,7 @@ interface CreateCardPaymentRequest {
   clientDocument?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: "entry" | "total";
   externalReference?: string;
@@ -456,8 +459,8 @@ serve(async (req: Request) => {
       const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: true });
       const body = requestBody as CreatePixPaymentRequest;
 
-      if (!body.clientId && !body.proposalId) {
-        throw new Error("clientId ou proposalId é obrigatório");
+      if (!body.clientId && !body.proposalId && !body.paymentLinkId) {
+        throw new Error("clientId, proposalId ou paymentLinkId é obrigatório");
       }
 
       console.log("Creating PIX payment:", { 
@@ -492,7 +495,9 @@ serve(async (req: Request) => {
               }
             : undefined,
         },
-        external_reference: body.subscriptionLinkId
+        external_reference: body.paymentLinkId
+          ? `paylink:${body.paymentLinkId}`
+          : body.subscriptionLinkId
           ? `sublink:${body.subscriptionLinkId}`
           : body.subscriptionId
           ? `sub:${body.subscriptionId}`
@@ -534,6 +539,7 @@ serve(async (req: Request) => {
             client_id: body.clientId || null,
             subscription_id: body.subscriptionId || null,
             subscription_link_id: body.subscriptionLinkId || null,
+            payment_link_id: body.paymentLinkId || null,
             proposal_id: body.proposalId || null,
             proposal_payment_type: body.proposalPaymentType || null,
           })
@@ -550,6 +556,7 @@ serve(async (req: Request) => {
           client_id: body.clientId || null,
           subscription_id: body.subscriptionId || null,
           subscription_link_id: body.subscriptionLinkId || null,
+          payment_link_id: body.paymentLinkId || null,
           proposal_id: body.proposalId || null,
           proposal_payment_type: body.proposalPaymentType || null,
           amount: body.amount,
@@ -583,8 +590,8 @@ serve(async (req: Request) => {
       const { accessToken } = await loadMercadoPagoSettings(supabase, { requireActive: true });
       const body = requestBody as CreateCardPaymentRequest;
 
-      if (!body.clientId && !body.proposalId) {
-        throw new Error("clientId ou proposalId é obrigatório");
+      if (!body.clientId && !body.proposalId && !body.paymentLinkId) {
+        throw new Error("clientId, proposalId ou paymentLinkId é obrigatório");
       }
 
       if (!body.token || !body.paymentMethodId || !body.installments) {
@@ -621,7 +628,7 @@ serve(async (req: Request) => {
               }
             : undefined,
         },
-        external_reference: body.externalReference || (body.subscriptionLinkId ? `sublink:${body.subscriptionLinkId}` : body.subscriptionId ? `sub:${body.subscriptionId}` : body.description),
+        external_reference: body.externalReference || (body.paymentLinkId ? `paylink:${body.paymentLinkId}` : body.subscriptionLinkId ? `sublink:${body.subscriptionLinkId}` : body.subscriptionId ? `sub:${body.subscriptionId}` : body.description),
         notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
       };
 
@@ -650,6 +657,7 @@ serve(async (req: Request) => {
         client_id: body.clientId || null,
         subscription_id: body.subscriptionId || null,
         subscription_link_id: body.subscriptionLinkId || null,
+        payment_link_id: body.paymentLinkId || null,
         proposal_id: body.proposalId || null,
         proposal_payment_type: body.proposalPaymentType || null,
         amount: body.amount,
@@ -695,6 +703,7 @@ serve(async (req: Request) => {
           paymentId: savedPaymentId,
           subscriptionId: body.subscriptionId || null,
           subscriptionLinkId: body.subscriptionLinkId || null,
+          paymentLinkId: body.paymentLinkId || null,
           proposalId: body.proposalId || null,
           proposalPaymentType: body.proposalPaymentType || null,
           clientId: body.clientId || null,
@@ -753,7 +762,7 @@ serve(async (req: Request) => {
 
       const { data: paymentRecord } = await supabase
         .from("payments")
-        .select("id, proposal_id, proposal_payment_type, status, subscription_id, subscription_link_id, client_id, amount, description, payment_method")
+        .select("id, proposal_id, proposal_payment_type, status, subscription_id, subscription_link_id, payment_link_id, client_id, amount, description, payment_method")
         .eq("transaction_id", paymentId)
         .maybeSingle();
 
@@ -776,6 +785,7 @@ serve(async (req: Request) => {
             paymentId: paymentRecord.id,
             subscriptionId: paymentRecord.subscription_id,
             subscriptionLinkId: paymentRecord.subscription_link_id,
+            paymentLinkId: paymentRecord.payment_link_id,
             proposalId: paymentRecord.proposal_id,
             proposalPaymentType: paymentRecord.proposal_payment_type,
             clientId: paymentRecord.client_id,
@@ -830,7 +840,7 @@ serve(async (req: Request) => {
           installments: Math.min(Math.max(body.maxInstallments || 1, 1), 4),
           default_installments: Math.min(Math.max(body.maxInstallments || 1, 1), 4),
         },
-        external_reference: body.externalReference || (body.subscriptionLinkId ? `sublink:${body.subscriptionLinkId}` : body.subscriptionId ? `sub:${body.subscriptionId}` : undefined),
+        external_reference: body.externalReference || (body.paymentLinkId ? `paylink:${body.paymentLinkId}` : body.subscriptionLinkId ? `sublink:${body.subscriptionLinkId}` : body.subscriptionId ? `sub:${body.subscriptionId}` : undefined),
         notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
         back_urls: body.returnUrl
           ? {
@@ -866,6 +876,7 @@ serve(async (req: Request) => {
         client_id: body.clientId || null,
         subscription_id: body.subscriptionId || null,
         subscription_link_id: body.subscriptionLinkId || null,
+        payment_link_id: body.paymentLinkId || null,
         proposal_id: body.proposalId || null,
         proposal_payment_type: body.proposalPaymentType || null,
         amount: body.amount,

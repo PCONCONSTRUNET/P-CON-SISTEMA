@@ -22,6 +22,8 @@ const ClientForgotPassword = lazy(() => import("./pages/ClientForgotPassword"));
 const ClientResetPassword = lazy(() => import("./pages/ClientResetPassword"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const SubscriptionCheckoutPublic = lazy(() => import("./pages/SubscriptionCheckoutPublic"));
+const PublicPayDispatcher = lazy(() => import("./pages/PublicPayDispatcher"));
+const PaymentLinkPublic = lazy(() => import("./pages/PaymentLinkPublic"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Receipt = lazy(() => import("./pages/Receipt"));
@@ -66,6 +68,7 @@ const App = () => (
                       <Route path="/clients/:id" element={<AdminPages.ClientProfile />} />
                       <Route path="/subscriptions" element={<AdminPages.Subscriptions />} />
                       <Route path="/payments" element={<AdminPages.Payments />} />
+                      <Route path="/links-pagamento" element={<AdminPages.PaymentLinks />} />
                       <Route path="/invoices" element={<AdminPages.Invoices />} />
                       <Route path="/notifications" element={<AdminPages.Notifications />} />
                       <Route path="/whatsapp" element={<AdminPages.WhatsAppMessages />} />
@@ -83,7 +86,8 @@ const App = () => (
                     {/* Referral Form (Public) */}
                     <Route path="/indicar" element={<ReferralForm />} />
                     <Route path="/r/:slug" element={<ReferralForm />} />
-                    <Route path="/pagar/:id" element={<SubscriptionCheckoutPublic />} />
+                    <Route path="/pagar/:id" element={<PublicPayDispatcher />} />
+                    <Route path="/cobranca/:id" element={<PaymentLinkPublic />} />
                     <Route path="/p/:id" element={<SubscriptionCheckoutPublic />} />
                     <Route path="/pagar-assinatura/:id" element={<SubscriptionCheckoutPublic />} />
                     <Route path="/contrato/:id" element={<ContractPublic />} />

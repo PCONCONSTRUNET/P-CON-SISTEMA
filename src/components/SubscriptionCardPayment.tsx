@@ -26,6 +26,7 @@ interface SubscriptionCardPaymentProps {
   publicKey?: string | null;
   amount: number;
   installments: number;
+  maxInstallments?: number;
   onInstallmentsChange: (installments: number) => void;
   payerEmail?: string | null;
   payerName: string;
@@ -46,6 +47,7 @@ const SubscriptionCardPayment = ({
   publicKey,
   amount,
   installments,
+  maxInstallments = 4,
   onInstallmentsChange,
   payerEmail,
   payerName,
@@ -54,6 +56,7 @@ const SubscriptionCardPayment = ({
   onSubmitBrick,
   onCheckoutProFallback,
 }: SubscriptionCardPaymentProps) => {
+  const safeMaxInstallments = Math.min(Math.max(Math.round(maxInstallments || 4), 1), 4);
   const [sdkReady, setSdkReady] = useState(false);
   const [brickReady, setBrickReady] = useState(false);
   const { update: updateBrickValues } = useCardPaymentBrick();
@@ -77,11 +80,13 @@ const SubscriptionCardPayment = ({
 
   const installmentOptions = useMemo(
     () =>
-      [1, 2, 3, 4].map((option) => ({
-        value: option,
-        pricing: calculateCardPricing(amount, option),
-      })),
-    [amount],
+      [1, 2, 3, 4]
+        .filter((option) => option <= safeMaxInstallments)
+        .map((option) => ({
+          value: option,
+          pricing: calculateCardPricing(amount, option),
+        })),
+    [amount, safeMaxInstallments],
   );
 
   // Refs para callbacks e valores dinâmicos evitarem desmontagem do Brick
@@ -126,7 +131,7 @@ const SubscriptionCardPayment = ({
     () => ({
       paymentMethods: {
         minInstallments: 1,
-        maxInstallments: 4,
+        maxInstallments: safeMaxInstallments,
         types: {
           included: ['credit_card' as const],
         },

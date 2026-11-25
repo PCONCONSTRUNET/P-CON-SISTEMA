@@ -91,6 +91,7 @@ export interface CompletePaymentParams {
   paymentId: string;
   subscriptionId?: string | null;
   subscriptionLinkId?: string | null;
+  paymentLinkId?: string | null;
   proposalId?: string | null;
   proposalPaymentType?: string | null;
   clientId?: string | null;
@@ -139,8 +140,8 @@ export async function completeSubscriptionPaymentCycle(
       .eq("id", params.proposalId);
   }
 
-  // 2. Se pagamento veio sem subscription_id mas tem client_id e amount, tenta casar assinatura ativa
-  if (!subscriptionId && params.clientId && params.amount != null) {
+  // 2. Se pagamento veio sem subscription_id (e não é link avulso) mas tem client_id e amount, tenta casar assinatura ativa
+  if (!subscriptionId && !params.paymentLinkId && params.clientId && params.amount != null) {
     const { data: matchingSub } = await supabase
       .from("subscriptions")
       .select("id")
@@ -160,6 +161,21 @@ export async function completeSubscriptionPaymentCycle(
   }
 
   let result: CompletePaymentResult = { advanced: false };
+
+  // 2b. Se for link de pagamento avulso, garante baixa imediata em payment_links
+  if (params.paymentLinkId) {
+    await supabase
+      .from("payment_links")
+      .update({
+        status: "paid",
+        payment_id: params.paymentId,
+        payment_method: paymentMethod,
+        paid_at: paidAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.paymentLinkId)
+      .neq("status", "paid");
+  }
 
   // 3. Se for assinatura, executa RPC idempotente que:
   //    - marca link atual como paid

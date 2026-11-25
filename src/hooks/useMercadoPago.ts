@@ -12,6 +12,7 @@ interface CreatePixPaymentParams {
   clientDocument?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
 }
@@ -27,6 +28,7 @@ interface CreateCardPreferenceParams {
   externalReference?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
   maxInstallments?: number;
@@ -43,6 +45,7 @@ interface CreateCardPaymentParams {
   clientDocument?: string;
   subscriptionId?: string;
   subscriptionLinkId?: string;
+  paymentLinkId?: string;
   proposalId?: string;
   proposalPaymentType?: 'entry' | 'total';
   externalReference?: string;
