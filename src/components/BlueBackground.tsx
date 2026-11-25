@@ -65,7 +65,7 @@ const BlueBackground = () => {
   // Simplified mobile background
   if (isMobile) {
     return (
-      <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ backgroundColor: '#0B1C3A' }}>
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none" style={{ backgroundColor: '#0B1C3A' }}>
         {/* Static gradient base layer */}
         <div
           className="absolute inset-0"
@@ -109,7 +109,7 @@ const BlueBackground = () => {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ backgroundColor: '#0B1C3A' }}>
+    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none" style={{ backgroundColor: '#0B1C3A' }}>
       {/* Animated gradient base layer */}
       <motion.div
         className="absolute inset-0"

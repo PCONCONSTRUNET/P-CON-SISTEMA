@@ -30,7 +30,7 @@ export const AdminShell = () => {
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <MobileHeader onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+        <main className="relative z-10 lg:ml-64 pt-14 lg:pt-0 min-h-screen">
           <Suspense fallback={<div className="p-4 sm:p-6 lg:p-8 min-h-[50vh]" />}>
             <Outlet />
           </Suspense>
@@ -74,7 +74,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <MobileHeader onMenuClick={() => setSidebarOpen(true)} />
 
-      <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+      <main className="relative z-10 lg:ml-64 pt-14 lg:pt-0 min-h-screen">
         {content}
       </main>
     </div>
