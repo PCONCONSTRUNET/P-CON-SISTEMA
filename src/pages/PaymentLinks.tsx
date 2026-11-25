@@ -576,7 +576,7 @@ export default function PaymentLinks() {
           if (!open) resetForm();
         }}
       >
-        <DialogContent className="sm:max-w-lg bg-[#0b1930] border-white/15 text-white">
+        <DialogContent className="sm:max-w-md bg-[#0b1930] border-white/15 text-white p-5">
           {createdLink ? (
             <>
               <DialogHeader>
@@ -676,71 +676,75 @@ export default function PaymentLinks() {
               </DialogFooter>
             </>
           ) : (
-            <form onSubmit={handleSubmitForm} className="space-y-4">
-              <DialogHeader>
-                <DialogTitle>
+            <form onSubmit={handleSubmitForm} className="space-y-3">
+              <DialogHeader className="space-y-1">
+                <DialogTitle className="text-lg">
                   {editingLink ? 'Editar Link de Pagamento' : 'Novo Link de Pagamento'}
                 </DialogTitle>
-                <DialogDescription className="text-white/70">
-                  Defina título, descrição, valor e quais formas de pagamento deseja liberar.
+                <DialogDescription className="text-xs text-white/70">
+                  Informe título, descrição, valor e libere PIX e/ou Cartão.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="link-title">Título da cobrança *</Label>
-                  <Input
-                    id="link-title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ex: Gestão de Redes Sociais"
-                    required
-                    className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35"
-                  />
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label htmlFor="link-title" className="text-xs">
+                      Título da cobrança *
+                    </Label>
+                    <Input
+                      id="link-title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Ex: Gestão de Redes Sociais"
+                      required
+                      className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="link-amount" className="text-xs">
+                      Valor (R$) *
+                    </Label>
+                    <Input
+                      id="link-amount"
+                      value={amountInput}
+                      onChange={(e) => setAmountInput(e.target.value)}
+                      placeholder="150,00"
+                      inputMode="decimal"
+                      required
+                      className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm font-semibold"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="link-desc">Descrição (opcional)</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="link-desc" className="text-xs">
+                    Descrição (opcional)
+                  </Label>
                   <Textarea
                     id="link-desc"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Descreva o serviço ou produto entregue..."
-                    rows={3}
-                    className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 resize-none"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="link-amount">Valor (R$) *</Label>
-                  <Input
-                    id="link-amount"
-                    value={amountInput}
-                    onChange={(e) => setAmountInput(e.target.value)}
-                    placeholder="Ex: 1500,00"
-                    inputMode="decimal"
-                    required
-                    className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-base font-semibold"
+                    placeholder="Detalhes do serviço ou produto..."
+                    rows={2}
+                    className="min-h-[56px] bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 resize-none text-sm"
                   />
                 </div>
 
                 {/* Opções de PIX e Cartão */}
-                <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3.5 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                    Formas de pagamento aceitas
-                  </p>
-
+                <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-[#32BCAD]/15 border border-[#32BCAD]/30 flex items-center justify-center">
-                        <QrCode className="w-4 h-4 text-[#5ce2d3]" />
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-md bg-[#32BCAD]/15 border border-[#32BCAD]/30 flex items-center justify-center">
+                        <QrCode className="w-3.5 h-3.5 text-[#5ce2d3]" />
                       </div>
                       <div>
                         <Label htmlFor="switch-pix" className="text-sm font-medium cursor-pointer">
                           Ativar PIX
                         </Label>
-                        <p className="text-[11px] text-white/55">
-                          Libera pagamento instantâneo via QR Code e Copia e Cola
+                        <p className="text-[11px] text-white/55 leading-tight">
+                          QR Code e Copia e Cola instantâneo
                         </p>
                       </div>
                     </div>
@@ -754,16 +758,16 @@ export default function PaymentLinks() {
                   <div className="h-px bg-white/10" />
 
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/30 flex items-center justify-center">
-                        <CreditCard className="w-4 h-4 text-sky-400" />
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-md bg-sky-500/15 border border-sky-400/30 flex items-center justify-center">
+                        <CreditCard className="w-3.5 h-3.5 text-sky-400" />
                       </div>
                       <div>
                         <Label htmlFor="switch-card" className="text-sm font-medium cursor-pointer">
                           Ativar Cartão de Crédito
                         </Label>
-                        <p className="text-[11px] text-white/55">
-                          Libera pagamento parcelado no cartão (Mercado Pago)
+                        <p className="text-[11px] text-white/55 leading-tight">
+                          Pagamento parcelado via Mercado Pago
                         </p>
                       </div>
                     </div>
@@ -777,12 +781,12 @@ export default function PaymentLinks() {
                   {allowCard && (
                     <div className="pt-1 flex items-center justify-between gap-3">
                       <Label htmlFor="max-installments" className="text-xs text-white/75">
-                        Parcelamento máximo no cartão
+                        Parcelamento máximo
                       </Label>
                       <Select value={maxInstallments} onValueChange={setMaxInstallments}>
                         <SelectTrigger
                           id="max-installments"
-                          className="w-32 h-8 bg-white/[0.06] border-white/15 text-xs text-white"
+                          className="w-28 h-8 bg-white/[0.06] border-white/15 text-xs text-white"
                         >
                           <SelectValue />
                         </SelectTrigger>
@@ -797,16 +801,15 @@ export default function PaymentLinks() {
                   )}
                 </div>
 
-                <div className="flex items-start gap-2 rounded-lg bg-sky-500/10 border border-sky-400/20 px-3 py-2 text-xs text-sky-200/90">
-                  <UserCheck className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                <div className="flex items-center gap-2 rounded-lg bg-sky-500/10 border border-sky-400/20 px-2.5 py-1.5 text-[11px] text-sky-200/90">
+                  <UserCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <span>
-                    Ao abrir o link, o cliente verá o título, descrição e valor e{' '}
-                    <strong>preencherá Nome completo e CPF/CNPJ</strong> antes de gerar o PIX ou pagar no cartão.
+                    O cliente informa <strong>Nome e CPF/CNPJ</strong> antes de pagar.
                   </span>
                 </div>
               </div>
 
-              <DialogFooter className="gap-2">
+              <DialogFooter className="gap-2 pt-1">
                 <Button
                   type="button"
                   variant="ghost"

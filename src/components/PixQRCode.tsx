@@ -12,6 +12,7 @@ interface PixQRCodeProps {
   expirationDate?: string;
   paymentId: string;
   amount?: number;
+  compact?: boolean;
   onCheckStatus?: () => Promise<{ status?: string } | null>;
   onPaymentConfirmed?: () => void;
 }
@@ -23,6 +24,7 @@ const PixQRCode = ({
   expirationDate,
   paymentId,
   amount,
+  compact = false,
   onCheckStatus,
   onPaymentConfirmed,
 }: PixQRCodeProps) => {
@@ -94,39 +96,45 @@ const PixQRCode = ({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header com logo maior */}
-      <div className="flex flex-col items-center gap-2">
-        <img
-          src="/images/logo-pcon-white.png"
-          alt="P-CON CONSTRUNET"
-          className="h-14 object-contain"
-        />
-        <div className="flex items-center gap-2 mt-1">
-          <img src={pixIcon} alt="PIX" className="h-5 w-5" />
-          <h2 className="text-lg font-bold text-foreground">Pague com PIX</h2>
+    <div className={compact ? 'space-y-2.5' : 'space-y-4'}>
+      {/* Header com logo maior (oculto no modo compacto) */}
+      <div className={compact ? 'flex items-center justify-center gap-1.5' : 'flex flex-col items-center gap-2'}>
+        {!compact && (
+          <img
+            src="/images/logo-pcon-white.png"
+            alt="P-CON CONSTRUNET"
+            className="h-14 object-contain"
+          />
+        )}
+        <div className={compact ? 'flex items-center gap-1.5' : 'flex items-center gap-2 mt-1'}>
+          <img src={pixIcon} alt="PIX" className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
+          <h2 className={compact ? 'text-sm font-semibold text-foreground' : 'text-lg font-bold text-foreground'}>
+            Pague com PIX
+          </h2>
         </div>
       </div>
 
       {/* QR Code com fundo branco para escaneabilidade */}
       <div className="flex justify-center">
         {qrCodeBase64 ? (
-          <div className="bg-white p-2.5 rounded-xl">
+          <div className={compact ? 'bg-white p-2 rounded-xl shadow-sm' : 'bg-white p-2.5 rounded-xl'}>
             <img
               src={qrCodeBase64.startsWith('data:image') ? qrCodeBase64 : `data:image/png;base64,${qrCodeBase64}`}
               alt="QR Code PIX"
-              className="w-36 h-36"
+              className={compact ? 'w-32 h-32' : 'w-36 h-36'}
             />
           </div>
         ) : (
-          <div className="w-36 h-36 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-center">
+          <div
+            className={`${compact ? 'w-32 h-32' : 'w-36 h-36'} rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-center`}
+          >
             <img src={pixIcon} alt="PIX" className="w-12 h-12 opacity-30" />
           </div>
         )}
       </div>
 
       {/* Valor em destaque */}
-      {amount != null && (
+      {!compact && amount != null && (
         <div className="text-center">
           <p className="text-xs text-muted-foreground">Valor a pagar</p>
           <p className="text-2xl font-bold text-foreground">
@@ -136,21 +144,27 @@ const PixQRCode = ({
       )}
 
       {/* Instruções */}
-      <p className="text-sm text-muted-foreground text-center">
-        Escaneie o QR Code acima ou copie o código abaixo:
+      <p className={compact ? 'text-xs text-muted-foreground text-center' : 'text-sm text-muted-foreground text-center'}>
+        {compact
+          ? 'Escaneie o QR Code ou copie o código PIX:'
+          : 'Escaneie o QR Code acima ou copie o código abaixo:'}
       </p>
 
       {/* Código PIX Copia e Cola */}
       <div className="relative">
-        <div className="bg-secondary/20 rounded-xl p-3 pr-12 border border-border/20 overflow-hidden">
-          <code className="text-xs text-foreground/80 break-all line-clamp-2">
+        <div
+          className={`bg-secondary/20 rounded-xl border border-border/20 overflow-hidden ${
+            compact ? 'p-2.5 pr-11' : 'p-3 pr-12'
+          }`}
+        >
+          <code className={`text-xs text-foreground/80 break-all ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
             {qrCode}
           </code>
         </div>
         <Button
           size="icon"
           variant="ghost"
-          className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-primary/10"
+          className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 hover:bg-primary/10"
           onClick={handleCopyCode}
         >
           {copied ? (
@@ -162,13 +176,13 @@ const PixQRCode = ({
       </div>
 
       {/* Status */}
-      <div className="flex items-center justify-center gap-2 text-sm py-2">
+      <div className={`flex items-center justify-center gap-2 ${compact ? 'text-xs py-0.5' : 'text-sm py-2'}`}>
         <motion.div
           animate={{ opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 2, repeat: Infinity }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5"
         >
-          <LoaderCircle className="h-4 w-4 animate-spin text-amber-400" />
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin text-amber-400" />
           <span className="text-muted-foreground">Aguardando pagamento...</span>
         </motion.div>
       </div>
@@ -177,28 +191,29 @@ const PixQRCode = ({
       <div className="flex gap-2">
         <Button
           variant="outline"
+          size={compact ? 'sm' : 'default'}
           className="flex-1 border-primary/20 hover:bg-primary/10"
           onClick={handleCheckStatus}
           disabled={checking}
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${checking ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${checking ? 'animate-spin' : ''}`} />
           Verificar Status
         </Button>
         {ticketUrl && (
           <Button
             variant="outline"
+            size={compact ? 'sm' : 'default'}
             className="border-primary/20 hover:bg-primary/10"
             onClick={() => window.open(ticketUrl, '_blank')}
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
 
       {expirationDate && (
-        <p className="text-xs text-muted-foreground text-center">
-          O QR Code expira em{' '}
-          {new Date(expirationDate).toLocaleString('pt-BR')}
+        <p className="text-[11px] text-muted-foreground text-center">
+          Expira em {new Date(expirationDate).toLocaleString('pt-BR')}
         </p>
       )}
     </div>

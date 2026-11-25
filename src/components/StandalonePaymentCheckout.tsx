@@ -514,30 +514,30 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
 
       {/* Header compacto P-CON */}
       <header className="relative z-10 border-b border-white/10 bg-[#07152b]/75 backdrop-blur-md">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
           <img
             src="/images/logo-pcon-white.png"
             alt="P-CON"
-            className="h-7 sm:h-8 w-auto object-contain"
+            className="h-6 sm:h-7 w-auto object-contain"
           />
-          <div className="flex items-center gap-1.5 text-xs text-emerald-300/90">
-            <ShieldCheck className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-emerald-300/90">
+            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>Ambiente Seguro</span>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-2.5 sm:p-5">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="w-full max-w-lg"
+          className="w-full max-w-md"
         >
           <Card className="relative overflow-hidden bg-[#0c1d38]/90 backdrop-blur-xl border-white/15 text-white shadow-2xl">
-            <div className="h-1.5 w-full bg-gradient-to-r from-[#32BCAD] via-[#1E4FA3] to-[#009EE3]" />
+            <div className="h-1 w-full bg-gradient-to-r from-[#32BCAD] via-[#1E4FA3] to-[#009EE3]" />
 
-            <div className="p-5 sm:p-7 space-y-5">
+            <div className="p-4 sm:p-5 space-y-3.5">
               {/* Estado: Cancelado */}
               {link.status === 'cancelled' && (
                 <div className="text-center py-6 space-y-4">
@@ -615,39 +615,77 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                 <>
                   {/* Resumo padrão (oculto no modo compacto Cartão) */}
                   {!isCompactCardView ? (
-                    <div className="space-y-3 pb-4 border-b border-white/10">
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge className="bg-sky-500/15 text-sky-300 border border-sky-400/30 hover:bg-sky-500/15">
-                          Cobrança P-CON
-                        </Badge>
-                        <span className="text-xs text-white/50">
-                          {step === 'identify' ? 'Passo 1 de 2' : 'Passo 2 de 2'}
-                        </span>
-                      </div>
+                    step === 'identify' ? (
+                      <div className="space-y-2 pb-3 border-b border-white/10">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge className="bg-sky-500/15 text-sky-300 border border-sky-400/30 hover:bg-sky-500/15 text-[11px]">
+                            Cobrança P-CON
+                          </Badge>
+                          <span className="text-[11px] text-white/50">Passo 1 de 2</span>
+                        </div>
 
-                      <div>
-                        <h1 className="text-xl sm:text-2xl font-bold text-white leading-snug">
-                          {link.title}
-                        </h1>
-                        {link.description && (
-                          <p className="mt-1 text-sm text-white/70 whitespace-pre-line">
-                            {link.description}
-                          </p>
-                        )}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h1 className="text-lg sm:text-xl font-bold text-white leading-snug">
+                              {link.title}
+                            </h1>
+                            {link.description && (
+                              <p className="mt-0.5 text-xs text-white/65 line-clamp-2 whitespace-pre-line">
+                                {link.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="block text-[10px] uppercase tracking-wider text-white/50">
+                              Valor
+                            </span>
+                            <span className="text-lg sm:text-xl font-bold text-emerald-300">
+                              {formatCurrency(link.amount)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
+                    ) : (
+                      /* Cabeçalho unificado ultra-compacto no Passo 2 (Título + Valor + Pagador) */
+                      resolvedPayer && (
+                        <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5 space-y-1.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h1 className="text-sm sm:text-base font-bold text-white leading-tight truncate">
+                                {link.title}
+                              </h1>
+                              {link.description && (
+                                <p className="text-[11px] text-white/60 line-clamp-1">
+                                  {link.description}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-base sm:text-lg font-bold text-emerald-300 shrink-0 leading-tight">
+                              {formatCurrency(link.amount)}
+                            </span>
+                          </div>
 
-                      <div className="rounded-xl bg-white/[0.04] border border-white/10 px-4 py-3 flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-wider text-white/60">
-                          Valor a pagar
-                        </span>
-                        <span className="text-2xl font-bold text-white">
-                          {formatCurrency(link.amount)}
-                        </span>
-                      </div>
-                    </div>
+                          <div className="pt-1.5 border-t border-white/10 flex items-center justify-between gap-2 text-[11px]">
+                            <span className="text-white/70 truncate">
+                              {resolvedPayer.name} ·{' '}
+                              <span className="font-mono text-white/55">
+                                {resolvedPayer.document}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setStep('identify')}
+                              className="text-sky-300 hover:text-sky-200 font-medium shrink-0"
+                            >
+                              Alterar
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    )
                   ) : (
                     /* Barra ultra-compacta no modo Cartão */
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
                       <div>
                         <p className="text-xs text-white/60 truncate max-w-[230px]">
                           {link.title}
@@ -656,16 +694,16 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                           Valor no cartão ({installments}x) · base {formatCurrency(link.amount)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         {canUsePix && (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
                             onClick={() => setPaymentTab('pix')}
-                            className="h-8 text-xs border-[#32BCAD]/40 bg-[#32BCAD]/10 text-[#6ce6d8] hover:bg-[#32BCAD]/20"
+                            className="h-7 text-xs border-[#32BCAD]/40 bg-[#32BCAD]/10 text-[#6ce6d8] hover:bg-[#32BCAD]/20"
                           >
-                            <QrCode className="w-3.5 h-3.5 mr-1.5" />
+                            <QrCode className="w-3 h-3 mr-1" />
                             Trocar p/ PIX
                           </Button>
                         )}
@@ -674,9 +712,9 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                           size="sm"
                           variant="ghost"
                           onClick={() => setStep('identify')}
-                          className="h-8 text-xs text-white/65 hover:text-white hover:bg-white/10 px-2"
+                          className="h-7 text-xs text-white/65 hover:text-white hover:bg-white/10 px-2"
                         >
-                          <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+                          <ArrowLeft className="w-3 h-3 mr-1" />
                           Dados
                         </Button>
                       </div>
@@ -685,17 +723,16 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
 
                   {/* ETAPA 1: Identificação obrigatória (Nome + CPF/CNPJ) */}
                   {step === 'identify' && (
-                    <form onSubmit={handleIdentifySubmit} className="space-y-4">
-                      <div className="flex items-start gap-2.5 rounded-lg bg-sky-500/10 border border-sky-400/20 p-3 text-xs text-sky-200/90">
-                        <UserCheck className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <form onSubmit={handleIdentifySubmit} className="space-y-3">
+                      <div className="flex items-center gap-2 rounded-lg bg-sky-500/10 border border-sky-400/20 px-3 py-2 text-xs text-sky-200/90">
+                        <UserCheck className="w-4 h-4 text-sky-400 shrink-0" />
                         <span>
-                          Para sua segurança e emissão do comprovante, preencha seu{' '}
-                          <strong>Nome completo</strong> e <strong>CPF ou CNPJ</strong> antes de pagar.
+                          Informe <strong>Nome completo</strong> e <strong>CPF ou CNPJ</strong> para continuar.
                         </span>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <Label htmlFor="payer-name" className="text-white/90 text-sm">
+                      <div className="space-y-1">
+                        <Label htmlFor="payer-name" className="text-white/90 text-xs sm:text-sm">
                           Nome completo *
                         </Label>
                         <Input
@@ -705,12 +742,12 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                           placeholder="Ex: Maria da Silva"
                           autoComplete="name"
                           required
-                          className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 h-11"
+                          className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 h-10"
                         />
                       </div>
 
-                      <div className="space-y-1.5">
-                        <Label htmlFor="payer-doc" className="text-white/90 text-sm">
+                      <div className="space-y-1">
+                        <Label htmlFor="payer-doc" className="text-white/90 text-xs sm:text-sm">
                           CPF ou CNPJ *
                         </Label>
                         <Input
@@ -720,7 +757,7 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                           placeholder="000.000.000-00"
                           inputMode="numeric"
                           required
-                          className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 h-11 font-mono"
+                          className="bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 h-10 font-mono"
                         />
                       </div>
 
@@ -734,7 +771,7 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                       <Button
                         type="submit"
                         disabled={preparingPayer}
-                        className="w-full h-11 bg-[#1E4FA3] hover:bg-[#1a448e] text-white font-semibold"
+                        className="w-full h-10 bg-[#1E4FA3] hover:bg-[#1a448e] text-white font-semibold"
                       >
                         {preparingPayer ? (
                           <>
@@ -753,50 +790,32 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
 
                   {/* ETAPA 2: Pagamento */}
                   {step === 'payment' && resolvedPayer && (
-                    <div className="space-y-4">
-                      {!isCompactCardView && (
-                        <div className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.04] border border-white/10 px-3 py-2 text-xs">
-                          <div className="min-w-0">
-                            <p className="text-white font-medium truncate">{resolvedPayer.name}</p>
-                            <p className="text-white/55 font-mono">{resolvedPayer.document}</p>
-                          </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setStep('identify')}
-                            className="h-7 px-2 text-xs text-sky-300 hover:text-sky-200 hover:bg-white/10"
-                          >
-                            Alterar
-                          </Button>
-                        </div>
-                      )}
-
+                    <div className="space-y-3">
                       {/* Abas de seleção (só aparecem se PIX e Cartão estiverem ambos liberados no link e ativos) */}
                       {canUsePix && canUseCard && !isCompactCardView && (
-                        <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-white/[0.05] border border-white/10">
+                        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-white/[0.05] border border-white/10">
                           <button
                             type="button"
                             onClick={() => setPaymentTab('pix')}
-                            className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+                            className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                               paymentTab === 'pix'
                                 ? 'bg-[#32BCAD] text-[#052320] shadow'
                                 : 'text-white/75 hover:text-white'
                             }`}
                           >
-                            <QrCode className="w-4 h-4" />
+                            <QrCode className="w-3.5 h-3.5" />
                             PIX
                           </button>
                           <button
                             type="button"
                             onClick={() => setPaymentTab('card')}
-                            className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+                            className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                               paymentTab === 'card'
                                 ? 'bg-[#009EE3] text-white shadow'
                                 : 'text-white/75 hover:text-white'
                             }`}
                           >
-                            <CreditCard className="w-4 h-4" />
+                            <CreditCard className="w-3.5 h-3.5" />
                             Cartão
                           </button>
                         </div>
@@ -804,20 +823,20 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
 
                       {/* Aviso caso nenhum método configurado esteja disponível no gateway */}
                       {!statusLoading && !canUsePix && !canUseCard && (
-                        <div className="rounded-xl bg-amber-500/15 border border-amber-400/30 p-4 text-center space-y-2 text-sm text-amber-200">
-                          <AlertCircle className="w-6 h-6 mx-auto text-amber-400" />
+                        <div className="rounded-xl bg-amber-500/15 border border-amber-400/30 p-3.5 text-center space-y-1.5 text-xs text-amber-200">
+                          <AlertCircle className="w-5 h-5 mx-auto text-amber-400" />
                           <p className="font-medium">
                             Nenhum meio de pagamento ativo está disponível para este link no momento.
                           </p>
-                          <p className="text-xs text-amber-200/75">
+                          <p className="text-amber-200/75">
                             Entre em contato com o suporte para concluir seu pagamento.
                           </p>
                         </div>
                       )}
 
                       {statusLoading && (
-                        <div className="py-8 flex flex-col items-center justify-center gap-2 text-white/70 text-sm">
-                          <LoaderCircle className="w-6 h-6 animate-spin text-sky-400" />
+                        <div className="py-6 flex flex-col items-center justify-center gap-2 text-white/70 text-xs">
+                          <LoaderCircle className="w-5 h-5 animate-spin text-sky-400" />
                           <span>Carregando opções de pagamento...</span>
                         </div>
                       )}
@@ -826,17 +845,18 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
                       {!statusLoading && paymentTab === 'pix' && canUsePix && (
                         <div>
                           {generatingPix && !pixData && (
-                            <div className="py-10 flex flex-col items-center justify-center gap-3 text-white/75">
-                              <LoaderCircle className="w-8 h-8 animate-spin text-[#32BCAD]" />
-                              <p className="text-sm">Gerando código PIX...</p>
+                            <div className="py-8 flex flex-col items-center justify-center gap-2.5 text-white/75">
+                              <LoaderCircle className="w-7 h-7 animate-spin text-[#32BCAD]" />
+                              <p className="text-xs sm:text-sm">Gerando código PIX...</p>
                             </div>
                           )}
 
                           {pixError && !pixData && !generatingPix && (
-                            <div className="rounded-xl bg-red-500/15 border border-red-400/30 p-4 text-center space-y-3">
-                              <p className="text-sm text-red-200">{pixError}</p>
+                            <div className="rounded-xl bg-red-500/15 border border-red-400/30 p-3.5 text-center space-y-2.5">
+                              <p className="text-xs sm:text-sm text-red-200">{pixError}</p>
                               <Button
                                 type="button"
+                                size="sm"
                                 onClick={() => void generatePixForPayer(resolvedPayer)}
                                 className="bg-[#32BCAD] hover:bg-[#2aa89a] text-[#052320] font-semibold"
                               >
@@ -847,6 +867,7 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
 
                           {pixData && (
                             <PixQRCode
+                              compact
                               qrCode={pixData.qrCode}
                               qrCodeBase64={pixData.qrCodeBase64}
                               ticketUrl={pixData.ticketUrl}
