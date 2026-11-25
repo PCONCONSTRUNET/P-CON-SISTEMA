@@ -149,7 +149,7 @@ export default function WhatsAppMessages() {
         .from('whatsapp_messages')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(150);
 
       if (error) throw error;
       setMessages(data || []);

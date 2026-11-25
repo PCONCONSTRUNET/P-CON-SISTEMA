@@ -8,7 +8,7 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-const SUPABASE_REQUEST_TIMEOUT_MS = 20_000;
+const SUPABASE_REQUEST_TIMEOUT_MS = 12_000;
 
 const fetchWithTimeout: typeof fetch = async (input, init) => {
   const controller = new AbortController();
@@ -45,6 +45,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 2,
+    },
   },
   global: {
     fetch: fetchWithTimeout,

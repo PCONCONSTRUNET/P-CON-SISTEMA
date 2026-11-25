@@ -1,52 +1,75 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  useOptionalGlobalData,
+  type Expense,
+  type ExpenseInput,
+} from '@/contexts/GlobalDataContext';
 import { toast } from 'sonner';
 
-export interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  category: string;
-  expense_type: 'fixed' | 'single';
-  due_date: string | null;
-  paid_at: string | null;
-  status: string;
-  recurrence: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ExpenseInput {
-  description: string;
-  amount: number;
-  category: string;
-  expense_type: 'fixed' | 'single';
-  due_date?: string;
-  status?: string;
-  recurrence?: string;
-  notes?: string;
-}
+export type { Expense, ExpenseInput };
 
 export const useExpenses = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
+  const globalData = useOptionalGlobalData();
+  const [fallbackExpenses, setFallbackExpenses] = useState<Expense[]>([]);
+  const [fallbackLoading, setFallbackLoading] = useState(!globalData);
+  const mountedRef = useRef(true);
 
-  const fetchExpenses = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('created_at', { ascending: false });
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-    if (error) {
-      toast.error('Erro ao carregar gastos');
-      console.error(error);
-    } else {
-      setExpenses((data as unknown as Expense[]) || []);
+  const ensureLoaded = globalData?.ensureExpensesLoaded;
+  useEffect(() => {
+    if (ensureLoaded) {
+      void ensureLoaded();
     }
-    setLoading(false);
-  };
+  }, [ensureLoaded]);
+
+  const fetchFallbackExpenses = useCallback(async () => {
+    setFallbackLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (mountedRef.current) {
+        setFallbackExpenses((data as unknown as Expense[]) || []);
+      }
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+      // Evita toast fantasma caso o usuário já tenha navegado para outra aba
+      if (mountedRef.current) {
+        toast.error('Erro ao carregar gastos');
+      }
+    } finally {
+      if (mountedRef.current) {
+        setFallbackLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (globalData) return;
+    void fetchFallbackExpenses();
+  }, [Boolean(globalData), fetchFallbackExpenses]);
+
+  if (globalData) {
+    return {
+      expenses: globalData.expenses,
+      loading: globalData.loadingExpenses,
+      addExpense: globalData.addExpense,
+      updateExpense: globalData.updateExpense,
+      deleteExpense: globalData.deleteExpense,
+      markAsPaid: globalData.markExpenseAsPaid,
+      fetchExpenses: globalData.fetchExpenses,
+    };
+  }
 
   const addExpense = async (input: ExpenseInput) => {
     const { error } = await supabase
@@ -59,7 +82,7 @@ export const useExpenses = () => {
       return false;
     }
     toast.success('Gasto adicionado!');
-    fetchExpenses();
+    void fetchFallbackExpenses();
     return true;
   };
 
@@ -75,7 +98,7 @@ export const useExpenses = () => {
       return false;
     }
     toast.success('Gasto atualizado!');
-    fetchExpenses();
+    void fetchFallbackExpenses();
     return true;
   };
 
@@ -91,7 +114,7 @@ export const useExpenses = () => {
       return false;
     }
     toast.success('Gasto excluído!');
-    fetchExpenses();
+    void fetchFallbackExpenses();
     return true;
   };
 
@@ -99,9 +122,13 @@ export const useExpenses = () => {
     return updateExpense(id, { status: 'paid', paid_at: new Date().toISOString() });
   };
 
-  useEffect(() => {
-    fetchExpenses();
-  }, []);
-
-  return { expenses, loading, addExpense, updateExpense, deleteExpense, markAsPaid, fetchExpenses };
+  return {
+    expenses: fallbackExpenses,
+    loading: fallbackLoading,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    markAsPaid,
+    fetchExpenses: fetchFallbackExpenses,
+  };
 };

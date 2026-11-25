@@ -55,13 +55,18 @@ export function buildClientSideFallbackToken(title: string): string {
   return `${slug}-${rand}`;
 }
 
+let cachedLinks: PaymentLinkRecord[] | null = null;
+
 export function usePaymentLinks() {
-  const [links, setLinks] = useState<PaymentLinkRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [links, setLinks] = useState<PaymentLinkRecord[]>(() => cachedLinks || []);
+  const [loading, setLoading] = useState(() => cachedLinks === null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchLinks = useCallback(async () => {
     setError(null);
+    if (cachedLinks === null) {
+      setLoading(true);
+    }
     try {
       const { data, error: fetchError } = await (supabase as any)
         .from('payment_links')
@@ -69,15 +74,19 @@ export function usePaymentLinks() {
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
-      setLinks((data || []) as PaymentLinkRecord[]);
+      const list = (data || []) as PaymentLinkRecord[];
+      cachedLinks = list;
+      setLinks(list);
     } catch (err: any) {
       console.error('Error fetching payment links:', err);
+      const msg = String(err?.message || '');
       const missingTable =
-        err?.code === 'PGRST205' || String(err?.message || '').includes('payment_links');
+        err?.code === 'PGRST205' ||
+        (msg.includes('payment_links') && msg.toLowerCase().includes('schema cache'));
       setError(
         missingTable
           ? 'A tabela payment_links ainda não foi criada no Supabase. Execute a migration SQL para ativar.'
-          : 'Não foi possível carregar os links de pagamento.',
+          : 'Banco de dados temporariamente indisponível ou lento. Exibindo últimos dados em cache e tentando reconectar.',
       );
     } finally {
       setLoading(false);
@@ -94,7 +103,7 @@ export function usePaymentLinks() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           void fetchLinks();
-        }, 800);
+        }, 1500);
       })
       .subscribe();
 
@@ -124,7 +133,11 @@ export function usePaymentLinks() {
 
       if (insertError) throw insertError;
       const created = data as PaymentLinkRecord;
-      setLinks((prev) => [created, ...prev.filter((l) => l.id !== created.id)]);
+      setLinks((prev) => {
+        const next = [created, ...prev.filter((l) => l.id !== created.id)];
+        cachedLinks = next;
+        return next;
+      });
       return created;
     } catch (err: any) {
       console.error('Error creating payment link:', err);
@@ -152,7 +165,11 @@ export function usePaymentLinks() {
 
       if (updateError) throw updateError;
       const updated = data as PaymentLinkRecord;
-      setLinks((prev) => prev.map((l) => (l.id === id ? updated : l)));
+      setLinks((prev) => {
+        const next = prev.map((l) => (l.id === id ? updated : l));
+        cachedLinks = next;
+        return next;
+      });
       return updated;
     } catch (err: any) {
       console.error('Error updating payment link:', err);
@@ -169,7 +186,11 @@ export function usePaymentLinks() {
         .eq('id', id);
 
       if (deleteError) throw deleteError;
-      setLinks((prev) => prev.filter((l) => l.id !== id));
+      setLinks((prev) => {
+        const next = prev.filter((l) => l.id !== id);
+        cachedLinks = next;
+        return next;
+      });
       toast.success('Link de pagamento removido!');
       return true;
     } catch (err: any) {

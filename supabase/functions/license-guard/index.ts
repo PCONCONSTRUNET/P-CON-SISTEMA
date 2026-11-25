@@ -49,12 +49,19 @@ serve(async (req: Request) => {
 
     console.log(`Verificando Cliente: ${client.name} (ID: ${client.id})`);
 
-    // 2. Verificar se a ASSINATURA está vencida
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("next_payment, status")
-      .eq("client_id", client.id)
-      .maybeSingle();
+    // 2 e 3 em paralelo: reduzir conexões e latência no Postgres
+    const [{ data: subscription }, { data: allPending }] = await Promise.all([
+      supabase
+        .from("subscriptions")
+        .select("next_payment, status")
+        .eq("client_id", client.id)
+        .maybeSingle(),
+      supabase
+        .from("payments")
+        .select("id, due_date")
+        .eq("client_id", client.id)
+        .neq("status", "paid"),
+    ]);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -71,13 +78,6 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Verificar se existem PAGAMENTOS gerados e não pagos
-    const { data: allPending } = await supabase
-      .from("payments")
-      .select("id, due_date")
-      .eq("client_id", client.id)
-      .neq("status", "paid");
-
     const blockedByPayment = allPending?.some(p => {
       const dueDate = new Date(p.due_date);
       const diffTime = today.getTime() - dueDate.getTime();
@@ -93,7 +93,13 @@ serve(async (req: Request) => {
         clientName: client.name,
         reason: isBlocked ? (blockedBySubscription ? "subscription_overdue" : "payment_overdue") : null,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60, s-maxage=120",
+        },
+      }
     );
 
   } catch (error: any) {

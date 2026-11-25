@@ -112,12 +112,39 @@ export interface AppSettings {
   pro_labore_fixed: number;
 }
 
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
+  expense_type: 'fixed' | 'single';
+  due_date: string | null;
+  paid_at: string | null;
+  status: string;
+  recurrence: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExpenseInput {
+  description: string;
+  amount: number;
+  category: string;
+  expense_type: 'fixed' | 'single';
+  due_date?: string;
+  status?: string;
+  recurrence?: string;
+  notes?: string;
+}
+
 interface GlobalDataContextType {
   // Data
   clients: Client[];
   subscriptions: Subscription[];
   payments: Payment[];
   invoices: Invoice[];
+  expenses: Expense[];
   whatsappTemplates: WhatsAppTemplate[];
   whatsappSettings: WhatsAppSettings | null;
   appSettings: AppSettings | null;
@@ -127,6 +154,7 @@ interface GlobalDataContextType {
   loadingSubscriptions: boolean;
   loadingPayments: boolean;
   loadingInvoices: boolean;
+  loadingExpenses: boolean;
   loadingTemplates: boolean;
   loadingAppSettings: boolean;
   clientsError: string | null;
@@ -136,6 +164,8 @@ interface GlobalDataContextType {
   refetchSubscriptions: () => Promise<void>;
   refetchPayments: () => Promise<void>;
   refetchInvoices: () => Promise<void>;
+  ensureExpensesLoaded: () => Promise<void>;
+  fetchExpenses: () => Promise<void>;
   refetchAll: () => Promise<void>;
   
   // CRUD operations - Clients
@@ -157,6 +187,12 @@ interface GlobalDataContextType {
   addInvoice: (invoice: Omit<Invoice, 'id' | 'issued_at'>) => Promise<Invoice | null>;
   deleteInvoice: (id: string) => Promise<boolean>;
 
+  // CRUD operations - Expenses
+  addExpense: (input: ExpenseInput) => Promise<boolean>;
+  updateExpense: (id: string, updates: Partial<ExpenseInput & { paid_at: string; status: string }>) => Promise<boolean>;
+  deleteExpense: (id: string) => Promise<boolean>;
+  markExpenseAsPaid: (id: string) => Promise<boolean>;
+
   // WhatsApp
   updateWhatsAppTemplate: (id: string, updates: Partial<WhatsAppTemplate>) => Promise<boolean>;
   updateWhatsAppSettings: (updates: Partial<WhatsAppSettings>) => Promise<boolean>;
@@ -175,6 +211,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   const [rawSubscriptions, setRawSubscriptions] = useState<Subscription[]>([]);
   const [rawPayments, setRawPayments] = useState<Payment[]>([]);
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([]);
   const [whatsappSettings, setWhatsappSettings] = useState<WhatsAppSettings | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
@@ -183,11 +220,14 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(isAuthenticated);
   const [loadingPayments, setLoadingPayments] = useState(isAuthenticated);
   const [loadingInvoices, setLoadingInvoices] = useState(isAuthenticated);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(isAuthenticated);
   const [loadingAppSettings, setLoadingAppSettings] = useState(isAuthenticated);
   const [clientsError, setClientsError] = useState<string | null>(null);
 
   const inFlightRef = useRef<Record<string, boolean>>({});
+  const expensesLoadedRef = useRef(false);
+  const dbCooldownUntilRef = useRef(0);
   const clientsCountRef = useRef(0);
   const clientsErrorRef = useRef<string | null>(null);
   const lastRecoveryAtRef = useRef(0);
@@ -203,18 +243,43 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
   const runWithQueryResilience = useCallback(
     async <T,>(operation: () => PromiseLike<T>, label: string, retries = 1): Promise<T> => {
+      // Circuit breaker: se o banco acabou de falhar/timeout, evita rajada de retries paralelos
+      const effectiveRetries = Date.now() < dbCooldownUntilRef.current ? 0 : retries;
       let lastError: unknown;
-      for (let attempt = 0; attempt <= retries; attempt++) {
+      for (let attempt = 0; attempt <= effectiveRetries; attempt++) {
         try {
-          return await Promise.race<T>([
+          const result = await Promise.race<T>([
             Promise.resolve(operation()),
             new Promise<T>((_, reject) =>
               setTimeout(() => reject(new Error(`Timeout after 12s fetching ${label}`)), 12_000),
             ),
           ]);
+
+          const maybeError =
+            result && typeof result === 'object' && 'error' in result
+              ? (result as { error?: { message?: string } | null }).error
+              : null;
+
+          if (maybeError?.message) {
+            const msg = maybeError.message.toLowerCase();
+            const isInfraError =
+              msg.includes('521') ||
+              msg.includes('502') ||
+              msg.includes('503') ||
+              msg.includes('504') ||
+              msg.includes('timeout') ||
+              msg.includes('failed to fetch') ||
+              msg.includes('web server is down');
+            if (isInfraError) {
+              throw maybeError;
+            }
+          }
+
+          return result;
         } catch (err) {
           lastError = err;
-          if (attempt < retries) {
+          dbCooldownUntilRef.current = Date.now() + 15_000;
+          if (attempt < effectiveRetries) {
             await new Promise((res) => setTimeout(res, 1_100));
           }
         }
@@ -468,8 +533,123 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAuthenticated, runWithQueryResilience]);
 
+  const fetchExpenses = useCallback(async () => {
+    if (!isAuthenticated || inFlightRef.current.expenses) return;
+    inFlightRef.current.expenses = true;
+    if (!expensesLoadedRef.current) {
+      setLoadingExpenses(true);
+    }
+    try {
+      const { data, error } = await runWithQueryResilience(
+        () =>
+          supabase
+            .from('expenses')
+            .select('*')
+            .order('created_at', { ascending: false }),
+        'expenses',
+        0,
+      );
+      if (error) throw error;
+      setExpenses((data as unknown as Expense[]) || []);
+      expensesLoadedRef.current = true;
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+      // Só exibe toast se ainda não havia dados em cache; evita spam em navegação rápida
+      if (!expensesLoadedRef.current) {
+        toast.error('Erro ao carregar gastos — banco indisponível no momento');
+      }
+    } finally {
+      inFlightRef.current.expenses = false;
+      setLoadingExpenses(false);
+    }
+  }, [isAuthenticated, runWithQueryResilience]);
+
+  const ensureExpensesLoaded = useCallback(async () => {
+    if (!isAuthenticated || expensesLoadedRef.current || inFlightRef.current.expenses) return;
+    if (Date.now() < dbCooldownUntilRef.current) return;
+    await fetchExpenses();
+  }, [isAuthenticated, fetchExpenses]);
+
+  const addExpense = useCallback(
+    async (input: ExpenseInput): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert([input as any])
+        .select('*')
+        .single();
+
+      if (error) {
+        toast.error('Erro ao adicionar gasto');
+        console.error(error);
+        return false;
+      }
+      if (data) {
+        setExpenses((prev) => [data as unknown as Expense, ...prev]);
+        expensesLoadedRef.current = true;
+      } else {
+        void fetchExpenses();
+      }
+      toast.success('Gasto adicionado!');
+      return true;
+    },
+    [fetchExpenses],
+  );
+
+  const updateExpense = useCallback(
+    async (
+      id: string,
+      updates: Partial<ExpenseInput & { paid_at: string; status: string }>,
+    ): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from('expenses')
+        .update(updates as any)
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) {
+        toast.error('Erro ao atualizar gasto');
+        console.error(error);
+        return false;
+      }
+      if (data) {
+        setExpenses((prev) => prev.map((e) => (e.id === id ? (data as unknown as Expense) : e)));
+      } else {
+        void fetchExpenses();
+      }
+      toast.success('Gasto atualizado!');
+      return true;
+    },
+    [fetchExpenses],
+  );
+
+  const deleteExpense = useCallback(
+    async (id: string): Promise<boolean> => {
+      const { error } = await supabase.from('expenses').delete().eq('id', id);
+
+      if (error) {
+        toast.error('Erro ao excluir gasto');
+        console.error(error);
+        return false;
+      }
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
+      toast.success('Gasto excluído!');
+      return true;
+    },
+    [],
+  );
+
+  const markExpenseAsPaid = useCallback(
+    async (id: string): Promise<boolean> => {
+      return updateExpense(id, { status: 'paid', paid_at: new Date().toISOString() });
+    },
+    [updateExpense],
+  );
+
   const refetchAll = useCallback(async () => {
     if (!isAuthenticated) return;
+    if (Date.now() < dbCooldownUntilRef.current && clientsCountRef.current > 0) return;
+
     if (clientsCountRef.current === 0) {
       setLoadingClients(true);
       setLoadingSubscriptions(true);
@@ -947,10 +1127,10 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
     debounceTimers.current[key] = setTimeout(() => {
       void fetchFn();
-    }, 1200);
+    }, 1800);
   }, []);
 
-  // Initialize and set up a single multiplexed realtime channel ONLY when admin is authenticated
+  // Initialize and set up a minimal realtime channel ONLY when admin is authenticated
   useEffect(() => {
     if (!isAuthenticated) {
       Object.values(debounceTimers.current).forEach(clearTimeout);
@@ -958,6 +1138,8 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       setRawSubscriptions([]);
       setRawPayments([]);
       setRawInvoices([]);
+      setExpenses([]);
+      expensesLoadedRef.current = false;
       setWhatsappTemplates([]);
       setWhatsappSettings(null);
       setAppSettings(null);
@@ -966,6 +1148,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       setLoadingSubscriptions(false);
       setLoadingPayments(false);
       setLoadingInvoices(false);
+      setLoadingExpenses(false);
       setLoadingTemplates(false);
       setLoadingAppSettings(false);
       return;
@@ -975,21 +1158,27 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
     const triggerRecoveryRefetch = () => {
       const now = Date.now();
-      if (now - lastRecoveryAtRef.current < 10_000) return;
+      if (now < dbCooldownUntilRef.current) return;
+      if (now - lastRecoveryAtRef.current < 20_000) return;
       if (clientsCountRef.current === 0 || clientsErrorRef.current !== null) {
         lastRecoveryAtRef.current = now;
         void refetchAll();
       }
     };
 
+    // Ouve somente pagamentos em tempo real (menor uso de WAL/RAM no Postgres);
+    // quando um pagamento muda para 'paid', sincroniza faturas e assinaturas juntas.
     const adminSyncChannel = supabase
       .channel('global-admin-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => debouncedFetch('clients', fetchClients))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => debouncedFetch('subscriptions', fetchSubscriptions))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => debouncedFetch('payments', fetchPayments))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => debouncedFetch('invoices', fetchInvoices))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => debouncedFetch('whatsapp', fetchWhatsApp))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => debouncedFetch('appSettings', fetchAppSettings))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => {
+        debouncedFetch('payments', async () => {
+          await fetchPayments();
+          const newStatus = (payload.new as { status?: string } | null)?.status;
+          if (newStatus === 'paid') {
+            await Promise.all([fetchInvoices(), fetchSubscriptions()]);
+          }
+        });
+      })
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           realtimeDegradedRef.current = true;
@@ -1006,7 +1195,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       Object.values(debounceTimers.current).forEach(clearTimeout);
       supabase.removeChannel(adminSyncChannel);
     };
-  }, [isAuthenticated, refetchAll, debouncedFetch, fetchClients, fetchSubscriptions, fetchPayments, fetchInvoices, fetchWhatsApp, fetchAppSettings]);
+  }, [isAuthenticated, refetchAll, debouncedFetch, fetchSubscriptions, fetchPayments, fetchInvoices]);
 
   return (
     <GlobalDataContext.Provider
@@ -1015,6 +1204,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         subscriptions,
         payments,
         invoices,
+        expenses,
         whatsappTemplates,
         whatsappSettings,
         appSettings,
@@ -1022,6 +1212,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         loadingSubscriptions,
         loadingPayments,
         loadingInvoices,
+        loadingExpenses,
         loadingTemplates,
         loadingAppSettings,
         clientsError,
@@ -1029,6 +1220,8 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         refetchSubscriptions: fetchSubscriptions,
         refetchPayments: fetchPayments,
         refetchInvoices: fetchInvoices,
+        ensureExpensesLoaded,
+        fetchExpenses,
         refetchAll,
         addClient,
         updateClient,
@@ -1041,6 +1234,10 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         deletePayment,
         addInvoice,
         deleteInvoice,
+        addExpense,
+        updateExpense,
+        deleteExpense,
+        markExpenseAsPaid,
         updateWhatsAppTemplate,
         updateWhatsAppSettings,
         updateAppSettings,
