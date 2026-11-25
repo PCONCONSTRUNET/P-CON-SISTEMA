@@ -90,7 +90,7 @@ const Subscriptions = () => {
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [whatsappParams, setWhatsappParams] = useState<WhatsAppSendParams | null>(null);
 
-  const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription, refetchSubscriptions } = useGlobalData();
+  const { subscriptions, clients, loadingSubscriptions: loading, addSubscription, updateSubscription, deleteSubscription, refetchSubscriptions, refetchPayments, refetchInvoices } = useGlobalData();
 
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
   const { sendReminderIfNeeded } = useSubscriptionReminder();
@@ -194,40 +194,68 @@ const Subscriptions = () => {
       return;
     }
 
+    const amountValue = parseFloat(newManualPayment.value);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      toast.error('Informe um valor válido');
+      return;
+    }
+
+    const paidAtIso = new Date(newManualPayment.paidAt + 'T12:00:00').toISOString();
+    const description = newManualPayment.description || `Pagamento manual de ${selectedClient.name}`;
+
     setIsRegisteringPayment(true);
     try {
-      // 1. Inserir pagamento como pago
-      const { data: payment, error: pError } = await supabase
-        .from('payments')
-        .insert({
-          client_id: selectedClient.id,
-          amount: parseFloat(newManualPayment.value),
-          status: 'paid',
-          payment_method: newManualPayment.paymentMethod,
-          description: newManualPayment.description || `Pagamento manual de ${selectedClient.name}`,
-          paid_at: new Date(newManualPayment.paidAt + 'T12:00:00').toISOString(),
-        })
-        .select()
-        .single();
+      // Caminho rápido: 1 única RPC atômica (insere pagamento + fatura na mesma transação)
+      const { error: rpcError } = await (supabase as any).rpc('register_manual_payment', {
+        p_client_id: selectedClient.id,
+        p_amount: amountValue,
+        p_payment_method: newManualPayment.paymentMethod,
+        p_description: description,
+        p_paid_at: paidAtIso,
+      });
 
-      if (pError) throw pError;
+      if (rpcError) {
+        const isMissingRpc =
+          rpcError.code === 'PGRST202' ||
+          String(rpcError.message || '').includes('register_manual_payment');
+        if (!isMissingRpc) throw rpcError;
 
-      // 2. Gerar fatura (Invoice)
-      const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, '0');
-      const invoiceNumber = `MANUAL-${year}${month}-${payment.id.slice(-4).toUpperCase()}`;
+        // Fallback caso a migration SQL ainda não tenha sido aplicada
+        const { data: payment, error: pError } = await supabase
+          .from('payments')
+          .insert({
+            client_id: selectedClient.id,
+            amount: amountValue,
+            status: 'paid',
+            payment_method: newManualPayment.paymentMethod,
+            description,
+            paid_at: paidAtIso,
+          })
+          .select('id, amount, description')
+          .single();
 
-      await supabase
-        .from('invoices')
-        .insert({
-          payment_id: payment.id,
-          client_id: selectedClient.id,
-          number: invoiceNumber,
-          amount: payment.amount,
-          status: 'issued',
-          description: payment.description,
-        });
+        if (pError) throw pError;
 
+        const year = new Date().getFullYear();
+        const month = String(new Date().getMonth() + 1).padStart(2, '0');
+        const invoiceNumber = `MANUAL-${year}${month}-${payment.id.slice(-4).toUpperCase()}`;
+
+        const { error: invError } = await supabase
+          .from('invoices')
+          .insert({
+            payment_id: payment.id,
+            client_id: selectedClient.id,
+            number: invoiceNumber,
+            amount: payment.amount,
+            status: 'issued',
+            description: payment.description,
+          });
+
+        if (invError) throw invError;
+      }
+
+      void refetchPayments();
+      void refetchInvoices();
       toast.success('Pagamento registrado com sucesso!');
       setIsDialogOpen(false);
       setNewManualPayment({
