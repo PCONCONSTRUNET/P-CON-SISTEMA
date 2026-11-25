@@ -3,7 +3,9 @@
 // A Edge Function whatsapp-auto-reminders tem verify_jwt=false, então a anon key é suficiente.
 
 const SUPABASE_URL = 'https://bevahgtmcdicyhjnrylk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjbmFwdGVmY2Vib3JhdHhoem94Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0ODM2ODksImV4cCI6MjA4MTA1OTY4OX0.0VYNRkLGDPGdum2sGLAWPDZJlR7ZWNOCuxhwKmr3bW4';
+const SUPABASE_ANON_KEY =
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  'sb_publishable_ziYHN3SayMmRYxusCm7qQQ_-rqQG7gM';
 
 export default async function handler(req, res) {
   // Aceita GET (Vercel Cron) ou POST (chamada manual)

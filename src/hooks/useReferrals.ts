@@ -75,7 +75,8 @@ export interface ReferralStats {
   totalToPay: number;
 }
 
-export function useReferrals() {
+export function useReferrals(options: { lightweight?: boolean; enabled?: boolean } = {}) {
+  const { lightweight = false, enabled = true } = options;
   const [settings, setSettings] = useState<ReferralSettings | null>(null);
   const [links, setLinks] = useState<ReferralLink[]>([]);
   const [clicks, setClicks] = useState<ReferralClick[]>([]);
@@ -90,9 +91,10 @@ export function useReferrals() {
     totalPaid: 0,
     totalToPay: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   const fetchSettings = useCallback(async () => {
+    if (lightweight) return null;
     const { data, error } = await supabase
       .from('referral_settings')
       .select('*')
@@ -105,91 +107,95 @@ export function useReferrals() {
     
     setSettings(data);
     return data;
-  }, []);
+  }, [lightweight]);
 
   const fetchLinks = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('referral_links')
-      .select('*, clients(name, email)')
-      .order('created_at', { ascending: false });
+    const query = lightweight
+      ? supabase.from('referral_links').select('id, client_id')
+      : supabase.from('referral_links').select('*, clients(name, email)').order('created_at', { ascending: false });
+
+    const { data, error } = await query;
     
     if (error) {
       console.error('Error fetching referral links:', error);
       return [];
     }
     
-    const formattedData = data?.map(link => ({
+    const formattedData = (data || []).map((link: any) => ({
       ...link,
       client: link.clients as { name: string; email: string } | undefined,
-    })) || [];
+    }));
     
-    setLinks(formattedData);
-    return formattedData;
-  }, []);
+    setLinks(formattedData as ReferralLink[]);
+    return formattedData as ReferralLink[];
+  }, [lightweight]);
 
   const fetchClicks = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('referral_clicks')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const query = lightweight
+      ? supabase.from('referral_clicks').select('referral_link_id')
+      : supabase.from('referral_clicks').select('*').order('created_at', { ascending: false });
+
+    const { data, error } = await query;
     
     if (error) {
       console.error('Error fetching referral clicks:', error);
       return [];
     }
     
-    setClicks(data || []);
-    return data || [];
-  }, []);
+    setClicks((data || []) as ReferralClick[]);
+    return (data || []) as ReferralClick[];
+  }, [lightweight]);
 
   const fetchLeads = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('referral_leads')
-      .select('*, referral_links(*, clients(name, email))')
-      .order('created_at', { ascending: false });
+    const query = lightweight
+      ? supabase.from('referral_leads').select('referral_link_id, is_converted')
+      : supabase.from('referral_leads').select('*, referral_links(*, clients(name, email))').order('created_at', { ascending: false });
+
+    const { data, error } = await query;
     
     if (error) {
       console.error('Error fetching referral leads:', error);
       return [];
     }
     
-    const formattedData = data?.map(lead => ({
+    const formattedData = (data || []).map((lead: any) => ({
       ...lead,
       referral_link: lead.referral_links ? {
         ...lead.referral_links,
-        client: (lead.referral_links as any).clients as { name: string; email: string } | undefined,
+        client: lead.referral_links.clients as { name: string; email: string } | undefined,
       } : undefined,
-    })) || [];
+    }));
     
-    setLeads(formattedData);
-    return formattedData;
-  }, []);
+    setLeads(formattedData as ReferralLead[]);
+    return formattedData as ReferralLead[];
+  }, [lightweight]);
 
   const fetchRewards = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('referral_rewards')
-      .select('*, referral_links(*, clients(name, email)), referral_leads(*)')
-      .order('created_at', { ascending: false });
+    const query = lightweight
+      ? supabase.from('referral_rewards').select('referral_link_id, status, amount')
+      : supabase.from('referral_rewards').select('*, referral_links(*, clients(name, email)), referral_leads(*)').order('created_at', { ascending: false });
+
+    const { data, error } = await query;
     
     if (error) {
       console.error('Error fetching referral rewards:', error);
       return [];
     }
     
-    const formattedData = data?.map(reward => ({
+    const formattedData = (data || []).map((reward: any) => ({
       ...reward,
       status: reward.status as 'pending' | 'approved' | 'paid',
       reward_type: (reward.reward_type || 'cash') as 'cash' | 'coupon',
       referral_link: reward.referral_links ? {
         ...reward.referral_links,
-        client: (reward.referral_links as any).clients as { name: string; email: string } | undefined,
+        client: reward.referral_links.clients as { name: string; email: string } | undefined,
       } : undefined,
       referral_lead: reward.referral_leads || undefined,
-    })) || [];
+    }));
     
-    setRewards(formattedData);
-    return formattedData;
-  }, []);
+    setRewards(formattedData as ReferralReward[]);
+    return formattedData as ReferralReward[];
+  }, [lightweight]);
 
   const calculateStats = useCallback((clicksData: ReferralClick[], leadsData: ReferralLead[], rewardsData: ReferralReward[], settingsData: ReferralSettings | null) => {
     const pending = rewardsData.filter(r => r.status === 'pending');
@@ -227,8 +233,9 @@ export function useReferrals() {
   }, [fetchSettings, fetchLinks, fetchClicks, fetchLeads, fetchRewards, calculateStats]);
 
   useEffect(() => {
-    fetchAll();
-  }, []);
+    if (!enabled) return;
+    void fetchAll();
+  }, [enabled, fetchAll]);
 
   const updateSettings = async (updates: Partial<ReferralSettings>) => {
     if (!settings?.id) return;

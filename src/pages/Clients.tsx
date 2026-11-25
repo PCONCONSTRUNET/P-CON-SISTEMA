@@ -77,8 +77,8 @@ const Clients = () => {
   const [isFlagsDialogOpen, setIsFlagsDialogOpen] = useState(false);
   const [flagsClient, setFlagsClient] = useState<Client | null>(null);
 
-  const { clients, loading, addClient, updateClient, deleteClient } = useClients();
-  const { links, clicks, leads, rewards } = useReferrals();
+  const { clients, loading, error, refetch, addClient, updateClient, deleteClient } = useClients();
+  const { links, clicks, leads, rewards } = useReferrals({ lightweight: true, enabled: !loading && clients.length > 0 });
   const { createPixPayment, loading: mpLoading, activeGateways, defaultGateway, isGatewayDisabled } = usePaymentGateway();
   const [selectedGateway, setSelectedGateway] = useState<PaymentGatewayId | null>(null);
   const activeGatewayChoice = (selectedGateway && activeGateways.includes(selectedGateway))
@@ -673,6 +673,14 @@ const Clients = () => {
       {loading ? (
         <div className="glass-card p-8 text-center">
           <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      ) : error && clients.length === 0 ? (
+        <div className="glass-card p-8 text-center space-y-3 border border-destructive/30">
+          <p className="text-sm text-destructive font-medium">{error}</p>
+          <Button variant="outline" size="sm" onClick={() => void refetch()} className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Tentar novamente
+          </Button>
         </div>
       ) : (
         <DataTable data={filteredClients} columns={columns} />

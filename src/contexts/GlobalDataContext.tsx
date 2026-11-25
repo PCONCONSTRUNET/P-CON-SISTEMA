@@ -129,6 +129,7 @@ interface GlobalDataContextType {
   loadingInvoices: boolean;
   loadingTemplates: boolean;
   loadingAppSettings: boolean;
+  clientsError: string | null;
   
   // Refetch functions
   refetchClients: () => Promise<void>;
@@ -178,14 +179,50 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
   const [whatsappSettings, setWhatsappSettings] = useState<WhatsAppSettings | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
-  const [loadingClients, setLoadingClients] = useState(false);
-  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
-  const [loadingPayments, setLoadingPayments] = useState(false);
-  const [loadingInvoices, setLoadingInvoices] = useState(false);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [loadingAppSettings, setLoadingAppSettings] = useState(false);
+  const [loadingClients, setLoadingClients] = useState(isAuthenticated);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(isAuthenticated);
+  const [loadingPayments, setLoadingPayments] = useState(isAuthenticated);
+  const [loadingInvoices, setLoadingInvoices] = useState(isAuthenticated);
+  const [loadingTemplates, setLoadingTemplates] = useState(isAuthenticated);
+  const [loadingAppSettings, setLoadingAppSettings] = useState(isAuthenticated);
+  const [clientsError, setClientsError] = useState<string | null>(null);
 
   const inFlightRef = useRef<Record<string, boolean>>({});
+  const clientsCountRef = useRef(0);
+  const clientsErrorRef = useRef<string | null>(null);
+  const lastRecoveryAtRef = useRef(0);
+  const realtimeDegradedRef = useRef(false);
+
+  useEffect(() => {
+    clientsCountRef.current = clients.length;
+  }, [clients.length]);
+
+  useEffect(() => {
+    clientsErrorRef.current = clientsError;
+  }, [clientsError]);
+
+  const runWithQueryResilience = useCallback(
+    async <T,>(operation: () => PromiseLike<T>, label: string, retries = 1): Promise<T> => {
+      let lastError: unknown;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          return await Promise.race<T>([
+            Promise.resolve(operation()),
+            new Promise<T>((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout after 12s fetching ${label}`)), 12_000),
+            ),
+          ]);
+        } catch (err) {
+          lastError = err;
+          if (attempt < retries) {
+            await new Promise((res) => setTimeout(res, 1_100));
+          }
+        }
+      }
+      throw lastError;
+    },
+    [],
+  );
 
   // Lookup maps em memória (evita JOINs triplos no PostgreSQL)
   const clientsById = useMemo(() => {
@@ -278,34 +315,46 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [rawInvoices, clientsById]);
 
-  // Fetch functions (consultas planas sem JOINs pesados + dedup de chamadas em voo)
+  // Fetch functions (consultas planas sem JOINs pesados + dedup + timeout/retry)
   const fetchClients = useCallback(async () => {
     if (!isAuthenticated || inFlightRef.current.clients) return;
     inFlightRef.current.clients = true;
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name, email, phone, document, status, license_token, created_at, updated_at')
-        .order('created_at', { ascending: false });
+      const { data, error } = await runWithQueryResilience(
+        () =>
+          supabase
+            .from('clients')
+            .select('id, name, email, phone, document, status, license_token, created_at, updated_at')
+            .order('created_at', { ascending: false }),
+        'clients',
+        1,
+      );
 
       if (error) throw error;
       setClients((data || []) as Client[]);
+      setClientsError(null);
     } catch (error) {
       console.error('Error fetching clients:', error);
+      setClientsError('Falha ao conectar ao banco de dados. Verifique sua conexão e tente novamente.');
     } finally {
       inFlightRef.current.clients = false;
       setLoadingClients(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, runWithQueryResilience]);
 
   const fetchSubscriptions = useCallback(async () => {
     if (!isAuthenticated || inFlightRef.current.subscriptions) return;
     inFlightRef.current.subscriptions = true;
     try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('id, client_id, plan_name, value, status, start_date, next_payment, created_at, updated_at, asaas_id')
-        .order('created_at', { ascending: false });
+      const { data, error } = await runWithQueryResilience(
+        () =>
+          supabase
+            .from('subscriptions')
+            .select('id, client_id, plan_name, value, status, start_date, next_payment, created_at, updated_at, asaas_id')
+            .order('created_at', { ascending: false }),
+        'subscriptions',
+        1,
+      );
 
       if (error) throw error;
       setRawSubscriptions((data || []) as Subscription[]);
@@ -315,16 +364,21 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       inFlightRef.current.subscriptions = false;
       setLoadingSubscriptions(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, runWithQueryResilience]);
 
   const fetchPayments = useCallback(async () => {
     if (!isAuthenticated || inFlightRef.current.payments) return;
     inFlightRef.current.payments = true;
     try {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('id, subscription_id, client_id, amount, status, payment_method, transaction_id, paid_at, created_at, due_date, description, asaas_id')
-        .order('created_at', { ascending: false });
+      const { data, error } = await runWithQueryResilience(
+        () =>
+          supabase
+            .from('payments')
+            .select('id, subscription_id, client_id, amount, status, payment_method, transaction_id, paid_at, created_at, due_date, description, asaas_id')
+            .order('created_at', { ascending: false }),
+        'payments',
+        1,
+      );
 
       if (error) throw error;
       setRawPayments((data || []) as Payment[]);
@@ -334,16 +388,21 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       inFlightRef.current.payments = false;
       setLoadingPayments(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, runWithQueryResilience]);
 
   const fetchInvoices = useCallback(async () => {
     if (!isAuthenticated || inFlightRef.current.invoices) return;
     inFlightRef.current.invoices = true;
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('id, payment_id, client_id, number, amount, status, description, issued_at')
-        .order('issued_at', { ascending: false });
+      const { data, error } = await runWithQueryResilience(
+        () =>
+          supabase
+            .from('invoices')
+            .select('id, payment_id, client_id, number, amount, status, description, issued_at')
+            .order('issued_at', { ascending: false }),
+        'invoices',
+        1,
+      );
 
       if (error) throw error;
       setRawInvoices((data || []) as Invoice[]);
@@ -353,17 +412,26 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       inFlightRef.current.invoices = false;
       setLoadingInvoices(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, runWithQueryResilience]);
 
   const fetchWhatsApp = useCallback(async () => {
     if (!isAuthenticated || inFlightRef.current.whatsapp) return;
     inFlightRef.current.whatsapp = true;
     try {
       const [templatesRes, settingsRes] = await Promise.all([
-        supabase
-          .from('whatsapp_templates')
-          .select('id, template_key, name, message_template, is_active, image_url, button_enabled, button_text, button_url, created_at, updated_at'),
-        (supabase as any).from('whatsapp_settings').select('id, send_hour, send_minute, admin_phone').maybeSingle(),
+        runWithQueryResilience(
+          () =>
+            supabase
+              .from('whatsapp_templates')
+              .select('id, template_key, name, message_template, is_active, image_url, button_enabled, button_text, button_url, created_at, updated_at'),
+          'whatsapp_templates',
+          0,
+        ),
+        runWithQueryResilience(
+          () => (supabase as any).from('whatsapp_settings').select('id, send_hour, send_minute, admin_phone').maybeSingle(),
+          'whatsapp_settings',
+          0,
+        ),
       ]);
 
       if (templatesRes.error) throw templatesRes.error;
@@ -375,16 +443,21 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       inFlightRef.current.whatsapp = false;
       setLoadingTemplates(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, runWithQueryResilience]);
 
   const fetchAppSettings = useCallback(async () => {
     if (!isAuthenticated || inFlightRef.current.appSettings) return;
     inFlightRef.current.appSettings = true;
     try {
-      const { data, error } = await (supabase as any)
-        .from('app_settings')
-        .select('id, pro_labore_mode, pro_labore_percent, pro_labore_fixed')
-        .maybeSingle();
+      const { data, error } = await runWithQueryResilience(
+        () =>
+          (supabase as any)
+            .from('app_settings')
+            .select('id, pro_labore_mode, pro_labore_percent, pro_labore_fixed')
+            .maybeSingle(),
+        'app_settings',
+        1,
+      );
       if (error) throw error;
       setAppSettings(data);
     } catch (error) {
@@ -393,16 +466,18 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       inFlightRef.current.appSettings = false;
       setLoadingAppSettings(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, runWithQueryResilience]);
 
   const refetchAll = useCallback(async () => {
     if (!isAuthenticated) return;
-    setLoadingClients(true);
-    setLoadingSubscriptions(true);
-    setLoadingPayments(true);
-    setLoadingInvoices(true);
-    setLoadingTemplates(true);
-    setLoadingAppSettings(true);
+    if (clientsCountRef.current === 0) {
+      setLoadingClients(true);
+      setLoadingSubscriptions(true);
+      setLoadingPayments(true);
+      setLoadingInvoices(true);
+      setLoadingTemplates(true);
+      setLoadingAppSettings(true);
+    }
 
     try {
       // Fase 1: dados essenciais para o Dashboard carregam em paralelo (1 round-trip)
@@ -886,6 +961,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       setWhatsappTemplates([]);
       setWhatsappSettings(null);
       setAppSettings(null);
+      setClientsError(null);
       setLoadingClients(false);
       setLoadingSubscriptions(false);
       setLoadingPayments(false);
@@ -897,6 +973,15 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
     void refetchAll();
 
+    const triggerRecoveryRefetch = () => {
+      const now = Date.now();
+      if (now - lastRecoveryAtRef.current < 10_000) return;
+      if (clientsCountRef.current === 0 || clientsErrorRef.current !== null) {
+        lastRecoveryAtRef.current = now;
+        void refetchAll();
+      }
+    };
+
     const adminSyncChannel = supabase
       .channel('global-admin-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => debouncedFetch('clients', fetchClients))
@@ -905,9 +990,19 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => debouncedFetch('invoices', fetchInvoices))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => debouncedFetch('whatsapp', fetchWhatsApp))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => debouncedFetch('appSettings', fetchAppSettings))
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          realtimeDegradedRef.current = true;
+        } else if (status === 'SUBSCRIBED' && realtimeDegradedRef.current) {
+          realtimeDegradedRef.current = false;
+          triggerRecoveryRefetch();
+        }
+      });
+
+    window.addEventListener('online', triggerRecoveryRefetch);
 
     return () => {
+      window.removeEventListener('online', triggerRecoveryRefetch);
       Object.values(debounceTimers.current).forEach(clearTimeout);
       supabase.removeChannel(adminSyncChannel);
     };
@@ -929,6 +1024,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         loadingInvoices,
         loadingTemplates,
         loadingAppSettings,
+        clientsError,
         refetchClients: fetchClients,
         refetchSubscriptions: fetchSubscriptions,
         refetchPayments: fetchPayments,

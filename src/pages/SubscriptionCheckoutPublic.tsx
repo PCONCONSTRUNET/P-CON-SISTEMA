@@ -98,7 +98,7 @@ const SubscriptionCheckoutPublic = () => {
     mercadoPagoPublicKey,
     statusLoading: gatewayStatusLoading,
     isGatewayDisabled,
-  } = usePaymentGateway();
+  } = usePaymentGateway({ forceRefreshOnMount: true });
 
   const [pixPayment, setPixPayment] = useState<{
     paymentId: string;

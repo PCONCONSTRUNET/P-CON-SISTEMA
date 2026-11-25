@@ -120,7 +120,8 @@ async function fetchStatusViaRpc(): Promise<{
   }
 }
 
-export function usePaymentGateway() {
+export function usePaymentGateway(options: { forceRefreshOnMount?: boolean } = {}) {
+  const { forceRefreshOnMount = false } = options;
   const efi = useEfiPay({ checkStatusOnMount: false });
   const mp = useMercadoPago({ checkStatusOnMount: false });
 
@@ -208,7 +209,11 @@ export function usePaymentGateway() {
   }, [efiActive, mercadoPagoActive, mercadoPagoPublicKey]);
 
   useEffect(() => {
-    void refreshStatuses(true);
+    const snap = readGatewaySnapshot();
+    const snapAgeMs = snap ? Date.now() - (snap.savedAt || 0) : Infinity;
+    if (forceRefreshOnMount || !snap || snapAgeMs > 120_000) {
+      void refreshStatuses(true);
+    }
 
     const onEfiChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ isActive: boolean }>).detail;
@@ -274,7 +279,7 @@ export function usePaymentGateway() {
     params: UnifiedPixParams,
     preferredGateway?: PaymentGatewayId,
   ): Promise<UnifiedPixResult | null> => {
-    const latest = await refreshStatuses();
+    const latest = await refreshStatuses(true);
     const available: PaymentGatewayId[] = [];
     if (latest.efiActive === true) available.push('efi');
     if (latest.mercadoPagoActive === true) available.push('mercadopago');

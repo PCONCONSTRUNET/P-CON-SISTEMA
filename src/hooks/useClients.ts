@@ -19,8 +19,10 @@ export const useClients = () => {
   const globalData = useOptionalGlobalData();
   const [fallbackClients, setFallbackClients] = useState<Client[]>([]);
   const [fallbackLoading, setFallbackLoading] = useState(!globalData);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
 
   const fetchFallbackClients = async () => {
+    setFallbackError(null);
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -31,6 +33,7 @@ export const useClients = () => {
       setFallbackClients((data || []) as Client[]);
     } catch (error) {
       console.error('Error fetching clients:', error);
+      setFallbackError('Não foi possível conectar ao banco de dados.');
       toast.error('Erro ao carregar clientes');
     } finally {
       setFallbackLoading(false);
@@ -63,6 +66,7 @@ export const useClients = () => {
     return {
       clients: globalData.clients as Client[],
       loading: globalData.loadingClients,
+      error: globalData.clientsError,
       addClient: globalData.addClient,
       updateClient: globalData.updateClient,
       deleteClient: globalData.deleteClient,
@@ -128,6 +132,7 @@ export const useClients = () => {
   return {
     clients: fallbackClients,
     loading: fallbackLoading,
+    error: fallbackError,
     addClient,
     updateClient,
     deleteClient,
