@@ -20,13 +20,14 @@ import {
   Send,
   Wallet,
 } from 'lucide-react';
-import { useState } from 'react';
+import { startTransition, MouseEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminNotifications } from '@/hooks/useAdminNotifications';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import logo from '@/assets/logo-pcon-grande.png';
 import WhatsAppIcon from '@/components/WhatsAppIcon';
+import { preloadAdminRoute } from '@/routes/adminRoutes';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -70,6 +71,16 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     }
   };
 
+  const handleSmoothNavigate = (path: string) => (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    preloadAdminRoute(path);
+    handleNavClick();
+    startTransition(() => {
+      navigate(path);
+    });
+  };
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -104,7 +115,9 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={handleNavClick}
+                onMouseEnter={() => preloadAdminRoute(item.path)}
+                onFocus={() => preloadAdminRoute(item.path)}
+                onClick={handleSmoothNavigate(item.path)}
                 className={({ isActive }) =>
                   `nav-item ${isActive ? 'nav-item-active' : ''}`
                 }
@@ -117,7 +130,9 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             {/* Notifications with badge */}
             <NavLink
               to="/notifications"
-              onClick={handleNavClick}
+              onMouseEnter={() => preloadAdminRoute('/notifications')}
+              onFocus={() => preloadAdminRoute('/notifications')}
+              onClick={handleSmoothNavigate('/notifications')}
               className={({ isActive }) =>
                 `nav-item relative ${isActive ? 'nav-item-active' : ''}`
               }

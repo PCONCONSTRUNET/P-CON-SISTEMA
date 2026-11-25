@@ -9,28 +9,12 @@ import { ClientAuthProvider } from "@/contexts/ClientAuthContext";
 import { GlobalDataProvider } from "@/contexts/GlobalDataContext";
 import { AdminNotificationsProvider } from "@/contexts/AdminNotificationsContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { AdminShell } from "@/components/DashboardLayout";
+import { AdminPages } from "@/routes/adminRoutes";
 
 const Login = lazy(() => import("./pages/Login"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Clients = lazy(() => import("./pages/Clients"));
-const ClientProfile = lazy(() => import("./pages/ClientProfile"));
-const Subscriptions = lazy(() => import("./pages/Subscriptions"));
-const Payments = lazy(() => import("./pages/Payments"));
-const Invoices = lazy(() => import("./pages/Invoices"));
-const Notifications = lazy(() => import("./pages/Notifications"));
-const Contracts = lazy(() => import("./pages/Contracts"));
-const Referrals = lazy(() => import("./pages/Referrals"));
-const ClientCoupons = lazy(() => import("./pages/ClientCoupons"));
 const ReferralForm = lazy(() => import("./pages/ReferralForm"));
-const WhatsAppMessages = lazy(() => import("./pages/WhatsAppMessages"));
-const WhatsAppReminders = lazy(() => import("./pages/WhatsAppReminders"));
-const WhatsAppBroadcast = lazy(() => import("./pages/WhatsAppBroadcast"));
-const Financial = lazy(() => import("./pages/Financial"));
-const Expenses = lazy(() => import("./pages/Expenses"));
-const EmailSettings = lazy(() => import("./pages/EmailSettings"));
 const ContractPublic = lazy(() => import("./pages/ContractPublic"));
-const EfiSettings = lazy(() => import("./pages/EfiSettings"));
-const MercadoPagoSettings = lazy(() => import("./pages/MercadoPagoSettings"));
 
 const ClientLogin = lazy(() => import("./pages/ClientLogin"));
 const ClientRegister = lazy(() => import("./pages/ClientRegister"));
@@ -76,24 +60,26 @@ const App = () => (
                     {/* Admin Routes */}
                     <Route path="/" element={<Login />} />
                     <Route path="/admin" element={<Login />} />
-                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                    <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-                    <Route path="/clients/:id" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
-                    <Route path="/subscriptions" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
-                    <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
-                    <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-                    <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                    <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppMessages /></ProtectedRoute>} />
-                    <Route path="/whatsapp/lembretes" element={<ProtectedRoute><WhatsAppReminders /></ProtectedRoute>} />
-                    <Route path="/whatsapp/disparo" element={<ProtectedRoute><WhatsAppBroadcast /></ProtectedRoute>} />
-                    <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
-                    <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
-                    <Route path="/coupons" element={<ProtectedRoute><ClientCoupons /></ProtectedRoute>} />
-                    <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
-                    <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-                    <Route path="/email" element={<ProtectedRoute><EmailSettings /></ProtectedRoute>} />
-                    <Route path="/efi-settings" element={<ProtectedRoute><EfiSettings /></ProtectedRoute>} />
-                    <Route path="/mercado-pago-settings" element={<ProtectedRoute><MercadoPagoSettings /></ProtectedRoute>} />
+                    <Route element={<ProtectedRoute><AdminShell /></ProtectedRoute>}>
+                      <Route path="/dashboard" element={<AdminPages.Dashboard />} />
+                      <Route path="/clients" element={<AdminPages.Clients />} />
+                      <Route path="/clients/:id" element={<AdminPages.ClientProfile />} />
+                      <Route path="/subscriptions" element={<AdminPages.Subscriptions />} />
+                      <Route path="/payments" element={<AdminPages.Payments />} />
+                      <Route path="/invoices" element={<AdminPages.Invoices />} />
+                      <Route path="/notifications" element={<AdminPages.Notifications />} />
+                      <Route path="/whatsapp" element={<AdminPages.WhatsAppMessages />} />
+                      <Route path="/whatsapp/lembretes" element={<AdminPages.WhatsAppReminders />} />
+                      <Route path="/whatsapp/disparo" element={<AdminPages.WhatsAppBroadcast />} />
+                      <Route path="/contracts" element={<AdminPages.Contracts />} />
+                      <Route path="/referrals" element={<AdminPages.Referrals />} />
+                      <Route path="/coupons" element={<AdminPages.ClientCoupons />} />
+                      <Route path="/financial" element={<AdminPages.Financial />} />
+                      <Route path="/expenses" element={<AdminPages.Expenses />} />
+                      <Route path="/email" element={<AdminPages.EmailSettings />} />
+                      <Route path="/efi-settings" element={<AdminPages.EfiSettings />} />
+                      <Route path="/mercado-pago-settings" element={<AdminPages.MercadoPagoSettings />} />
+                    </Route>
                     {/* Referral Form (Public) */}
                     <Route path="/indicar" element={<ReferralForm />} />
                     <Route path="/r/:slug" element={<ReferralForm />} />
