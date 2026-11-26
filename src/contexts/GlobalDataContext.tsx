@@ -49,6 +49,10 @@ export interface Payment {
   due_date: string | null;
   description: string | null;
   asaas_id: string | null;
+  parent_payment_id?: string | null;
+  original_amount?: number | null;
+  paid_amount?: number | null;
+  is_partial_attempt?: boolean;
   clientName?: string;
   subscriptions?: {
     clients?: {
@@ -65,6 +69,14 @@ export interface Payment {
     phone?: string | null;
     document?: string | null;
   };
+}
+
+export interface PartialPaymentInput {
+  parentPaymentId: string;
+  paidAmount: number;
+  paymentMethod?: string;
+  description?: string;
+  paidAt?: string;
 }
 
 export interface Invoice {
@@ -180,6 +192,7 @@ interface GlobalDataContextType {
   
   // CRUD operations - Payments
   markPaymentAsPaid: (id: string) => Promise<boolean>;
+  registerPartialPayment: (input: PartialPaymentInput) => Promise<boolean>;
   updatePayment: (id: string, updates: Partial<Payment>) => Promise<Payment | null>;
   deletePayment: (id: string) => Promise<boolean>;
   
@@ -439,14 +452,17 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         () =>
           supabase
             .from('payments')
-            .select('id, subscription_id, client_id, amount, status, payment_method, transaction_id, paid_at, created_at, due_date, description, asaas_id')
+            .select('id, subscription_id, client_id, amount, status, payment_method, transaction_id, paid_at, created_at, due_date, description, asaas_id, parent_payment_id, original_amount, paid_amount, is_partial_attempt')
             .order('created_at', { ascending: false }),
         'payments',
         1,
       );
 
       if (error) throw error;
-      setRawPayments((data || []) as Payment[]);
+      const visiblePayments = ((data || []) as Payment[]).filter(
+        (p) => !(p.is_partial_attempt && p.status !== 'paid'),
+      );
+      setRawPayments(visiblePayments);
     } catch (error) {
       console.error('Error fetching payments:', error);
     } finally {
@@ -941,6 +957,32 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const registerPartialPayment = async (input: PartialPaymentInput): Promise<boolean> => {
+    try {
+      const { error } = await (supabase as any).rpc('apply_partial_payment', {
+        p_parent_payment_id: input.parentPaymentId,
+        p_paid_amount: input.paidAmount,
+        p_payment_method: input.paymentMethod || 'PIX',
+        p_description: input.description || null,
+        p_paid_at: input.paidAt || new Date().toISOString(),
+      });
+
+      if (error) {
+        console.error('Error applying partial payment:', error);
+        toast.error(error.message || 'Erro ao registrar pagamento parcial');
+        return false;
+      }
+
+      toast.success('Pagamento parcial registrado com sucesso!');
+      await Promise.all([fetchPayments(), fetchInvoices(), fetchSubscriptions()]);
+      return true;
+    } catch (error: any) {
+      console.error('Error applying partial payment:', error);
+      toast.error(error?.message || 'Erro ao registrar pagamento parcial');
+      return false;
+    }
+  };
+
   const updatePayment = async (id: string, updates: Partial<Payment>): Promise<Payment | null> => {
     try {
       const { data, error } = await supabase
@@ -1230,6 +1272,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
         updateSubscription,
         deleteSubscription,
         markPaymentAsPaid,
+        registerPartialPayment,
         updatePayment,
         deletePayment,
         addInvoice,

@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag, FolderArchive, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, FileText, CreditCard, Calendar, User, Loader2, Plus, QrCode, Receipt, Upload, Trash2, ExternalLink, FileSignature, Gift, Clock, CheckCircle, DollarSign, Lock, Pencil, Flag, FolderArchive, AlertTriangle, Wallet } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
@@ -17,6 +17,8 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
 import { useContracts } from '@/hooks/useContracts';
+import { useOptionalGlobalData } from '@/contexts/GlobalDataContext';
+import { inputDateToISO } from '@/utils/dateUtils';
 import PixQRCode from '@/components/PixQRCode';
 import ClientVault from '@/components/ClientVault';
 import ClientFlagsTab from '@/components/ClientFlagsTab';
@@ -42,12 +44,17 @@ interface Subscription {
 
 interface Payment {
   id: string;
+  subscription_id?: string | null;
   amount: number;
   status: string;
   payment_method: string | null;
   created_at: string;
   paid_at: string | null;
   description?: string | null;
+  parent_payment_id?: string | null;
+  original_amount?: number | null;
+  paid_amount?: number | null;
+  is_partial_attempt?: boolean;
   subscription: {
     plan_name: string;
   } | null;
@@ -68,6 +75,7 @@ interface ReferralReward {
 const ClientProfile = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const globalData = useOptionalGlobalData();
   const [client, setClient] = useState<Client | null>(null);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -119,6 +127,99 @@ const ClientProfile = () => {
     status: '',
   });
   const [isUpdatingClient, setIsUpdatingClient] = useState(false);
+
+  // Partial payment state
+  const [partialTargetPayment, setPartialTargetPayment] = useState<Payment | null>(null);
+  const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
+  const [partialForm, setPartialForm] = useState({
+    amount: '',
+    paymentMethod: 'PIX',
+    paidAt: new Date().toISOString().split('T')[0],
+    description: '',
+  });
+  const [isSavingPartial, setIsSavingPartial] = useState(false);
+
+  const handleOpenPartialModal = (payment: Payment) => {
+    setPartialTargetPayment(payment);
+    setPartialForm({
+      amount: '',
+      paymentMethod: 'PIX',
+      paidAt: new Date().toISOString().split('T')[0],
+      description: '',
+    });
+    setIsPartialModalOpen(true);
+  };
+
+  const refreshClientPayments = async () => {
+    if (!id) return;
+    const merged: Payment[] = [];
+    if (subscriptions.length > 0) {
+      const { data: subPays } = await supabase
+        .from('payments')
+        .select('*, subscription:subscriptions(plan_name)')
+        .in('subscription_id', subscriptions.map((s) => s.id))
+        .order('created_at', { ascending: false });
+      if (subPays) {
+        merged.push(
+          ...(subPays as Payment[]).filter((p) => !(p.is_partial_attempt && p.status !== 'paid')),
+        );
+      }
+    }
+    const { data: singles } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('client_id', id)
+      .is('subscription_id', null)
+      .order('created_at', { ascending: false });
+    if (singles) {
+      const formatted = (singles as Payment[])
+        .filter((p) => !(p.is_partial_attempt && p.status !== 'paid'))
+        .map((p) => ({ ...p, subscription: null }));
+      merged.push(...formatted);
+    }
+    merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    setPayments(merged);
+  };
+
+  const handleConfirmPartialPayment = async () => {
+    if (!partialTargetPayment) return;
+    const paidValue = parseFloat(partialForm.amount.replace(',', '.'));
+    const openAmount = Number(partialTargetPayment.amount);
+
+    if (!Number.isFinite(paidValue) || paidValue <= 0) {
+      toast.error('Informe um valor pago maior que zero.');
+      return;
+    }
+    if (paidValue > openAmount) {
+      toast.error('O valor parcial não pode ultrapassar o saldo em aberto.');
+      return;
+    }
+
+    setIsSavingPartial(true);
+    try {
+      const { error } = await (supabase as any).rpc('apply_partial_payment', {
+        p_parent_payment_id: partialTargetPayment.id,
+        p_paid_amount: paidValue,
+        p_payment_method: partialForm.paymentMethod,
+        p_description: partialForm.description.trim() || null,
+        p_paid_at: partialForm.paidAt ? inputDateToISO(partialForm.paidAt) : new Date().toISOString(),
+      });
+
+      if (error) throw error;
+
+      toast.success('Pagamento parcial registrado com sucesso!');
+      setIsPartialModalOpen(false);
+      setPartialTargetPayment(null);
+      await refreshClientPayments();
+      void globalData?.refetchPayments?.();
+      void globalData?.refetchInvoices?.();
+    } catch (error: any) {
+      console.error('Error registering partial payment:', error);
+      toast.error(error?.message || 'Erro ao registrar pagamento parcial');
+    } finally {
+      setIsSavingPartial(false);
+    }
+  };
 
   const openEditClientDialog = () => {
     if (!client) return;
@@ -288,10 +389,12 @@ const ClientProfile = () => {
           .order('created_at', { ascending: false });
         
         if (newPayments) {
-          const formattedCharges = newPayments.map(p => ({
-            ...p,
-            subscription: null
-          })) as Payment[];
+          const formattedCharges = (newPayments as Payment[])
+            .filter(p => !(p.is_partial_attempt && p.status !== 'paid'))
+            .map(p => ({
+              ...p,
+              subscription: null
+            }));
           
           // Merge with subscription payments
           const subPayments = payments.filter(p => p.subscription !== null);
@@ -373,7 +476,9 @@ const ClientProfile = () => {
           .order('created_at', { ascending: false });
         
         if (subscriptionPayments) {
-          allPayments.push(...(subscriptionPayments as Payment[]));
+          allPayments.push(
+            ...(subscriptionPayments as Payment[]).filter(p => !(p.is_partial_attempt && p.status !== 'paid')),
+          );
         }
       }
 
@@ -386,10 +491,12 @@ const ClientProfile = () => {
         .order('created_at', { ascending: false });
 
       if (singleCharges) {
-        const formattedCharges = singleCharges.map(p => ({
-          ...p,
-          subscription: null
-        })) as Payment[];
+        const formattedCharges = (singleCharges as Payment[])
+          .filter(p => !(p.is_partial_attempt && p.status !== 'paid'))
+          .map(p => ({
+            ...p,
+            subscription: null
+          }));
         allPayments.push(...formattedCharges);
       }
 
@@ -876,28 +983,64 @@ const ClientProfile = () => {
                 <p className="text-muted-foreground text-center py-8">Nenhum pagamento encontrado</p>
               ) : (
                 <div className="space-y-3">
-                  {payments.map((payment) => (
-                    <div 
-                      key={payment.id} 
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-secondary/30 gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate">
-                          {payment.subscription?.plan_name || payment.description || 'Cobrança única'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(payment.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                        </p>
-                        {payment.payment_method && (
-                          <p className="text-xs text-muted-foreground uppercase">{payment.payment_method}</p>
-                        )}
+                  {payments.map((payment) => {
+                    const paidSoFar = Number(payment.paid_amount || 0);
+                    const origTotal = Number(payment.original_amount || Number(payment.amount) + paidSoFar);
+                    const hasPartialHistory = payment.status !== 'paid' && paidSoFar > 0;
+                    const canRegisterPartial =
+                      payment.status !== 'paid' && !payment.subscription_id && !payment.subscription;
+
+                    return (
+                      <div 
+                        key={payment.id} 
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-secondary/30 gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-foreground truncate">
+                              {payment.subscription?.plan_name || payment.description || 'Cobrança única'}
+                            </p>
+                            {payment.parent_payment_id && (
+                              <Badge variant="outline" className="text-[10px] border-primary/40 text-primary px-1.5 py-0">
+                                Parcial
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(payment.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                          {hasPartialHistory && (
+                            <p className="text-xs text-primary/90 mt-0.5">
+                              Total: {formatCurrency(origTotal)} · Já pago: {formatCurrency(paidSoFar)}
+                            </p>
+                          )}
+                          {payment.payment_method && (
+                            <p className="text-xs text-muted-foreground uppercase">{payment.payment_method}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 flex-wrap">
+                          <div className="text-right">
+                            <p className="font-semibold text-primary">{formatCurrency(Number(payment.amount))}</p>
+                            {hasPartialHistory && (
+                              <p className="text-[10px] text-muted-foreground">Restante</p>
+                            )}
+                          </div>
+                          <StatusBadge status={payment.status} />
+                          {canRegisterPartial && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                              onClick={() => handleOpenPartialModal(payment)}
+                            >
+                              <Wallet className="w-3.5 h-3.5 mr-1" />
+                              Parcial
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
-                        <p className="font-semibold text-primary">{formatCurrency(Number(payment.amount))}</p>
-                        <StatusBadge status={payment.status} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -1296,6 +1439,136 @@ const ClientProfile = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Payment Dialog */}
+      <Dialog open={isPartialModalOpen} onOpenChange={setIsPartialModalOpen}>
+        <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Registrar Pagamento Parcial</DialogTitle>
+            <DialogDescription>
+              Informe quanto o cliente já pagou desta cobrança. O restante continuará pendente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {partialTargetPayment && (() => {
+            const openAmount = Number(partialTargetPayment.amount);
+            const alreadyPaid = Number(partialTargetPayment.paid_amount || 0);
+            const origTotal = Number(partialTargetPayment.original_amount || openAmount + alreadyPaid);
+            const entered = parseFloat(partialForm.amount.replace(',', '.'));
+            const validEntered = Number.isFinite(entered) && entered > 0 && entered <= openAmount;
+            const willRemain = validEntered ? Math.max(0, openAmount - entered) : openAmount;
+
+            return (
+              <div className="space-y-4 mt-2">
+                <div className="p-3.5 rounded-xl bg-secondary/40 border border-border/40 space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Cobrança</span>
+                    <span className="font-medium text-foreground truncate">
+                      {partialTargetPayment.description || 'Cobrança única'}
+                    </span>
+                  </div>
+                  {alreadyPaid > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Valor original</span>
+                        <span className="text-foreground">{formatCurrency(origTotal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Já pago</span>
+                        <span className="text-success font-medium">{formatCurrency(alreadyPaid)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground font-medium">Restante em aberto</span>
+                    <span className="font-bold text-primary">{formatCurrency(openAmount)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Valor recebido agora (R$) *</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={openAmount}
+                    placeholder={`Ex: ${Math.min(700, openAmount).toFixed(2)}`}
+                    value={partialForm.amount}
+                    onChange={(e) => setPartialForm({ ...partialForm, amount: e.target.value })}
+                    className="bg-secondary/50 border-border/50"
+                  />
+                  {validEntered && (
+                    <p className="text-xs text-muted-foreground">
+                      {willRemain > 0.009
+                        ? `Pago agora: ${formatCurrency(entered)} · Restará em aberto: ${formatCurrency(willRemain)}`
+                        : 'Este valor quita integralmente o saldo em aberto.'}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Método</label>
+                    <Select
+                      value={partialForm.paymentMethod}
+                      onValueChange={(val) => setPartialForm({ ...partialForm, paymentMethod: val })}
+                    >
+                      <SelectTrigger className="bg-secondary/50 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass-card border-border/50">
+                        <SelectItem value="PIX">PIX</SelectItem>
+                        <SelectItem value="DINHEIRO">Dinheiro</SelectItem>
+                        <SelectItem value="TRANSFERENCIA">Transferência</SelectItem>
+                        <SelectItem value="CARTAO">Cartão</SelectItem>
+                        <SelectItem value="OUTRO">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Data</label>
+                    <Input
+                      type="date"
+                      value={partialForm.paidAt}
+                      onChange={(e) => setPartialForm({ ...partialForm, paidAt: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Observação (opcional)</label>
+                  <Input
+                    placeholder="Ex: Entrada combinada via PIX"
+                    value={partialForm.description}
+                    onChange={(e) => setPartialForm({ ...partialForm, description: e.target.value })}
+                    className="bg-secondary/50 border-border/50"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-border/50"
+                    onClick={() => setIsPartialModalOpen(false)}
+                    disabled={isSavingPartial}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                    onClick={handleConfirmPartialPayment}
+                    disabled={isSavingPartial || !validEntered}
+                  >
+                    {isSavingPartial ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Parcial'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

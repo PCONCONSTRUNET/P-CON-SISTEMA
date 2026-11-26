@@ -7,6 +7,7 @@ import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/use
 import { useContracts, Contract } from '@/hooks/useContracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { 
@@ -25,7 +26,8 @@ import {
   CreditCard,
   X,
   FileCheck,
-  Copy
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 import logo from '@/assets/logo-pcon-pwa-large.png';
 import pixIcon from '@/assets/pix-icon.svg';
@@ -56,6 +58,10 @@ interface Payment {
   transaction_id: string | null;
   subscription_id: string | null;
   due_date: string | null;
+  parent_payment_id?: string | null;
+  original_amount?: number | null;
+  paid_amount?: number | null;
+  is_partial_attempt?: boolean;
   subscriptions?: {
     plan_name: string;
   } | null;
@@ -64,7 +70,7 @@ interface Payment {
 const Checkout = () => {
   const { client, isAuthenticated, isLoading: authLoading, logout } = useClientAuth();
   const navigate = useNavigate();
-  const { createPixPayment, loading: mpLoading, activeGateways, isGatewayDisabled } = usePaymentGateway();
+  const { createPixPayment, checkPaymentStatus, loading: mpLoading, activeGateways, isGatewayDisabled } = usePaymentGateway();
   const { contracts, loading: contractsLoading } = useContracts(client?.id);
   
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -77,9 +83,20 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'CREDIT_CARD' | null>(null);
-  const [pixData, setPixData] = useState<{ qrCode: string; copyPaste: string; qrcodeUrl?: string } | null>(null);
+  const [pixData, setPixData] = useState<{
+    qrCode: string;
+    copyPaste: string;
+    qrcodeUrl?: string;
+    paymentId?: string;
+    gatewayUsed?: PaymentGatewayId;
+    amountPaid?: number;
+    isPartial?: boolean;
+  } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'select' | 'processing' | 'pix' | 'success' | 'error'>('select');
+  const [chargePayMode, setChargePayMode] = useState<'full' | 'partial'>('full');
+  const [partialAmountInput, setPartialAmountInput] = useState('');
+  const [isCheckingPix, setIsCheckingPix] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
 
@@ -138,7 +155,10 @@ const Checkout = () => {
         console.error('Error fetching payments:', error);
       }
       
-      setPayments(data || []);
+      const visiblePayments = ((data || []) as Payment[]).filter(
+        (p) => !(p.is_partial_attempt && p.status !== 'paid'),
+      );
+      setPayments(visiblePayments);
     } catch (error) {
       console.error('Error:', error);
     }
@@ -161,7 +181,8 @@ const Checkout = () => {
         console.error('Error fetching pending charges:', error);
       }
       
-      setPendingCharges(data || []);
+      const visibleCharges = ((data || []) as Payment[]).filter((c) => !c.is_partial_attempt);
+      setPendingCharges(visibleCharges);
     } catch (error) {
       console.error('Error:', error);
     }
@@ -183,10 +204,50 @@ const Checkout = () => {
   const openChargePaymentModal = (charge: Payment) => {
     setSelectedCharge(charge);
     setSelectedSubscription(null);
+    setChargePayMode('full');
+    setPartialAmountInput('');
     setIsPaymentDialogOpen(true);
     setPaymentStep('select');
     setPixData(null);
   };
+
+  const verifyCurrentPixPayment = async (manual = false) => {
+    if (!pixData?.paymentId || !client?.id) return;
+    if (manual) setIsCheckingPix(true);
+    try {
+      const statusRes = await checkPaymentStatus(pixData.paymentId, pixData.gatewayUsed);
+      const st = statusRes?.status?.toLowerCase?.();
+      if (statusRes?.success && (st === 'approved' || st === 'paid' || st === 'concluida')) {
+        if (pixData.isPartial) {
+          await (supabase as any).rpc('confirm_partial_payment_by_tx', {
+            p_transaction_id: pixData.paymentId,
+            p_client_id: client.id,
+          });
+        }
+        await Promise.all([fetchPayments(), fetchPendingCharges(), fetchSubscriptions()]);
+        setPaymentStep('success');
+        toast.success(
+          pixData.isPartial
+            ? 'Pagamento parcial confirmado! O saldo restante já foi atualizado.'
+            : 'Pagamento confirmado com sucesso!',
+        );
+      } else if (manual) {
+        toast.info('Pagamento ainda não compensado. Assim que pagar, confirmaremos automaticamente.');
+      }
+    } catch (error) {
+      if (manual) toast.error('Não foi possível verificar o status no momento.');
+    } finally {
+      if (manual) setIsCheckingPix(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isPaymentDialogOpen || paymentStep !== 'pix' || !pixData?.paymentId) return;
+    const timer = setInterval(() => {
+      void verifyCurrentPixPayment(false);
+    }, 7000);
+    return () => clearInterval(timer);
+  }, [isPaymentDialogOpen, paymentStep, pixData?.paymentId, pixData?.gatewayUsed, pixData?.isPartial, client?.id]);
 
   const openPaidPaymentDetails = (payment: Payment) => {
     setSelectedPaidPayment(payment);
@@ -204,10 +265,44 @@ const Checkout = () => {
     
     // Determina se é assinatura ou cobrança única
     const isSubscription = !!selectedSubscription;
-    const paymentValue = isSubscription ? Number(selectedSubscription!.value) : Number(selectedCharge!.amount);
+    const openChargeAmount = selectedCharge ? Number(selectedCharge.amount) : 0;
+    const requestedPartial =
+      !isSubscription && chargePayMode === 'partial'
+        ? parseFloat(partialAmountInput.replace(',', '.'))
+        : openChargeAmount;
+
+    if (!isSubscription && chargePayMode === 'partial') {
+      if (!Number.isFinite(requestedPartial) || requestedPartial <= 0) {
+        toast.error('Informe um valor parcial maior que zero.');
+        return;
+      }
+      if (requestedPartial > openChargeAmount) {
+        toast.error('O valor parcial não pode ultrapassar o saldo em aberto.');
+        return;
+      }
+    }
+
+    const paymentValue = isSubscription ? Number(selectedSubscription!.value) : requestedPartial;
+    const isPartialFlow = !isSubscription && chargePayMode === 'partial' && paymentValue < openChargeAmount - 0.009;
+
+    if (isPartialFlow && selectedCharge) {
+      const collidingCharge = pendingCharges.find(
+        (c) => c.id !== selectedCharge.id && Math.abs(Number(c.amount) - paymentValue) < 0.01,
+      );
+      if (collidingCharge) {
+        const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(paymentValue);
+        toast.error(
+          `Você possui outra cobrança pendente exatamente no valor de ${formattedVal}. Informe outro valor parcial (ex: R$ 1,00 de diferença).`,
+        );
+        return;
+      }
+    }
+
     const paymentDescription = isSubscription 
       ? `Pagamento - ${selectedSubscription!.plan_name}` 
-      : selectedCharge!.description || 'Cobrança única';
+      : isPartialFlow
+        ? `Pagamento parcial (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(paymentValue)}) - ${selectedCharge!.description || 'Cobrança única'}`
+        : selectedCharge!.description || 'Cobrança única';
     const externalRef = isSubscription ? selectedSubscription!.id : selectedCharge!.id;
     
     setPaymentMethod(method);
@@ -228,12 +323,27 @@ const Checkout = () => {
       }, gateway);
 
       if (pixResult?.success && pixResult.qrCode) {
+        if (isPartialFlow && pixResult.paymentId && selectedCharge) {
+          const { error: linkError } = await (supabase as any).rpc('link_partial_payment_attempt', {
+            p_parent_payment_id: selectedCharge.id,
+            p_transaction_id: pixResult.paymentId,
+            p_client_id: client.id,
+          });
+          if (linkError) {
+            console.error('Error linking partial attempt:', linkError);
+          }
+        }
+
         // qrCodeBase64 já vem com prefixo 'data:image/png;base64,'
         // qrCode = copyPaste (código copia e cola)
         setPixData({
           qrCode: pixResult.qrCodeBase64 || '',   // base64 completo com prefixo
           copyPaste: pixResult.qrCode,             // código copia e cola
           qrcodeUrl: (pixResult as any).qrcodeUrl || undefined, // URL da imagem como fallback
+          paymentId: pixResult.paymentId,
+          gatewayUsed: pixResult.gatewayUsed,
+          amountPaid: paymentValue,
+          isPartial: isPartialFlow,
         });
         setPaymentStep('pix');
       } else {
@@ -587,7 +697,14 @@ const Checkout = () => {
                 </h2>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {pendingCharges.map((charge, index) => (
+                {pendingCharges.map((charge, index) => {
+                  const paidSoFar = Number(charge.paid_amount || 0);
+                  const origTotal = Number(charge.original_amount || Number(charge.amount) + paidSoFar);
+                  const hasPartialHistory = paidSoFar > 0;
+                  const fmtBrl = (v: number) =>
+                    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+                  return (
                   <motion.div
                     key={charge.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -600,7 +717,9 @@ const Checkout = () => {
                         <h3 className="text-base font-heading font-semibold text-foreground truncate">
                           {charge.description || 'Cobrança única'}
                         </h3>
-                        <p className="text-gray-neutral text-xs mt-0.5">Aguardando pagamento</p>
+                        <p className="text-gray-neutral text-xs mt-0.5">
+                          {hasPartialHistory ? 'Pagamento parcial em andamento' : 'Aguardando pagamento'}
+                        </p>
                       </div>
                       <Badge className="bg-warning/20 text-warning border-warning/30 flex items-center gap-1 px-2 py-0.5 border rounded-full text-[10px] flex-shrink-0">
                         <Clock className="h-3 w-3" />
@@ -614,10 +733,17 @@ const Checkout = () => {
                           <DollarSign className="h-4 w-4" style={{ color: '#1E4FA3' }} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[10px] text-gray-neutral">Valor</p>
-                          <p className="text-lg font-semibold text-foreground">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(charge.amount))}
+                          <p className="text-[10px] text-gray-neutral">
+                            {hasPartialHistory ? 'Restante em aberto' : 'Valor'}
                           </p>
+                          <p className="text-lg font-semibold text-foreground">
+                            {fmtBrl(Number(charge.amount))}
+                          </p>
+                          {hasPartialHistory && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Total: {fmtBrl(origTotal)} · Já pago: <span className="text-success font-medium">{fmtBrl(paidSoFar)}</span>
+                            </p>
+                          )}
                         </div>
                       </div>
                       {charge.due_date && (
@@ -649,7 +775,8 @@ const Checkout = () => {
                       </Button>
                     </motion.div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -797,12 +924,24 @@ const Checkout = () => {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {payment.subscriptions?.plan_name || payment.description || 'Cobrança única'}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {payment.subscriptions?.plan_name || payment.description || 'Cobrança única'}
+                            </p>
+                            {payment.parent_payment_id && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
+                                Parcial
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             Criado em {formatBrazilDate(payment.created_at, "dd/MM/yyyy 'às' HH:mm")}
                           </p>
+                          {payment.status === 'pending' && Number(payment.paid_amount || 0) > 0 && (
+                            <p className="text-[11px] text-primary/90 font-medium">
+                              Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(payment.original_amount || Number(payment.amount) + Number(payment.paid_amount)))} · Pago: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(payment.paid_amount))}
+                            </p>
+                          )}
                           {payment.due_date && (
                             <p className="text-[10px] text-warning font-medium">
                               Vencimento: {formatBrazilDate(payment.due_date, "dd/MM/yyyy")}
@@ -892,25 +1031,108 @@ const Checkout = () => {
 
 
                 {/* Select Payment Method */}
-                {paymentStep === 'select' && (
+                {paymentStep === 'select' && (() => {
+                  const isSingleCharge = !selectedSubscription && !!selectedCharge;
+                  const openBalance = Number(selectedCharge?.amount || 0);
+                  const alreadyPaid = Number(selectedCharge?.paid_amount || 0);
+                  const origTotal = Number(selectedCharge?.original_amount || openBalance + alreadyPaid);
+                  const partialNum = parseFloat(partialAmountInput.replace(',', '.'));
+                  const isValidPartial =
+                    !isSingleCharge ||
+                    chargePayMode === 'full' ||
+                    (Number.isFinite(partialNum) && partialNum > 0 && partialNum <= openBalance);
+                  const isPartialChoice =
+                    isSingleCharge && chargePayMode === 'partial' && Number.isFinite(partialNum) && partialNum < openBalance - 0.009;
+                  const effectiveAmount = selectedSubscription
+                    ? Number(selectedSubscription.value)
+                    : chargePayMode === 'partial' && Number.isFinite(partialNum) && partialNum > 0
+                      ? Math.min(partialNum, openBalance)
+                      : openBalance;
+                  const fmtBrl = (v: number) =>
+                    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+                  return (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-6"
+                    className="space-y-5"
                   >
                     <div className="text-center">
-                      <h2 className="text-xl font-heading font-semibold text-foreground mb-2">
+                      <h2 className="text-xl font-heading font-semibold text-foreground mb-1">
                         {selectedSubscription ? selectedSubscription.plan_name : (selectedCharge?.description || 'Cobrança única')}
                       </h2>
                       <p className="text-2xl font-bold text-foreground mb-1">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                          selectedSubscription ? Number(selectedSubscription.value) : Number(selectedCharge?.amount || 0)
-                        )}
+                        {fmtBrl(effectiveAmount)}
                       </p>
+                      {isSingleCharge && alreadyPaid > 0 && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Total original: {fmtBrl(origTotal)} · Já pago: <span className="text-success font-medium">{fmtBrl(alreadyPaid)}</span>
+                        </p>
+                      )}
                       <p className="text-gray-neutral text-sm">
-                        Selecione a forma de pagamento
+                        {isSingleCharge ? 'Escolha pagar o valor total ou um valor parcial' : 'Selecione a forma de pagamento'}
                       </p>
                     </div>
+
+                    {isSingleCharge && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-secondary/40 border border-border/30">
+                          <button
+                            type="button"
+                            onClick={() => setChargePayMode('full')}
+                            className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              chargePayMode === 'full'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            Valor Total ({fmtBrl(openBalance)})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setChargePayMode('partial')}
+                            className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              chargePayMode === 'partial'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            Pagar Parcial
+                          </button>
+                        </div>
+
+                        {chargePayMode === 'partial' && (
+                          <div className="p-3 rounded-xl bg-secondary/30 border border-border/40 space-y-2">
+                            <label className="text-xs font-medium text-foreground block">
+                              Quanto deseja pagar agora? (máx. {fmtBrl(openBalance)})
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              max={openBalance}
+                              placeholder={`Ex: ${Math.min(700, openBalance).toFixed(2)}`}
+                              value={partialAmountInput}
+                              onChange={(e) => setPartialAmountInput(e.target.value)}
+                              className="bg-background/60 border-border/50 text-sm"
+                            />
+                            {partialAmountInput && (
+                              Number.isFinite(partialNum) && partialNum > 0 && partialNum <= openBalance ? (
+                                <p className="text-[11px] text-muted-foreground">
+                                  {partialNum < openBalance - 0.009
+                                    ? `Pago agora: ${fmtBrl(partialNum)} · Restará em aberto: ${fmtBrl(openBalance - partialNum)}`
+                                    : 'Este valor quita integralmente o saldo em aberto.'}
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-destructive">
+                                  Informe um valor entre R$ 0,01 e {fmtBrl(openBalance)}.
+                                </p>
+                              )
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="space-y-3">
                       {isGatewayDisabled ? (
@@ -921,29 +1143,34 @@ const Checkout = () => {
                         activeGateways.map((gateway) => (
                           <motion.button
                             key={gateway}
-                            whileHover={{ scale: 1.02, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
+                            whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
+                            whileTap={isValidPartial ? { scale: 0.98 } : undefined}
+                            disabled={!isValidPartial}
                             onClick={() => handlePayment('PIX', gateway)}
-                            className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white border-none cursor-pointer btn-pix"
+                            className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <img src={pixIcon} alt="Pix" className="w-5 h-5" />
-                            Pix ({GATEWAY_LABELS[gateway]})
+                            {isPartialChoice
+                              ? `Pagar ${fmtBrl(effectiveAmount)} no Pix (${GATEWAY_LABELS[gateway]})`
+                              : `Pix (${GATEWAY_LABELS[gateway]})`}
                           </motion.button>
                         ))
                       ) : (
                         <motion.button
-                          whileHover={{ scale: 1.02, y: -2 }}
-                          whileTap={{ scale: 0.98 }}
+                          whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
+                          whileTap={isValidPartial ? { scale: 0.98 } : undefined}
+                          disabled={!isValidPartial}
                           onClick={() => handlePayment('PIX')}
-                          className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-base text-white border-none cursor-pointer btn-pix"
+                          className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-base text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <img src={pixIcon} alt="Pix" className="w-6 h-6" />
-                          Pagar com Pix
+                          {isPartialChoice ? `Pagar ${fmtBrl(effectiveAmount)} com Pix` : 'Pagar com Pix'}
                         </motion.button>
                       )}
                     </div>
                   </motion.div>
-                )}
+                  );
+                })()}
 
                 {/* Processing */}
                 {paymentStep === 'processing' && (
@@ -975,12 +1202,26 @@ const Checkout = () => {
                     </div>
 
                     {/* Valor em destaque */}
-                    {selectedCharge && (
+                    {(pixData.amountPaid !== undefined || selectedCharge) && (
                       <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Valor a pagar</p>
-                        <p className="text-2xl font-bold text-foreground">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedCharge.amount)}
+                        <p className="text-xs text-muted-foreground">
+                          {pixData.isPartial ? 'Valor parcial a pagar' : 'Valor a pagar'}
                         </p>
+                        <p className="text-2xl font-bold text-foreground">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                            Number(pixData.amountPaid ?? selectedCharge?.amount ?? selectedSubscription?.value ?? 0),
+                          )}
+                        </p>
+                        {pixData.isPartial && selectedCharge && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Restará em aberto após compensar:{' '}
+                            <span className="font-medium text-foreground">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                Math.max(0, Number(selectedCharge.amount) - Number(pixData.amountPaid || 0)),
+                              )}
+                            </span>
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -1020,11 +1261,24 @@ const Checkout = () => {
                       </div>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-3">
-                      <CheckCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#1E4FA3' }} />
-                      <p className="text-xs text-foreground/80">
-                        A confirmação será automática após o pagamento.
-                      </p>
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle className="h-5 w-5 flex-shrink-0" style={{ color: '#1E4FA3' }} />
+                        <p className="text-xs text-foreground/80">
+                          A confirmação será automática após o pagamento.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs shrink-0"
+                        onClick={() => verifyCurrentPixPayment(true)}
+                        disabled={isCheckingPix}
+                      >
+                        <RefreshCw className={`h-3 w-3 mr-1 ${isCheckingPix ? 'animate-spin' : ''}`} />
+                        Verificar
+                      </Button>
                     </div>
                   </motion.div>
                 )}
@@ -1042,11 +1296,19 @@ const Checkout = () => {
                       <CheckCircle className="h-8 w-8 text-success" />
                     </div>
                     <h3 className="text-lg font-heading font-semibold text-foreground">
-                      Redirecionado com sucesso!
+                      {pixData?.isPartial ? 'Pagamento parcial confirmado!' : 'Pagamento confirmado com sucesso!'}
                     </h3>
                     <p className="text-gray-neutral text-sm">
-                      Complete o pagamento na nova janela.
+                      {pixData?.isPartial
+                        ? 'O valor pago já foi registrado nas suas transações e o saldo restante continua em aberto.'
+                        : 'Seu pagamento foi aprovado e já aparece em suas transações.'}
                     </p>
+                    <Button
+                      className="mt-1 btn-blue"
+                      onClick={() => setIsPaymentDialogOpen(false)}
+                    >
+                      Concluir
+                    </Button>
                   </motion.div>
                 )}
 

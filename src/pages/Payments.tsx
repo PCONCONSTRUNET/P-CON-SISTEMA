@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle, Pencil } from 'lucide-react';
+import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle, Pencil, Wallet } from 'lucide-react';
 import WhatsAppSendModal, { WhatsAppSendParams } from '@/components/WhatsAppSendModal';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,11 +48,64 @@ const Payments = () => {
     loadingPayments: loading, 
     deletePayment, 
     markPaymentAsPaid, 
+    registerPartialPayment,
     updatePayment,
     addInvoice, 
     invoices 
   } = useGlobalData();
   const { sendReminder, sendingReminderId } = useWhatsAppReminder();
+
+  const [isPartialDialogOpen, setIsPartialDialogOpen] = useState(false);
+  const [partialForm, setPartialForm] = useState({
+    amount: '',
+    paymentMethod: 'PIX',
+    paidAt: new Date().toISOString().split('T')[0],
+    description: '',
+  });
+  const [isSavingPartial, setIsSavingPartial] = useState(false);
+
+  const handleOpenPartialDialog = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setPartialForm({
+      amount: '',
+      paymentMethod: 'PIX',
+      paidAt: new Date().toISOString().split('T')[0],
+      description: '',
+    });
+    setIsPartialDialogOpen(true);
+  };
+
+  const handleSavePartialPayment = async () => {
+    if (!selectedPayment) return;
+    const paidValue = parseFloat(partialForm.amount.replace(',', '.'));
+    const openAmount = Number(selectedPayment.amount);
+
+    if (!Number.isFinite(paidValue) || paidValue <= 0) {
+      toast.error('Informe um valor pago maior que zero.');
+      return;
+    }
+    if (paidValue > openAmount) {
+      toast.error(`O valor parcial não pode ultrapassar o saldo em aberto (${formatCurrency(openAmount)}).`);
+      return;
+    }
+
+    setIsSavingPartial(true);
+    try {
+      const ok = await registerPartialPayment({
+        parentPaymentId: selectedPayment.id,
+        paidAmount: paidValue,
+        paymentMethod: partialForm.paymentMethod,
+        description: partialForm.description.trim() || undefined,
+        paidAt: partialForm.paidAt ? inputDateToISO(partialForm.paidAt) : new Date().toISOString(),
+      });
+      if (ok) {
+        setIsPartialDialogOpen(false);
+        setSelectedPayment(null);
+      }
+    } finally {
+      setIsSavingPartial(false);
+    }
+  };
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState({
@@ -226,7 +286,19 @@ const Payments = () => {
       header: 'Cliente',
       render: (item: Payment) => (
         <div>
-          <span className="font-medium text-foreground text-sm">{getPaymentClientName(item)}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium text-foreground text-sm">{getPaymentClientName(item)}</span>
+            {item.parent_payment_id && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
+                Parcial
+              </span>
+            )}
+          </div>
+          {item.description && !item.subscription_id && (
+            <span className="block text-[11px] text-muted-foreground truncate max-w-[220px]">
+              {item.description}
+            </span>
+          )}
           <span className="block text-xs text-muted-foreground sm:hidden">{item.payment_method}</span>
         </div>
       ),
@@ -234,9 +306,21 @@ const Payments = () => {
     {
       key: 'amount',
       header: 'Valor',
-      render: (item: Payment) => (
-        <span className="font-semibold text-foreground text-sm">{formatCurrency(Number(item.amount))}</span>
-      ),
+      render: (item: Payment) => {
+        const paidSoFar = Number(item.paid_amount || 0);
+        const origTotal = Number(item.original_amount || 0);
+        const hasPartialHistory = item.status !== 'paid' && paidSoFar > 0;
+        return (
+          <div>
+            <span className="font-semibold text-foreground text-sm">{formatCurrency(Number(item.amount))}</span>
+            {hasPartialHistory && (
+              <span className="block text-[11px] text-muted-foreground">
+                de {formatCurrency(origTotal || Number(item.amount) + paidSoFar)} · pago {formatCurrency(paidSoFar)}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'method',
@@ -327,6 +411,12 @@ const Payments = () => {
               >
                 <Check className="w-4 h-4 mr-2" />
                 Marcar como pago
+              </DropdownMenuItem>
+            )}
+            {item.status !== 'paid' && !item.subscription_id && (
+              <DropdownMenuItem onClick={() => handleOpenPartialDialog(item)}>
+                <Wallet className="w-4 h-4 mr-2 text-primary" />
+                Registrar parcial
               </DropdownMenuItem>
             )}
             <DropdownMenuItem 
@@ -512,9 +602,35 @@ const Payments = () => {
                 </div>
                 
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Valor</label>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {selectedPayment.status !== 'paid' && Number(selectedPayment.paid_amount || 0) > 0
+                      ? 'Restante em aberto'
+                      : 'Valor'}
+                  </label>
                   <p className="text-sm font-medium text-foreground">{formatCurrency(Number(selectedPayment.amount))}</p>
                 </div>
+
+                {Number(selectedPayment.paid_amount || 0) > 0 && (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Valor Original</label>
+                      <p className="text-sm font-medium text-foreground">
+                        {formatCurrency(
+                          Number(
+                            selectedPayment.original_amount ||
+                              Number(selectedPayment.amount) + Number(selectedPayment.paid_amount || 0),
+                          ),
+                        )}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Já Pago (Parcial)</label>
+                      <p className="text-sm font-medium text-success">
+                        {formatCurrency(Number(selectedPayment.paid_amount || 0))}
+                      </p>
+                    </div>
+                  </>
+                )}
                 
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Método</label>
@@ -586,6 +702,20 @@ const Payments = () => {
                 >
                   Fechar
                 </Button>
+                {selectedPayment.status !== 'paid' && !selectedPayment.subscription_id && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-primary/40 text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      const target = selectedPayment;
+                      setIsDetailsDialogOpen(false);
+                      handleOpenPartialDialog(target);
+                    }}
+                  >
+                    <Wallet className="w-4 h-4 mr-2" />
+                    Parcial
+                  </Button>
+                )}
                 {selectedPayment.status !== 'paid' && (
                   <Button 
                     className="flex-1 bg-success hover:bg-success/90 text-success-foreground" 
@@ -778,6 +908,143 @@ const Payments = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Payment Dialog */}
+      <Dialog open={isPartialDialogOpen} onOpenChange={setIsPartialDialogOpen}>
+        <DialogContent className="glass-card border-border/50 max-w-[95vw] sm:max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Registrar Pagamento Parcial</DialogTitle>
+            <DialogDescription>
+              Registre um valor avulso já pago pelo cliente. O restante continuará pendente na cobrança original.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPayment && (() => {
+            const openAmount = Number(selectedPayment.amount);
+            const alreadyPaid = Number(selectedPayment.paid_amount || 0);
+            const origAmount = Number(selectedPayment.original_amount || openAmount + alreadyPaid);
+            const entered = parseFloat(partialForm.amount.replace(',', '.'));
+            const validEntered = Number.isFinite(entered) && entered > 0 && entered <= openAmount;
+            const willRemain = validEntered ? Math.max(0, openAmount - entered) : openAmount;
+
+            return (
+              <div className="space-y-4 mt-2">
+                <div className="p-3.5 rounded-xl bg-secondary/40 border border-border/40 space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Cliente</span>
+                    <span className="font-medium text-foreground">{getPaymentClientName(selectedPayment)}</span>
+                  </div>
+                  {selectedPayment.description && (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground shrink-0">Cobrança</span>
+                      <span className="font-medium text-foreground truncate">{selectedPayment.description}</span>
+                    </div>
+                  )}
+                  {alreadyPaid > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Valor original</span>
+                        <span className="text-foreground">{formatCurrency(origAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Já pago anteriormente</span>
+                        <span className="text-success font-medium">{formatCurrency(alreadyPaid)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground font-medium">Saldo em aberto</span>
+                    <span className="font-bold text-primary">{formatCurrency(openAmount)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Valor recebido agora (R$) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={openAmount}
+                    placeholder={`Ex: ${Math.min(700, openAmount).toFixed(2)}`}
+                    value={partialForm.amount}
+                    onChange={(e) => setPartialForm({ ...partialForm, amount: e.target.value })}
+                    className="bg-secondary/50 border-border/50"
+                  />
+                  {validEntered && (
+                    <p className="text-xs text-muted-foreground">
+                      {willRemain > 0.009
+                        ? `Pago agora: ${formatCurrency(entered)} · Restará em aberto: ${formatCurrency(willRemain)}`
+                        : 'Este valor quita integralmente o saldo em aberto.'}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Método</Label>
+                    <Select
+                      value={partialForm.paymentMethod}
+                      onValueChange={(val) => setPartialForm({ ...partialForm, paymentMethod: val })}
+                    >
+                      <SelectTrigger className="bg-secondary/50 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass-card border-border/50">
+                        <SelectItem value="PIX">PIX</SelectItem>
+                        <SelectItem value="DINHEIRO">Dinheiro</SelectItem>
+                        <SelectItem value="TRANSFERENCIA">Transferência</SelectItem>
+                        <SelectItem value="CARTAO">Cartão</SelectItem>
+                        <SelectItem value="OUTRO">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Data do pagamento</Label>
+                    <Input
+                      type="date"
+                      value={partialForm.paidAt}
+                      onChange={(e) => setPartialForm({ ...partialForm, paidAt: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Observação (opcional)</Label>
+                  <Input
+                    placeholder="Ex: Entrada combinada via PIX"
+                    value={partialForm.description}
+                    onChange={(e) => setPartialForm({ ...partialForm, description: e.target.value })}
+                    className="bg-secondary/50 border-border/50"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-border/50"
+                    onClick={() => {
+                      setIsPartialDialogOpen(false);
+                      setSelectedPayment(null);
+                    }}
+                    disabled={isSavingPartial}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                    onClick={handleSavePartialPayment}
+                    disabled={isSavingPartial || !validEntered}
+                  >
+                    {isSavingPartial ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Parcial'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </DashboardLayout>
