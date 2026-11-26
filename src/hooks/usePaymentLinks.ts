@@ -20,6 +20,8 @@ export interface PaymentLinkRecord {
   payment_id: string | null;
   payment_method: string | null;
   paid_at: string | null;
+  original_amount?: number | null;
+  balance_payment_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +33,21 @@ export interface CreatePaymentLinkInput {
   allow_pix: boolean;
   allow_card: boolean;
   max_installments?: number;
+  client_id?: string | null;
+  original_amount?: number | null;
+}
+
+export interface ConfigurePaymentLinkBillingInput {
+  linkId: string;
+  title?: string;
+  description?: string | null;
+  amount?: number;
+  allow_pix?: boolean;
+  allow_card?: boolean;
+  max_installments?: number;
+  client_id?: string | null;
+  clear_client?: boolean;
+  original_amount?: number | null;
 }
 
 export function buildStandalonePaymentUrl(token: string, origin?: string): string {
@@ -132,7 +149,26 @@ export function usePaymentLinks() {
         .single();
 
       if (insertError) throw insertError;
-      const created = data as PaymentLinkRecord;
+      let created = data as PaymentLinkRecord;
+
+      if (input.client_id || (input.original_amount && input.original_amount > input.amount)) {
+        const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+          'configure_payment_link_billing',
+          {
+            p_link_id: created.id,
+            p_client_id: input.client_id || null,
+            p_clear_client: false,
+            p_original_amount:
+              input.original_amount && input.original_amount > input.amount
+                ? Number(input.original_amount)
+                : null,
+          },
+        );
+        if (!rpcErr && rpcRes?.link) {
+          created = rpcRes.link as PaymentLinkRecord;
+        }
+      }
+
       setLinks((prev) => {
         const next = [created, ...prev.filter((l) => l.id !== created.id)];
         cachedLinks = next;
@@ -142,6 +178,45 @@ export function usePaymentLinks() {
     } catch (err: any) {
       console.error('Error creating payment link:', err);
       toast.error(err?.message || 'Erro ao criar link de pagamento');
+      return null;
+    }
+  };
+
+  const configureLinkBilling = async (
+    input: ConfigurePaymentLinkBillingInput,
+  ): Promise<PaymentLinkRecord | null> => {
+    try {
+      const { data: rpcRes, error: rpcError } = await (supabase as any).rpc(
+        'configure_payment_link_billing',
+        {
+          p_link_id: input.linkId,
+          p_title: input.title ?? null,
+          p_description: input.description === undefined ? null : input.description || '',
+          p_amount: input.amount ?? null,
+          p_allow_pix: input.allow_pix ?? null,
+          p_allow_card: input.allow_card ?? null,
+          p_max_installments: input.max_installments ?? null,
+          p_client_id: input.client_id ?? null,
+          p_clear_client: !!input.clear_client,
+          p_original_amount: input.original_amount ?? null,
+        },
+      );
+
+      if (rpcError) throw rpcError;
+      const updated = (rpcRes?.link || null) as PaymentLinkRecord | null;
+      if (updated) {
+        setLinks((prev) => {
+          const next = prev.map((l) => (l.id === updated.id ? updated : l));
+          cachedLinks = next;
+          return next;
+        });
+      } else {
+        await fetchLinks();
+      }
+      return updated;
+    } catch (err: any) {
+      console.error('Error configuring payment link billing:', err);
+      toast.error(err?.message || 'Erro ao atualizar configurações do link');
       return null;
     }
   };
@@ -206,6 +281,7 @@ export function usePaymentLinks() {
     error,
     createLink,
     updateLink,
+    configureLinkBilling,
     deleteLink,
     refetch: fetchLinks,
   };

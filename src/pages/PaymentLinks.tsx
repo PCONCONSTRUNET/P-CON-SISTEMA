@@ -54,6 +54,8 @@ import {
   buildStandalonePaymentUrl,
   usePaymentLinks,
 } from '@/hooks/usePaymentLinks';
+import { ClientSearchSelect } from '@/components/ClientSearchSelect';
+import { useOptionalGlobalData } from '@/contexts/GlobalDataContext';
 import { formatBrazilDateTime } from '@/utils/dateUtils';
 import { formatDocumentInput } from '@/utils/documentValidation';
 import { generatePaymentReceiptPDF } from '@/utils/paymentReceiptPdfGenerator';
@@ -75,8 +77,13 @@ const parseAmountInput = (raw: string): number => {
 };
 
 export default function PaymentLinks() {
-  const { links, loading, error, createLink, updateLink, deleteLink, refetch } =
+  const { links, loading, error, createLink, updateLink, configureLinkBilling, deleteLink, refetch } =
     usePaymentLinks();
+  const globalData = useOptionalGlobalData();
+  const selectableClients = useMemo(
+    () => (globalData?.clients || []).filter((c) => c.status !== 'inactive'),
+    [globalData?.clients],
+  );
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid' | 'cancelled'>('all');
@@ -91,6 +98,8 @@ export default function PaymentLinks() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amountInput, setAmountInput] = useState('');
+  const [originalAmountInput, setOriginalAmountInput] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [allowPix, setAllowPix] = useState(true);
   const [allowCard, setAllowCard] = useState(true);
   const [maxInstallments, setMaxInstallments] = useState('4');
@@ -253,6 +262,8 @@ export default function PaymentLinks() {
     setTitle('');
     setDescription('');
     setAmountInput('');
+    setOriginalAmountInput('');
+    setSelectedClientId('');
     setAllowPix(true);
     setAllowCard(true);
     setMaxInstallments('4');
@@ -269,6 +280,12 @@ export default function PaymentLinks() {
     setTitle(item.title);
     setDescription(item.description || '');
     setAmountInput(Number(item.amount || 0).toFixed(2).replace('.', ','));
+    setOriginalAmountInput(
+      item.original_amount && Number(item.original_amount) > Number(item.amount || 0)
+        ? Number(item.original_amount).toFixed(2).replace('.', ',')
+        : '',
+    );
+    setSelectedClientId(item.client_id || '');
     setAllowPix(item.allow_pix !== false);
     setAllowCard(item.allow_card !== false);
     setMaxInstallments(String(Math.min(Math.max(item.max_installments || 4, 1), 4)));
@@ -314,7 +331,14 @@ export default function PaymentLinks() {
     e.preventDefault();
 
     const trimmedTitle = title.trim();
-    const numericAmount = parseAmountInput(amountInput);
+    const numericAmount = editingLink?.status === 'paid'
+      ? Number(editingLink.amount)
+      : parseAmountInput(amountInput);
+    const parsedOriginal = originalAmountInput.trim()
+      ? parseAmountInput(originalAmountInput)
+      : NaN;
+    const hasOriginalPartial =
+      Number.isFinite(parsedOriginal) && parsedOriginal > numericAmount + 0.009;
 
     if (trimmedTitle.length < 2) {
       toast.error('Informe um título para a cobrança (ex: Gestão de Redes Sociais).');
@@ -326,7 +350,17 @@ export default function PaymentLinks() {
       return;
     }
 
-    if (!allowPix && !allowCard) {
+    if (originalAmountInput.trim() && (!Number.isFinite(parsedOriginal) || parsedOriginal < numericAmount - 0.009)) {
+      toast.error('O valor total original deve ser igual ou maior que o valor do link.');
+      return;
+    }
+
+    if (hasOriginalPartial && editingLink?.status === 'paid' && !selectedClientId) {
+      toast.error('Vincule um cliente cadastrado para lançar o saldo restante na área do cliente.');
+      return;
+    }
+
+    if (editingLink?.status !== 'paid' && !allowPix && !allowCard) {
       toast.error('Ative pelo menos uma forma de pagamento (PIX ou Cartão).');
       return;
     }
@@ -336,17 +370,27 @@ export default function PaymentLinks() {
       const installmentsNum = Math.min(Math.max(Number(maxInstallments || 4), 1), 4);
 
       if (editingLink) {
-        const updated = await updateLink(editingLink.id, {
+        const updated = await configureLinkBilling({
+          linkId: editingLink.id,
           title: trimmedTitle,
-          description: description.trim() || null,
-          amount: numericAmount,
+          description: description.trim() || '',
+          amount: editingLink.status === 'paid' ? undefined : numericAmount,
           allow_pix: allowPix,
           allow_card: allowCard,
           max_installments: installmentsNum,
+          client_id: selectedClientId || null,
+          clear_client: !selectedClientId,
+          original_amount: hasOriginalPartial ? parsedOriginal : null,
         });
 
         if (updated) {
-          toast.success('Link de pagamento atualizado!');
+          toast.success(
+            hasOriginalPartial && updated.status === 'paid'
+              ? 'Link atualizado! Saldo restante lançado na área do cliente.'
+              : 'Link de pagamento atualizado!',
+          );
+          void globalData?.refetchPayments?.();
+          void globalData?.refetchInvoices?.();
           setModalOpen(false);
           resetForm();
         }
@@ -360,6 +404,8 @@ export default function PaymentLinks() {
         allow_pix: allowPix,
         allow_card: allowCard,
         max_installments: installmentsNum,
+        client_id: selectedClientId || null,
+        original_amount: hasOriginalPartial ? parsedOriginal : null,
       });
 
       if (created) {
@@ -448,16 +494,27 @@ export default function PaymentLinks() {
     {
       key: 'amount',
       header: 'Valor',
-      render: (item: PaymentLinkRecord) => (
-        <div className="whitespace-nowrap">
-          <div className="font-bold text-foreground">{formatCurrency(item.amount)}</div>
-          {item.allow_card && (
-            <div className="text-[11px] text-muted-foreground">
-              até {item.max_installments || 4}x no cartão
-            </div>
-          )}
-        </div>
-      ),
+      render: (item: PaymentLinkRecord) => {
+        const orig = Number(item.original_amount || 0);
+        const amt = Number(item.amount || 0);
+        const hasRemaining = orig > amt + 0.009;
+        return (
+          <div className="whitespace-nowrap">
+            <div className="font-bold text-foreground">{formatCurrency(amt)}</div>
+            {hasRemaining ? (
+              <div className="text-[11px] text-amber-300/90">
+                de {formatCurrency(orig)} · restam {formatCurrency(orig - amt)}
+              </div>
+            ) : (
+              item.allow_card && (
+                <div className="text-[11px] text-muted-foreground">
+                  até {item.max_installments || 4}x no cartão
+                </div>
+              )
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'methods',
@@ -485,9 +542,16 @@ export default function PaymentLinks() {
       header: 'Pagador (Nome / CPF)',
       hideOnMobile: true,
       render: (item: PaymentLinkRecord) =>
-        item.payer_name || item.payer_document ? (
+        item.payer_name || item.payer_document || item.client_id ? (
           <div className="space-y-0.5 text-xs">
-            <div className="font-medium text-foreground">{item.payer_name || '-'}</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-foreground">{item.payer_name || '-'}</span>
+              {item.client_id && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/25">
+                  Vinculado
+                </span>
+              )}
+            </div>
             {item.payer_document && (
               <div className="font-mono text-muted-foreground">
                 {formatDocumentInput(item.payer_document)}
@@ -571,34 +635,32 @@ export default function PaymentLinks() {
             <MessageCircle className="w-4 h-4" />
           </Button>
 
-          {item.status !== 'paid' && (
-            <>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                title="Editar link"
-                onClick={() => openEditModal(item)}
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              >
-                <Pencil className="w-4 h-4" />
-              </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            title={item.status === 'paid' ? 'Vincular cliente / definir valor original' : 'Editar link'}
+            onClick={() => openEditModal(item)}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="w-4 h-4" />
+          </Button>
 
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                title={item.status === 'cancelled' ? 'Reativar link' : 'Cancelar link'}
-                onClick={() => void handleToggleCancel(item)}
-                className="h-8 w-8 text-amber-400 hover:text-amber-300 hover:bg-amber-500/15"
-              >
-                {item.status === 'cancelled' ? (
-                  <RotateCcw className="w-4 h-4" />
-                ) : (
-                  <Ban className="w-4 h-4" />
-                )}
-              </Button>
-            </>
+          {item.status !== 'paid' && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              title={item.status === 'cancelled' ? 'Reativar link' : 'Cancelar link'}
+              onClick={() => void handleToggleCancel(item)}
+              className="h-8 w-8 text-amber-400 hover:text-amber-300 hover:bg-amber-500/15"
+            >
+              {item.status === 'cancelled' ? (
+                <RotateCcw className="w-4 h-4" />
+              ) : (
+                <Ban className="w-4 h-4" />
+              )}
+            </Button>
           )}
 
           <Button
@@ -847,32 +909,38 @@ export default function PaymentLinks() {
             <form onSubmit={handleSubmitForm} className="space-y-3">
               <DialogHeader className="space-y-1">
                 <DialogTitle className="text-lg">
-                  {editingLink ? 'Editar Link de Pagamento' : 'Novo Link de Pagamento'}
+                  {editingLink
+                    ? editingLink.status === 'paid'
+                      ? 'Editar Cobrança Paga & Vincular Cliente'
+                      : 'Editar Link de Pagamento'
+                    : 'Novo Link de Pagamento'}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-white/70">
-                  Informe título, descrição, valor e libere PIX e/ou Cartão.
+                  {editingLink?.status === 'paid'
+                    ? 'Vincule o cliente cadastrado e informe o valor total original para lançar o saldo restante na área do cliente.'
+                    : 'Informe título, valor, descrição e opcionalmente vincule um cliente cadastrado.'}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div className="sm:col-span-2 space-y-1">
-                    <Label htmlFor="link-title" className="text-xs">
-                      Título da cobrança *
-                    </Label>
-                    <Input
-                      id="link-title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Ex: Gestão de Redes Sociais"
-                      required
-                      className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm"
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <Label htmlFor="link-title" className="text-xs">
+                    Título da cobrança *
+                  </Label>
+                  <Input
+                    id="link-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Ex: Gestão de Redes Sociais"
+                    required
+                    className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm"
+                  />
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div className="space-y-1">
                     <Label htmlFor="link-amount" className="text-xs">
-                      Valor (R$) *
+                      {editingLink?.status === 'paid' ? 'Valor pago no link (R$)' : 'Valor do link (R$) *'}
                     </Label>
                     <Input
                       id="link-amount"
@@ -881,9 +949,58 @@ export default function PaymentLinks() {
                       placeholder="150,00"
                       inputMode="decimal"
                       required
-                      className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm font-semibold"
+                      disabled={editingLink?.status === 'paid'}
+                      className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm font-semibold disabled:opacity-70"
                     />
                   </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="link-original-amount" className="text-xs">
+                      Valor total original (opcional)
+                    </Label>
+                    <Input
+                      id="link-original-amount"
+                      value={originalAmountInput}
+                      onChange={(e) => setOriginalAmountInput(e.target.value)}
+                      placeholder="Ex: 1750,00"
+                      inputMode="decimal"
+                      className="h-9 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {(() => {
+                  const paidAmt = editingLink?.status === 'paid' ? Number(editingLink.amount) : parseAmountInput(amountInput);
+                  const origAmt = originalAmountInput.trim() ? parseAmountInput(originalAmountInput) : NaN;
+                  if (Number.isFinite(paidAmt) && Number.isFinite(origAmt) && origAmt > paidAmt + 0.009) {
+                    return (
+                      <div className="rounded-lg bg-emerald-500/10 border border-emerald-400/25 px-3 py-2 text-xs text-emerald-200 space-y-0.5">
+                        <p className="font-medium">
+                          {editingLink?.status === 'paid' ? 'Pago no link' : 'Entrada deste link'}:{' '}
+                          <strong className="text-white">{formatCurrency(paidAmt)}</strong> · Restante em aberto:{' '}
+                          <strong className="text-amber-300">{formatCurrency(origAmt - paidAmt)}</strong>
+                        </p>
+                        <p className="text-[11px] text-white/70">
+                          {selectedClientId
+                            ? 'O saldo restante aparecerá em aberto na Área do Cliente vinculada.'
+                            : 'Selecione o cliente cadastrado abaixo para exibir o saldo na Área do Cliente.'}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    Vincular cliente cadastrado {originalAmountInput.trim() ? '*' : '(opcional)'}
+                  </Label>
+                  <ClientSearchSelect
+                    clients={selectableClients}
+                    value={selectedClientId}
+                    onChange={setSelectedClientId}
+                    placeholder="Selecionar cliente cadastrado..."
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -896,88 +1013,94 @@ export default function PaymentLinks() {
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Detalhes do serviço ou produto..."
                     rows={2}
-                    className="min-h-[56px] bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 resize-none text-sm"
+                    className="min-h-[54px] bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 resize-none text-sm"
                   />
                 </div>
 
-                {/* Opções de PIX e Cartão */}
-                <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-md bg-[#32BCAD]/15 border border-[#32BCAD]/30 flex items-center justify-center">
-                        <QrCode className="w-3.5 h-3.5 text-[#5ce2d3]" />
+                {/* Opções de PIX e Cartão (editável antes de pagar) */}
+                {editingLink?.status !== 'paid' && (
+                  <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-md bg-[#32BCAD]/15 border border-[#32BCAD]/30 flex items-center justify-center">
+                          <QrCode className="w-3.5 h-3.5 text-[#5ce2d3]" />
+                        </div>
+                        <div>
+                          <Label htmlFor="switch-pix" className="text-sm font-medium cursor-pointer">
+                            Ativar PIX
+                          </Label>
+                          <p className="text-[11px] text-white/55 leading-tight">
+                            QR Code e Copia e Cola instantâneo
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <Label htmlFor="switch-pix" className="text-sm font-medium cursor-pointer">
-                          Ativar PIX
+                      <Switch
+                        id="switch-pix"
+                        checked={allowPix}
+                        onCheckedChange={setAllowPix}
+                      />
+                    </div>
+
+                    <div className="h-px bg-white/10" />
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-md bg-sky-500/15 border border-sky-400/30 flex items-center justify-center">
+                          <CreditCard className="w-3.5 h-3.5 text-sky-400" />
+                        </div>
+                        <div>
+                          <Label htmlFor="switch-card" className="text-sm font-medium cursor-pointer">
+                            Ativar Cartão de Crédito
+                          </Label>
+                          <p className="text-[11px] text-white/55 leading-tight">
+                            Pagamento parcelado via Mercado Pago
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        id="switch-card"
+                        checked={allowCard}
+                        onCheckedChange={setAllowCard}
+                      />
+                    </div>
+
+                    {allowCard && (
+                      <div className="pt-1 flex items-center justify-between gap-3">
+                        <Label htmlFor="max-installments" className="text-xs text-white/75">
+                          Parcelamento máximo
                         </Label>
-                        <p className="text-[11px] text-white/55 leading-tight">
-                          QR Code e Copia e Cola instantâneo
-                        </p>
+                        <Select value={maxInstallments} onValueChange={setMaxInstallments}>
+                          <SelectTrigger
+                            id="max-installments"
+                            className="w-28 h-8 bg-white/[0.06] border-white/15 text-xs text-white"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-[#0e203d] border-white/15 text-white">
+                            <SelectItem value="1">À vista (1x)</SelectItem>
+                            <SelectItem value="2">Até 2x</SelectItem>
+                            <SelectItem value="3">Até 3x</SelectItem>
+                            <SelectItem value="4">Até 4x</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </div>
-                    <Switch
-                      id="switch-pix"
-                      checked={allowPix}
-                      onCheckedChange={setAllowPix}
-                    />
+                    )}
                   </div>
+                )}
 
-                  <div className="h-px bg-white/10" />
-
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-md bg-sky-500/15 border border-sky-400/30 flex items-center justify-center">
-                        <CreditCard className="w-3.5 h-3.5 text-sky-400" />
-                      </div>
-                      <div>
-                        <Label htmlFor="switch-card" className="text-sm font-medium cursor-pointer">
-                          Ativar Cartão de Crédito
-                        </Label>
-                        <p className="text-[11px] text-white/55 leading-tight">
-                          Pagamento parcelado via Mercado Pago
-                        </p>
-                      </div>
-                    </div>
-                    <Switch
-                      id="switch-card"
-                      checked={allowCard}
-                      onCheckedChange={setAllowCard}
-                    />
+                {editingLink?.status !== 'paid' && (
+                  <div className="flex items-center gap-2 rounded-lg bg-sky-500/10 border border-sky-400/20 px-2.5 py-1.5 text-[11px] text-sky-200/90">
+                    <UserCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <span>
+                      {selectedClientId
+                        ? 'Dados do cliente já vinculados — ele ainda poderá conferir antes de pagar.'
+                        : 'O cliente informa Nome e CPF/CNPJ antes de pagar.'}
+                    </span>
                   </div>
-
-                  {allowCard && (
-                    <div className="pt-1 flex items-center justify-between gap-3">
-                      <Label htmlFor="max-installments" className="text-xs text-white/75">
-                        Parcelamento máximo
-                      </Label>
-                      <Select value={maxInstallments} onValueChange={setMaxInstallments}>
-                        <SelectTrigger
-                          id="max-installments"
-                          className="w-28 h-8 bg-white/[0.06] border-white/15 text-xs text-white"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#0e203d] border-white/15 text-white">
-                          <SelectItem value="1">À vista (1x)</SelectItem>
-                          <SelectItem value="2">Até 2x</SelectItem>
-                          <SelectItem value="3">Até 3x</SelectItem>
-                          <SelectItem value="4">Até 4x</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 rounded-lg bg-sky-500/10 border border-sky-400/20 px-2.5 py-1.5 text-[11px] text-sky-200/90">
-                  <UserCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                  <span>
-                    O cliente informa <strong>Nome e CPF/CNPJ</strong> antes de pagar.
-                  </span>
-                </div>
+                )}
               </div>
 
-              <DialogFooter className="gap-2 pt-1">
+              <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:space-x-0 pt-1">
                 <Button
                   type="button"
                   variant="ghost"
@@ -1039,10 +1162,20 @@ export default function PaymentLinks() {
                   {/* Resumo financeiro */}
                   <div className="rounded-xl bg-white/[0.05] border border-white/10 p-3.5 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] text-white/60">Valor da cobrança</p>
+                      <p className="text-[11px] text-white/60">
+                        {Number(detailsLink.original_amount || 0) > Number(detailsLink.amount)
+                          ? 'Valor parcial pago no link'
+                          : 'Valor da cobrança'}
+                      </p>
                       <p className="text-2xl font-bold text-emerald-400">
                         {formatCurrency(Number(linkedPaymentData?.amount ?? detailsLink.amount))}
                       </p>
+                      {Number(detailsLink.original_amount || 0) > Number(detailsLink.amount) && (
+                        <p className="text-xs text-amber-300 mt-0.5">
+                          de {formatCurrency(Number(detailsLink.original_amount))} · Restam{' '}
+                          {formatCurrency(Number(detailsLink.original_amount) - Number(detailsLink.amount))}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right space-y-0.5 text-xs">
                       <p className="text-white/75">
@@ -1196,6 +1329,19 @@ export default function PaymentLinks() {
                     className="border-white/20 bg-white/5 hover:bg-white/10 text-white"
                   >
                     Fechar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const target = detailsLink;
+                      setDetailsLink(null);
+                      openEditModal(target);
+                    }}
+                    className="border-white/20 bg-white/5 hover:bg-white/10 text-white gap-1.5"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar / Vincular
                   </Button>
                   <Button
                     type="button"

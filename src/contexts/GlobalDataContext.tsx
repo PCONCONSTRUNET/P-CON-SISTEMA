@@ -1012,6 +1012,7 @@ export const GlobalDataProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
       setRawPayments((prev) => prev.filter((p) => p.id !== id));
+      await Promise.all([fetchPayments(), fetchInvoices()]);
       toast.success('Pagamento removido com sucesso!');
       return true;
     } catch (error) {
