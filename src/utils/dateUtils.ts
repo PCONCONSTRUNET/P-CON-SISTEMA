@@ -124,6 +124,31 @@ export const inputDateToISO = (inputDate: string): string => {
 };
 
 /**
+ * Formata uma data no formato HH:mm para inputs type="time"
+ */
+export const formatTimeForInput = (date: Date = new Date()): string => {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+/**
+ * Converte data (yyyy-MM-dd) e horário local (HH:mm) para ISO string preservando o horário
+ */
+export const localDateTimeToISO = (dateStr: string, timeStr?: string): string => {
+  if (!dateStr) return new Date().toISOString();
+  const normalizedDate = normalizeInputDate(dateStr);
+  const safeTime = /^\d{2}:\d{2}$/.test(timeStr || '')
+    ? `${timeStr}:00`
+    : `${formatTimeForInput(new Date())}:00`;
+  const combined = new Date(`${normalizedDate}T${safeTime}`);
+  if (Number.isNaN(combined.getTime())) {
+    return inputDateToISO(dateStr) || new Date().toISOString();
+  }
+  return combined.toISOString();
+};
+
+/**
  * Normaliza uma data do input para o formato yyyy-MM-dd
  * Útil para enviar ao ASAAS que espera esse formato
  */

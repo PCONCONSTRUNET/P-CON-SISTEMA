@@ -2,22 +2,29 @@ import { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   Ban,
+  Building2,
   Check,
   Copy,
   CreditCard,
+  Download,
   ExternalLink,
+  Eye,
+  FileText,
   Link2,
   LoaderCircle,
   MessageCircle,
   Pencil,
   Plus,
   QrCode,
+  Receipt,
+  RefreshCw,
   RotateCcw,
   Search,
   Sparkles,
   Trash2,
   UserCheck,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
@@ -47,7 +54,9 @@ import {
   buildStandalonePaymentUrl,
   usePaymentLinks,
 } from '@/hooks/usePaymentLinks';
+import { formatBrazilDateTime } from '@/utils/dateUtils';
 import { formatDocumentInput } from '@/utils/documentValidation';
+import { generatePaymentReceiptPDF } from '@/utils/paymentReceiptPdfGenerator';
 import { toast } from 'sonner';
 
 const formatCurrency = (value: number) =>
@@ -89,6 +98,154 @@ export default function PaymentLinks() {
   // Confirmação de exclusão
   const [deleteTarget, setDeleteTarget] = useState<PaymentLinkRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Modal de Detalhes / Comprovante
+  const [detailsLink, setDetailsLink] = useState<PaymentLinkRecord | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [generatingReceipt, setGeneratingReceipt] = useState(false);
+  const [linkedPaymentData, setLinkedPaymentData] = useState<{
+    id: string;
+    amount: number;
+    status: string;
+    payment_method: string | null;
+    transaction_id: string | null;
+    asaas_id: string | null;
+    paid_at: string | null;
+    created_at: string;
+    description: string | null;
+  } | null>(null);
+  const [linkedInvoiceNumber, setLinkedInvoiceNumber] = useState<string | null>(null);
+  const [liveMpInfo, setLiveMpInfo] = useState<{
+    status?: string | null;
+    statusDetail?: string | null;
+    paidAt?: string | null;
+  } | null>(null);
+
+  const openDetailsModal = async (item: PaymentLinkRecord) => {
+    setDetailsLink(item);
+    setLinkedPaymentData(null);
+    setLinkedInvoiceNumber(null);
+    setLiveMpInfo(null);
+    setDetailsLoading(true);
+
+    try {
+      let paymentRow: any = null;
+      if (item.payment_id) {
+        const { data } = await supabase
+          .from('payments')
+          .select('id, amount, status, payment_method, transaction_id, asaas_id, paid_at, created_at, description')
+          .eq('id', item.payment_id)
+          .maybeSingle();
+        paymentRow = data;
+      }
+
+      if (!paymentRow) {
+        const { data } = await (supabase as any)
+          .from('payments')
+          .select('id, amount, status, payment_method, transaction_id, asaas_id, paid_at, created_at, description')
+          .eq('payment_link_id', item.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        paymentRow = data;
+      }
+
+      if (paymentRow) {
+        setLinkedPaymentData(paymentRow);
+
+        const { data: invData } = await supabase
+          .from('invoices')
+          .select('number')
+          .eq('payment_id', paymentRow.id)
+          .order('issued_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (invData?.number) {
+          setLinkedInvoiceNumber(invData.number);
+        }
+
+        // Consulta status detalhado no Mercado Pago quando transaction_id numérico
+        if (paymentRow.transaction_id && /^\d+$/.test(String(paymentRow.transaction_id).trim())) {
+          try {
+            const { data: mpRes } = await supabase.functions.invoke('mercadopago', {
+              body: {
+                _action: 'check-status',
+                paymentId: String(paymentRow.transaction_id).trim(),
+              },
+            });
+            if (mpRes?.success) {
+              setLiveMpInfo({
+                status: mpRes.status || null,
+                statusDetail: mpRes.statusDetail || null,
+                paidAt: mpRes.paidAt || null,
+              });
+            }
+          } catch {
+            // Falha silenciosa: dados principais seguem disponíveis do banco
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error loading payment link details:', err);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleCopyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copiado!`);
+    } catch {
+      toast.info(`${label}: ${value}`);
+    }
+  };
+
+  const detectGatewayLabel = (): string => {
+    if (linkedPaymentData?.asaas_id) return 'Asaas / Gateway';
+    const tx = linkedPaymentData?.transaction_id || '';
+    if (/^\d+$/.test(tx)) return 'Mercado Pago';
+    if (/^[a-f0-9]{20,}$/i.test(tx)) return 'EFI Bank';
+    return 'Mercado Pago';
+  };
+
+  const handleDownloadReceipt = async () => {
+    if (!detailsLink) return;
+    setGeneratingReceipt(true);
+    try {
+      await generatePaymentReceiptPDF({
+        title: detailsLink.title,
+        description: detailsLink.description,
+        amount: Number(linkedPaymentData?.amount ?? detailsLink.amount),
+        status: linkedPaymentData?.status || detailsLink.status,
+        paymentMethod: linkedPaymentData?.payment_method || detailsLink.payment_method,
+        paidAt: liveMpInfo?.paidAt || linkedPaymentData?.paid_at || detailsLink.paid_at,
+        createdAt: detailsLink.created_at,
+        checkoutUrl: buildStandalonePaymentUrl(detailsLink.token),
+        token: detailsLink.token,
+        linkId: detailsLink.id,
+        paymentId: linkedPaymentData?.id || detailsLink.payment_id,
+        transactionId: linkedPaymentData?.transaction_id || null,
+        invoiceNumber: linkedInvoiceNumber,
+        gatewayName: detectGatewayLabel(),
+        gatewayStatus: liveMpInfo?.status || linkedPaymentData?.status || detailsLink.status,
+        gatewayStatusDetail: liveMpInfo?.statusDetail || null,
+        payerName: detailsLink.payer_name,
+        payerDocument: detailsLink.payer_document,
+        payerEmail: detailsLink.payer_email,
+        payerPhone: detailsLink.payer_phone,
+        recipientName: 'P-CON CONSTRUNET',
+        recipientSite: 'www.pconassinantes.site',
+      });
+      toast.success('Comprovante em PDF gerado com sucesso!');
+    } catch (err) {
+      console.error('Error generating receipt PDF:', err);
+      toast.error('Erro ao gerar comprovante em PDF.');
+    } finally {
+      setGeneratingReceipt(false);
+    }
+  };
 
   const resetForm = () => {
     setEditingLink(null);
@@ -368,6 +525,17 @@ export default function PaymentLinks() {
             type="button"
             size="icon"
             variant="ghost"
+            title="Ver detalhes e comprovante"
+            onClick={() => void openDetailsModal(item)}
+            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/15"
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
             title="Copiar link"
             onClick={() => void handleCopyUrl(item)}
             className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/15"
@@ -564,7 +732,7 @@ export default function PaymentLinks() {
             )}
           </div>
         ) : (
-          <DataTable data={filteredLinks} columns={columns} />
+          <DataTable data={filteredLinks} columns={columns} onRowClick={(item) => void openDetailsModal(item)} />
         )}
       </div>
 
@@ -576,7 +744,7 @@ export default function PaymentLinks() {
           if (!open) resetForm();
         }}
       >
-        <DialogContent className="sm:max-w-md bg-[#0b1930] border-white/15 text-white p-5">
+        <DialogContent className="sm:max-w-md bg-[#0b1930] border-white/15 text-white p-5 overflow-x-hidden">
           {createdLink ? (
             <>
               <DialogHeader>
@@ -592,18 +760,18 @@ export default function PaymentLinks() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 py-2">
-                <div className="rounded-xl bg-white/[0.05] border border-white/10 p-4 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-white">{createdLink.title}</span>
-                    <span className="font-bold text-emerald-400">
+              <div className="space-y-4 py-2 min-w-0">
+                <div className="rounded-xl bg-white/[0.05] border border-white/10 p-4 space-y-1.5 min-w-0">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <span className="font-semibold text-white min-w-0 break-words">{createdLink.title}</span>
+                    <span className="font-bold text-emerald-400 shrink-0 whitespace-nowrap">
                       {formatCurrency(createdLink.amount)}
                     </span>
                   </div>
                   {createdLink.description && (
-                    <p className="text-xs text-white/65">{createdLink.description}</p>
+                    <p className="text-xs text-white/65 break-words">{createdLink.description}</p>
                   )}
-                  <div className="flex gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1.5 pt-1">
                     {createdLink.allow_pix && (
                       <Badge className="bg-[#32BCAD]/20 text-[#6ce6d8] border-[#32BCAD]/35">
                         PIX ativo
@@ -617,13 +785,13 @@ export default function PaymentLinks() {
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label className="text-xs text-white/70">URL do Checkout</Label>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Input
                       readOnly
                       value={buildStandalonePaymentUrl(createdLink.token)}
-                      className="bg-white/[0.06] border-white/15 font-mono text-xs text-sky-300"
+                      className="min-w-0 flex-1 bg-white/[0.06] border-white/15 font-mono text-xs text-sky-300"
                     />
                     <Button
                       type="button"
@@ -641,7 +809,15 @@ export default function PaymentLinks() {
                 </div>
               </div>
 
-              <DialogFooter className="flex-col sm:flex-row gap-2">
+              <DialogFooter className="flex flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2 sm:space-x-0 pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={resetForm}
+                  className="text-white/70 hover:text-white"
+                >
+                  Criar outro
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -663,15 +839,7 @@ export default function PaymentLinks() {
                   className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  Enviar no WhatsApp
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={resetForm}
-                  className="text-white/70 hover:text-white"
-                >
-                  Criar outro
+                  WhatsApp
                 </Button>
               </DialogFooter>
             </>
@@ -833,6 +1001,228 @@ export default function PaymentLinks() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Detalhes e Comprovante do Link */}
+      <Dialog
+        open={!!detailsLink}
+        onOpenChange={(open) => {
+          if (!open) setDetailsLink(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg bg-[#0b1930] border-white/15 text-white p-5">
+          {detailsLink && (() => {
+            const gatewayLabel = detectGatewayLabel();
+            const effectiveStatus = linkedPaymentData?.status || detailsLink.status;
+            const effectivePaidAt = liveMpInfo?.paidAt || linkedPaymentData?.paid_at || detailsLink.paid_at;
+            const effectiveMethod = linkedPaymentData?.payment_method || detailsLink.payment_method;
+            const mpTxId = linkedPaymentData?.transaction_id || null;
+
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-start justify-between gap-3 pr-6">
+                    <div className="min-w-0">
+                      <DialogTitle className="text-lg font-heading text-white break-words">
+                        {detailsLink.title}
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-white/65 mt-0.5">
+                        /pagar/{detailsLink.token}
+                      </DialogDescription>
+                    </div>
+                    <StatusBadge status={effectiveStatus} />
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-3 py-1">
+                  {/* Resumo financeiro */}
+                  <div className="rounded-xl bg-white/[0.05] border border-white/10 p-3.5 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] text-white/60">Valor da cobrança</p>
+                      <p className="text-2xl font-bold text-emerald-400">
+                        {formatCurrency(Number(linkedPaymentData?.amount ?? detailsLink.amount))}
+                      </p>
+                    </div>
+                    <div className="text-right space-y-0.5 text-xs">
+                      <p className="text-white/75">
+                        Forma: <span className="font-semibold text-white">{effectiveMethod || (detailsLink.allow_pix && detailsLink.allow_card ? 'PIX / Cartão' : detailsLink.allow_pix ? 'PIX' : 'Cartão')}</span>
+                      </p>
+                      <p className="text-white/60">
+                        Criado em {formatBrazilDateTime(detailsLink.created_at)}
+                      </p>
+                      {effectivePaidAt && (
+                        <p className="text-emerald-400 font-medium">
+                          Pago em {formatBrazilDateTime(effectivePaidAt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {detailsLink.description && (
+                    <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-1">
+                      <p className="text-[11px] uppercase tracking-wider text-white/55 font-medium">
+                        Descrição
+                      </p>
+                      <p className="text-xs text-white/85 whitespace-pre-wrap break-words">
+                        {detailsLink.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Pagador e Destinatário */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-sky-300 font-semibold">
+                        <UserCheck className="w-3.5 h-3.5" />
+                        Pagador (Remetente)
+                      </div>
+                      <div className="text-xs space-y-1">
+                        <p className="font-semibold text-white break-words">
+                          {detailsLink.payer_name || 'Ainda não preenchido'}
+                        </p>
+                        <p className="font-mono text-white/75">
+                          CPF/CNPJ: {detailsLink.payer_document ? formatDocumentInput(detailsLink.payer_document) : '-'}
+                        </p>
+                        {detailsLink.payer_email && (
+                          <p className="text-white/70 break-all">{detailsLink.payer_email}</p>
+                        )}
+                        {detailsLink.payer_phone && (
+                          <p className="text-white/70">{detailsLink.payer_phone}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-emerald-300 font-semibold">
+                        <Building2 className="w-3.5 h-3.5" />
+                        Destinatário (Recebedor)
+                      </div>
+                      <div className="text-xs space-y-1">
+                        <p className="font-semibold text-white">P-CON CONSTRUNET</p>
+                        <p className="text-white/75">Gateway: {gatewayLabel}</p>
+                        <p className="text-white/65">www.pconassinantes.site</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dados do Mercado Pago / IDs */}
+                  <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-white/70 font-semibold">
+                        <Receipt className="w-3.5 h-3.5 text-primary" />
+                        Dados da Transação ({gatewayLabel})
+                      </div>
+                      {detailsLoading && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-white/60">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          Consultando...
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="bg-black/20 rounded-lg p-2 flex items-center justify-between gap-2 min-w-0">
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-white/55">ID Transação (MP / Gateway)</p>
+                          <p className="font-mono text-sky-300 truncate">{mpTxId || 'Sem transação gerada'}</p>
+                        </div>
+                        {mpTxId && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 shrink-0 text-white/70 hover:text-white"
+                            onClick={() => void handleCopyText(mpTxId, 'ID da transação')}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="bg-black/20 rounded-lg p-2 min-w-0">
+                        <p className="text-[10px] text-white/55">Status no Gateway</p>
+                        <p className="font-medium text-white truncate">
+                          {liveMpInfo?.status
+                            ? `${liveMpInfo.status}${liveMpInfo.statusDetail ? ` (${liveMpInfo.statusDetail})` : ''}`
+                            : effectiveStatus === 'paid'
+                              ? 'Aprovado / Pago'
+                              : effectiveStatus === 'cancelled'
+                                ? 'Cancelado'
+                                : 'Aguardando pagamento'}
+                        </p>
+                      </div>
+
+                      <div className="bg-black/20 rounded-lg p-2 flex items-center justify-between gap-2 min-w-0">
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-white/55">ID Pagamento (Sistema)</p>
+                          <p className="font-mono text-white/80 truncate text-[11px]">
+                            {linkedPaymentData?.id || detailsLink.payment_id || '-'}
+                          </p>
+                        </div>
+                        {(linkedPaymentData?.id || detailsLink.payment_id) && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 shrink-0 text-white/70 hover:text-white"
+                            onClick={() =>
+                              void handleCopyText(
+                                (linkedPaymentData?.id || detailsLink.payment_id)!,
+                                'ID do pagamento',
+                              )
+                            }
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="bg-black/20 rounded-lg p-2 min-w-0">
+                        <p className="text-[10px] text-white/55">Nota / Fatura Vinculada</p>
+                        <p className="font-mono text-white/85 truncate text-[11px]">
+                          {linkedInvoiceNumber || 'Não emitida'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter className="flex flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2 sm:space-x-0 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDetailsLink(null)}
+                    className="border-white/20 bg-white/5 hover:bg-white/10 text-white"
+                  >
+                    Fechar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleCopyUrl(detailsLink)}
+                    className="border-white/20 bg-white/5 hover:bg-white/10 text-white gap-1.5"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copiar Link
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleDownloadReceipt()}
+                    disabled={generatingReceipt}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
+                  >
+                    {generatingReceipt ? (
+                      <LoaderCircle className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                    Gerar Comprovante PDF
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

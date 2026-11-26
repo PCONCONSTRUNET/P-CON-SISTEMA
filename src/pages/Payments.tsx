@@ -27,8 +27,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { useGlobalData, Payment } from '@/contexts/GlobalDataContext';
-import { formatBrazilDate, inputDateToISO } from '@/utils/dateUtils';
+import {
+  formatBrazilDate,
+  formatBrazilDateTime,
+  formatDateForInput,
+  formatTimeForInput,
+  inputDateToISO,
+  localDateTimeToISO,
+} from '@/utils/dateUtils';
 import { toast } from 'sonner';
 import { exportToCSV, formatCurrencyForExport, formatDateForExport } from '@/utils/exportUtils';
 import { useWhatsAppReminder } from '@/hooks/useWhatsAppReminder';
@@ -59,17 +67,20 @@ const Payments = () => {
   const [partialForm, setPartialForm] = useState({
     amount: '',
     paymentMethod: 'PIX',
-    paidAt: new Date().toISOString().split('T')[0],
+    paidAt: formatDateForInput(new Date()),
+    paidTime: formatTimeForInput(new Date()),
     description: '',
   });
   const [isSavingPartial, setIsSavingPartial] = useState(false);
 
   const handleOpenPartialDialog = (payment: Payment) => {
+    const now = new Date();
     setSelectedPayment(payment);
     setPartialForm({
       amount: '',
       paymentMethod: 'PIX',
-      paidAt: new Date().toISOString().split('T')[0],
+      paidAt: formatDateForInput(now),
+      paidTime: formatTimeForInput(now),
       description: '',
     });
     setIsPartialDialogOpen(true);
@@ -96,7 +107,9 @@ const Payments = () => {
         paidAmount: paidValue,
         paymentMethod: partialForm.paymentMethod,
         description: partialForm.description.trim() || undefined,
-        paidAt: partialForm.paidAt ? inputDateToISO(partialForm.paidAt) : new Date().toISOString(),
+        paidAt: partialForm.paidAt
+          ? localDateTimeToISO(partialForm.paidAt, partialForm.paidTime)
+          : new Date().toISOString(),
       });
       if (ok) {
         setIsPartialDialogOpen(false);
@@ -284,24 +297,40 @@ const Payments = () => {
     {
       key: 'client',
       header: 'Cliente',
-      render: (item: Payment) => (
-        <div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium text-foreground text-sm">{getPaymentClientName(item)}</span>
-            {item.parent_payment_id && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
-                Parcial
+      render: (item: Payment) => {
+        const parentPayment = item.parent_payment_id
+          ? payments.find((p) => p.id === item.parent_payment_id)
+          : undefined;
+        const hasPartialBalance = !item.parent_payment_id && Number(item.paid_amount || 0) > 0;
+        return (
+          <div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-foreground text-sm">{getPaymentClientName(item)}</span>
+              {item.parent_payment_id && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
+                  Parcial
+                </span>
+              )}
+              {hasPartialBalance && item.status !== 'paid' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
+                  Parcial em aberto
+                </span>
+              )}
+            </div>
+            {item.description && !item.subscription_id && (
+              <span className="block text-[11px] text-muted-foreground truncate max-w-[240px]">
+                {item.description}
               </span>
             )}
+            {parentPayment?.description && parentPayment.description !== item.description && (
+              <span className="block text-[10px] text-muted-foreground/80 truncate max-w-[240px]">
+                Ref: {parentPayment.description}
+              </span>
+            )}
+            <span className="block text-xs text-muted-foreground sm:hidden">{item.payment_method}</span>
           </div>
-          {item.description && !item.subscription_id && (
-            <span className="block text-[11px] text-muted-foreground truncate max-w-[220px]">
-              {item.description}
-            </span>
-          )}
-          <span className="block text-xs text-muted-foreground sm:hidden">{item.payment_method}</span>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'amount',
@@ -310,12 +339,29 @@ const Payments = () => {
         const paidSoFar = Number(item.paid_amount || 0);
         const origTotal = Number(item.original_amount || 0);
         const hasPartialHistory = item.status !== 'paid' && paidSoFar > 0;
+        const parentPayment = item.parent_payment_id
+          ? payments.find((p) => p.id === item.parent_payment_id)
+          : undefined;
+        const parentOrig = parentPayment
+          ? Number(parentPayment.original_amount || Number(parentPayment.amount) + Number(parentPayment.paid_amount || 0))
+          : 0;
+        const parentRemaining = parentPayment
+          ? parentPayment.status === 'paid'
+            ? 0
+            : Number(parentPayment.amount)
+          : 0;
+
         return (
           <div>
             <span className="font-semibold text-foreground text-sm">{formatCurrency(Number(item.amount))}</span>
             {hasPartialHistory && (
               <span className="block text-[11px] text-muted-foreground">
                 de {formatCurrency(origTotal || Number(item.amount) + paidSoFar)} · pago {formatCurrency(paidSoFar)}
+              </span>
+            )}
+            {item.parent_payment_id && parentPayment && (
+              <span className="block text-[11px] text-muted-foreground">
+                de {formatCurrency(parentOrig)} · {parentRemaining > 0.009 ? `restam ${formatCurrency(parentRemaining)}` : 'quitada'}
               </span>
             )}
           </div>
@@ -357,9 +403,14 @@ const Payments = () => {
       header: 'Criação',
       hideOnMobile: true,
       render: (item: Payment) => (
-        <span className="text-muted-foreground">
-          {formatBrazilDate(item.created_at)}
-        </span>
+        <div>
+          <span className="text-muted-foreground block">
+            {formatBrazilDate(item.created_at, 'dd/MM/yyyy')}
+          </span>
+          <span className="text-[11px] text-muted-foreground/75 block">
+            às {formatBrazilDate(item.created_at, 'HH:mm')}
+          </span>
+        </div>
       ),
     },
     {
@@ -593,8 +644,68 @@ const Payments = () => {
             </DialogDescription>
           </DialogHeader>
           
-          {selectedPayment && (
-            <div className="space-y-4 mt-4">
+          {selectedPayment && (() => {
+            const parentPayment = selectedPayment.parent_payment_id
+              ? payments.find((p) => p.id === selectedPayment.parent_payment_id)
+              : undefined;
+            const childPartials = payments.filter(
+              (p) => p.parent_payment_id === selectedPayment.id && p.status === 'paid',
+            );
+            const hasPartialContext =
+              !!selectedPayment.parent_payment_id ||
+              Number(selectedPayment.paid_amount || 0) > 0 ||
+              childPartials.length > 0;
+            const summaryRef = parentPayment || selectedPayment;
+            const summaryPaid = Number(
+              summaryRef.paid_amount ||
+                childPartials.reduce((acc, p) => acc + Number(p.amount), 0) ||
+                (selectedPayment.parent_payment_id ? selectedPayment.amount : 0),
+            );
+            const summaryRemaining = summaryRef.status === 'paid' ? 0 : Number(summaryRef.amount);
+            const summaryOrig = Number(
+              summaryRef.original_amount ||
+                (summaryRef.status === 'paid' && Number(summaryRef.paid_amount || 0) === 0
+                  ? summaryRef.amount
+                  : summaryRemaining + summaryPaid),
+            );
+
+            return (
+            <div className="space-y-4 mt-4 max-h-[75vh] overflow-y-auto pr-1">
+              {hasPartialContext && (
+                <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/25 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Badge className="bg-primary/20 text-primary border border-primary/30 text-[11px]">
+                      {selectedPayment.parent_payment_id
+                        ? 'Pagamento Parcial'
+                        : selectedPayment.status === 'paid'
+                          ? 'Quitado com Pagamentos Parciais'
+                          : 'Cobrança com Pagamento Parcial'}
+                    </Badge>
+                    {parentPayment?.description && (
+                      <span className="text-[11px] text-muted-foreground truncate max-w-[220px]">
+                        {parentPayment.description}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block">Total Original</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(summaryOrig)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Já Pago</span>
+                      <span className="font-semibold text-success">{formatCurrency(summaryPaid)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Restante</span>
+                      <span className={`font-semibold ${summaryRemaining > 0.009 ? 'text-warning' : 'text-success'}`}>
+                        {summaryRemaining > 0.009 ? formatCurrency(summaryRemaining) : 'Quitado'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Cliente</label>
@@ -603,48 +714,35 @@ const Payments = () => {
                 
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">
-                    {selectedPayment.status !== 'paid' && Number(selectedPayment.paid_amount || 0) > 0
-                      ? 'Restante em aberto'
-                      : 'Valor'}
+                    {selectedPayment.parent_payment_id
+                      ? 'Valor desta Parcela'
+                      : selectedPayment.status !== 'paid' && Number(selectedPayment.paid_amount || 0) > 0
+                        ? 'Restante em aberto'
+                        : 'Valor'}
                   </label>
                   <p className="text-sm font-medium text-foreground">{formatCurrency(Number(selectedPayment.amount))}</p>
                 </div>
 
-                {Number(selectedPayment.paid_amount || 0) > 0 && (
-                  <>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Valor Original</label>
-                      <p className="text-sm font-medium text-foreground">
-                        {formatCurrency(
-                          Number(
-                            selectedPayment.original_amount ||
-                              Number(selectedPayment.amount) + Number(selectedPayment.paid_amount || 0),
-                          ),
-                        )}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Já Pago (Parcial)</label>
-                      <p className="text-sm font-medium text-success">
-                        {formatCurrency(Number(selectedPayment.paid_amount || 0))}
-                      </p>
-                    </div>
-                  </>
-                )}
-                
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Método</label>
                   <p className="text-sm font-medium text-foreground">{selectedPayment.payment_method || 'N/A'}</p>
                 </div>
                 
-                <div className="space-y-1">
+                <div className="space-y-1 flex flex-col items-start">
                   <label className="text-xs font-medium text-muted-foreground">Status</label>
-                  <StatusBadge status={selectedPayment.status} />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <StatusBadge status={selectedPayment.status} />
+                    {(selectedPayment.parent_payment_id || Number(selectedPayment.paid_amount || 0) > 0) && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-medium">
+                        Parcial
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Data de Criação</label>
-                  <p className="text-sm font-medium text-foreground">{formatBrazilDate(selectedPayment.created_at)}</p>
+                  <p className="text-sm font-medium text-foreground">{formatBrazilDateTime(selectedPayment.created_at)}</p>
                 </div>
 
                 {selectedPayment.due_date && (
@@ -657,7 +755,7 @@ const Payments = () => {
                 {selectedPayment.paid_at && (
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground">Data de Pagamento</label>
-                    <p className="text-sm font-medium text-foreground">{formatBrazilDate(selectedPayment.paid_at)}</p>
+                    <p className="text-sm font-medium text-foreground">{formatBrazilDateTime(selectedPayment.paid_at)}</p>
                   </div>
                 )}
                 
@@ -665,6 +763,41 @@ const Payments = () => {
                   <div className="space-y-1 col-span-2">
                     <label className="text-xs font-medium text-muted-foreground">Descrição</label>
                     <p className="text-sm font-medium text-foreground">{selectedPayment.description}</p>
+                  </div>
+                )}
+
+                {parentPayment?.description && parentPayment.description !== selectedPayment.description && (
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Cobrança Original</label>
+                    <p className="text-sm font-medium text-foreground">{parentPayment.description}</p>
+                  </div>
+                )}
+
+                {childPartials.length > 0 && (
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Parcelas Pagas ({childPartials.length})
+                    </label>
+                    <div className="space-y-1.5">
+                      {childPartials.map((cp) => (
+                        <div
+                          key={cp.id}
+                          className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-secondary/40 border border-border/40 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground truncate">
+                              {cp.description || 'Pagamento parcial'}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {formatBrazilDateTime(cp.paid_at || cp.created_at)} · {cp.payment_method || 'PIX'}
+                            </p>
+                          </div>
+                          <span className="font-semibold text-success shrink-0">
+                            {formatCurrency(Number(cp.amount))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -742,7 +875,8 @@ const Payments = () => {
                 )}
               </div>
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -981,7 +1115,7 @@ const Payments = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label>Método</Label>
                     <Select
@@ -1002,11 +1136,21 @@ const Payments = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Data do pagamento</Label>
+                    <Label>Data</Label>
                     <Input
                       type="date"
                       value={partialForm.paidAt}
                       onChange={(e) => setPartialForm({ ...partialForm, paidAt: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Horário</Label>
+                    <Input
+                      type="time"
+                      value={partialForm.paidTime}
+                      onChange={(e) => setPartialForm({ ...partialForm, paidTime: e.target.value })}
                       className="bg-secondary/50 border-border/50"
                     />
                   </div>

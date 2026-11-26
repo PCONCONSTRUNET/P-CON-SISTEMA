@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { usePaymentGateway, PaymentGatewayId, GATEWAY_LABELS } from '@/hooks/usePaymentGateway';
 import { useContracts } from '@/hooks/useContracts';
 import { useOptionalGlobalData } from '@/contexts/GlobalDataContext';
-import { inputDateToISO } from '@/utils/dateUtils';
+import { formatDateForInput, formatTimeForInput, localDateTimeToISO } from '@/utils/dateUtils';
 import PixQRCode from '@/components/PixQRCode';
 import ClientVault from '@/components/ClientVault';
 import ClientFlagsTab from '@/components/ClientFlagsTab';
@@ -134,17 +134,20 @@ const ClientProfile = () => {
   const [partialForm, setPartialForm] = useState({
     amount: '',
     paymentMethod: 'PIX',
-    paidAt: new Date().toISOString().split('T')[0],
+    paidAt: formatDateForInput(new Date()),
+    paidTime: formatTimeForInput(new Date()),
     description: '',
   });
   const [isSavingPartial, setIsSavingPartial] = useState(false);
 
   const handleOpenPartialModal = (payment: Payment) => {
+    const now = new Date();
     setPartialTargetPayment(payment);
     setPartialForm({
       amount: '',
       paymentMethod: 'PIX',
-      paidAt: new Date().toISOString().split('T')[0],
+      paidAt: formatDateForInput(now),
+      paidTime: formatTimeForInput(now),
       description: '',
     });
     setIsPartialModalOpen(true);
@@ -202,7 +205,9 @@ const ClientProfile = () => {
         p_paid_amount: paidValue,
         p_payment_method: partialForm.paymentMethod,
         p_description: partialForm.description.trim() || null,
-        p_paid_at: partialForm.paidAt ? inputDateToISO(partialForm.paidAt) : new Date().toISOString(),
+        p_paid_at: partialForm.paidAt
+          ? localDateTimeToISO(partialForm.paidAt, partialForm.paidTime)
+          : new Date().toISOString(),
       });
 
       if (error) throw error;
@@ -987,6 +992,17 @@ const ClientProfile = () => {
                     const paidSoFar = Number(payment.paid_amount || 0);
                     const origTotal = Number(payment.original_amount || Number(payment.amount) + paidSoFar);
                     const hasPartialHistory = payment.status !== 'paid' && paidSoFar > 0;
+                    const parentPayment = payment.parent_payment_id
+                      ? payments.find((p) => p.id === payment.parent_payment_id)
+                      : undefined;
+                    const parentOrig = parentPayment
+                      ? Number(parentPayment.original_amount || Number(parentPayment.amount) + Number(parentPayment.paid_amount || 0))
+                      : 0;
+                    const parentRemaining = parentPayment
+                      ? parentPayment.status === 'paid'
+                        ? 0
+                        : Number(parentPayment.amount)
+                      : 0;
                     const canRegisterPartial =
                       payment.status !== 'paid' && !payment.subscription_id && !payment.subscription;
 
@@ -1005,13 +1021,33 @@ const ClientProfile = () => {
                                 Parcial
                               </Badge>
                             )}
+                            {hasPartialHistory && (
+                              <Badge variant="outline" className="text-[10px] border-warning/40 text-warning px-1.5 py-0">
+                                Parcial em aberto
+                              </Badge>
+                            )}
                           </div>
+                          {parentPayment?.description && parentPayment.description !== payment.description && (
+                            <p className="text-xs text-muted-foreground/90 truncate">
+                              Ref: {parentPayment.description}
+                            </p>
+                          )}
                           <p className="text-sm text-muted-foreground">
-                            {format(new Date(payment.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            Criado em {format(new Date(payment.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                           </p>
+                          {payment.paid_at && (
+                            <p className="text-xs text-success">
+                              Pago em {format(new Date(payment.paid_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </p>
+                          )}
                           {hasPartialHistory && (
                             <p className="text-xs text-primary/90 mt-0.5">
                               Total: {formatCurrency(origTotal)} · Já pago: {formatCurrency(paidSoFar)}
+                            </p>
+                          )}
+                          {payment.parent_payment_id && parentPayment && (
+                            <p className="text-xs text-primary/90 mt-0.5">
+                              Total da guia: {formatCurrency(parentOrig)} · {parentRemaining > 0.009 ? `Restam: ${formatCurrency(parentRemaining)}` : 'Quitada'}
                             </p>
                           )}
                           {payment.payment_method && (
@@ -1508,7 +1544,7 @@ const ClientProfile = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Método</label>
                     <Select
@@ -1534,6 +1570,16 @@ const ClientProfile = () => {
                       type="date"
                       value={partialForm.paidAt}
                       onChange={(e) => setPartialForm({ ...partialForm, paidAt: e.target.value })}
+                      className="bg-secondary/50 border-border/50"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Horário</label>
+                    <Input
+                      type="time"
+                      value={partialForm.paidTime}
+                      onChange={(e) => setPartialForm({ ...partialForm, paidTime: e.target.value })}
                       className="bg-secondary/50 border-border/50"
                     />
                   </div>

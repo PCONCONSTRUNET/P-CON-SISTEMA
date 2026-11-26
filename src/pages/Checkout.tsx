@@ -35,7 +35,7 @@ import pixIcon from '@/assets/pix-icon.svg';
 import BlueBackground from '@/components/BlueBackground';
 
 import { generateInvoicePDF } from '@/utils/invoicePdfGenerator';
-import { formatBrazilDate } from '@/utils/dateUtils';
+import { formatBrazilDate, formatBrazilDateTime } from '@/utils/dateUtils';
 
 interface Subscription {
   id: string;
@@ -949,7 +949,7 @@ const Checkout = () => {
                           )}
                           {payment.status === 'paid' && payment.paid_at && (
                             <p className="text-[10px] text-success font-medium">
-                              Pago em: {formatBrazilDate(payment.paid_at, "dd/MM/yyyy")}
+                              Pago em: {formatBrazilDateTime(payment.paid_at)}
                             </p>
                           )}
                         </div>
@@ -1382,9 +1382,16 @@ const Checkout = () => {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Status</p>
-                      <Badge className="bg-success/20 text-success border-0 px-2 py-0.5 text-xs">
-                        Paga
-                      </Badge>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge className="bg-success/20 text-success border-0 px-2 py-0.5 text-xs">
+                          Paga
+                        </Badge>
+                        {selectedPaidPayment.parent_payment_id && (
+                          <Badge className="bg-primary/20 text-primary border-0 px-2 py-0.5 text-xs">
+                            Parcial
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1394,48 +1401,89 @@ const Checkout = () => {
                   <div className="w-24 h-24 rounded-full border-4 border-success flex items-center justify-center mb-4">
                     <CheckCircle className="h-12 w-12 text-success" />
                   </div>
-                  <h3 className="text-lg font-heading font-semibold text-foreground">
-                    Pagamento realizado com sucesso!
+                  <h3 className="text-lg font-heading font-semibold text-foreground text-center">
+                    {selectedPaidPayment.parent_payment_id
+                      ? 'Pagamento parcial realizado com sucesso!'
+                      : 'Pagamento realizado com sucesso!'}
                   </h3>
                 </div>
 
                 {/* Payment Details Card */}
-                <div className="bg-success/10 rounded-xl p-4 border border-success/20">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Data de criação</span>
-                      <span className="text-sm text-muted-foreground">
-                        {formatBrazilDate(selectedPaidPayment.created_at, "dd/MM/yy")}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Data do pagamento</span>
-                      <span className="text-sm text-muted-foreground">
-                        {selectedPaidPayment.paid_at 
-                          ? formatBrazilDate(selectedPaidPayment.paid_at, "dd/MM/yy")
-                          : 'Informação não disponível'
-                        }
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Valor pago</span>
-                      <span className="text-sm text-muted-foreground">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(selectedPaidPayment.amount))}
-                      </span>
-                    </div>
-                    {selectedPaidPayment.payment_method && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-foreground">Método</span>
-                        <span className="text-sm text-muted-foreground capitalize">
-                          {selectedPaidPayment.payment_method === 'pix' ? 'PIX' : 
-                           selectedPaidPayment.payment_method === 'boleto' ? 'Boleto' : 
-                           selectedPaidPayment.payment_method === 'credit_card' ? 'Cartão de Crédito' : 
-                           selectedPaidPayment.payment_method}
-                        </span>
+                {(() => {
+                  const parentCharge = selectedPaidPayment.parent_payment_id
+                    ? [...payments, ...pendingCharges].find((p) => p.id === selectedPaidPayment.parent_payment_id)
+                    : undefined;
+                  const parentOrig = parentCharge
+                    ? Number(parentCharge.original_amount || Number(parentCharge.amount) + Number(parentCharge.paid_amount || 0))
+                    : 0;
+                  const parentRemaining = parentCharge
+                    ? parentCharge.status === 'paid'
+                      ? 0
+                      : Number(parentCharge.amount)
+                    : 0;
+                  const fmtBrl = (v: number) =>
+                    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+                  return (
+                    <div className="bg-success/10 rounded-xl p-4 border border-success/20">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">Data de criação</span>
+                          <span className="text-sm text-muted-foreground">
+                            {formatBrazilDateTime(selectedPaidPayment.created_at)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">Data do pagamento</span>
+                          <span className="text-sm text-muted-foreground">
+                            {selectedPaidPayment.paid_at
+                              ? formatBrazilDateTime(selectedPaidPayment.paid_at)
+                              : 'Informação não disponível'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">Valor pago</span>
+                          <span className="text-sm font-semibold text-foreground">
+                            {fmtBrl(Number(selectedPaidPayment.amount))}
+                          </span>
+                        </div>
+                        {selectedPaidPayment.description && (
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-sm font-medium text-foreground shrink-0">Descrição</span>
+                            <span className="text-xs text-muted-foreground text-right">
+                              {selectedPaidPayment.description}
+                            </span>
+                          </div>
+                        )}
+                        {parentCharge && (
+                          <>
+                            <div className="flex items-center justify-between gap-3 pt-2 border-t border-success/20">
+                              <span className="text-sm font-medium text-foreground">Valor original da guia</span>
+                              <span className="text-sm text-muted-foreground">{fmtBrl(parentOrig)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium text-foreground">Saldo restante</span>
+                              <span className={`text-sm font-semibold ${parentRemaining > 0.009 ? 'text-warning' : 'text-success'}`}>
+                                {parentRemaining > 0.009 ? fmtBrl(parentRemaining) : 'Quitada'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        {selectedPaidPayment.payment_method && (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-foreground">Método</span>
+                            <span className="text-sm text-muted-foreground capitalize">
+                              {selectedPaidPayment.payment_method === 'pix' ? 'PIX' : 
+                               selectedPaidPayment.payment_method === 'boleto' ? 'Boleto' : 
+                               selectedPaidPayment.payment_method === 'credit_card' ? 'Cartão de Crédito' : 
+                               selectedPaidPayment.payment_method}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()}
               </div>
             </DialogContent>
           </Dialog>
