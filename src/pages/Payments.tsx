@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle, Pencil, Wallet } from 'lucide-react';
+import { Search, MoreHorizontal, CreditCard, CheckCircle, XCircle, Clock, Trash2, Download, Eye, FileText, Loader2, Check, MessageCircle, Pencil, Wallet, Link2 } from 'lucide-react';
 import WhatsAppSendModal, { WhatsAppSendParams } from '@/components/WhatsAppSendModal';
+import GenerateOpenPaymentLinkDialog, { OpenPaymentLinkTarget } from '@/components/GenerateOpenPaymentLinkDialog';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
@@ -50,6 +51,8 @@ const Payments = () => {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [whatsappParams, setWhatsappParams] = useState<WhatsAppSendParams | null>(null);
+  const [linkDialogTarget, setLinkDialogTarget] = useState<OpenPaymentLinkTarget | null>(null);
+  const [isGenerateLinkOpen, setIsGenerateLinkOpen] = useState(false);
   
   const { 
     payments, 
@@ -128,6 +131,19 @@ const Payments = () => {
     paid_at: '',
     description: '',
   });
+
+  const handleOpenGenerateLinkDialog = (payment: Payment) => {
+    setLinkDialogTarget({
+      paymentId: payment.id,
+      clientName: getPaymentClientName(payment),
+      clientPhone: payment.clients?.phone || payment.subscriptions?.clients?.phone || null,
+      defaultTitle: payment.description || 'Cobrança P-CON',
+      openAmount: Number(payment.amount),
+      originalAmount: payment.original_amount ?? null,
+      paidAmount: payment.paid_amount ?? null,
+    });
+    setIsGenerateLinkOpen(true);
+  };
 
   const handleOpenEditDialog = (payment: Payment) => {
     setSelectedPayment(payment);
@@ -465,10 +481,16 @@ const Payments = () => {
               </DropdownMenuItem>
             )}
             {item.status !== 'paid' && !item.subscription_id && (
-              <DropdownMenuItem onClick={() => handleOpenPartialDialog(item)}>
-                <Wallet className="w-4 h-4 mr-2 text-primary" />
-                Registrar parcial
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem onClick={() => handleOpenPartialDialog(item)}>
+                  <Wallet className="w-4 h-4 mr-2 text-primary" />
+                  Registrar parcial
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleOpenGenerateLinkDialog(item)}>
+                  <Link2 className="w-4 h-4 mr-2 text-sky-400" />
+                  {Number(item.paid_amount || 0) > 0 ? 'Gerar link do restante' : 'Gerar link de pagamento'}
+                </DropdownMenuItem>
+              </>
             )}
             <DropdownMenuItem 
               onClick={() => openInvoiceDialog(item)}
@@ -836,18 +858,32 @@ const Payments = () => {
                   Fechar
                 </Button>
                 {selectedPayment.status !== 'paid' && !selectedPayment.subscription_id && (
-                  <Button
-                    variant="outline"
-                    className="flex-1 border-primary/40 text-primary hover:bg-primary/10"
-                    onClick={() => {
-                      const target = selectedPayment;
-                      setIsDetailsDialogOpen(false);
-                      handleOpenPartialDialog(target);
-                    }}
-                  >
-                    <Wallet className="w-4 h-4 mr-2" />
-                    Parcial
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-primary/40 text-primary hover:bg-primary/10"
+                      onClick={() => {
+                        const target = selectedPayment;
+                        setIsDetailsDialogOpen(false);
+                        handleOpenPartialDialog(target);
+                      }}
+                    >
+                      <Wallet className="w-4 h-4 mr-2" />
+                      Parcial
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-sky-400/40 text-sky-300 hover:bg-sky-500/10"
+                      onClick={() => {
+                        const target = selectedPayment;
+                        setIsDetailsDialogOpen(false);
+                        handleOpenGenerateLinkDialog(target);
+                      }}
+                    >
+                      <Link2 className="w-4 h-4 mr-2" />
+                      Gerar Link
+                    </Button>
+                  </>
                 )}
                 {selectedPayment.status !== 'paid' && (
                   <Button 
@@ -1191,6 +1227,12 @@ const Payments = () => {
           })()}
         </DialogContent>
       </Dialog>
+
+      <GenerateOpenPaymentLinkDialog
+        open={isGenerateLinkOpen}
+        onOpenChange={setIsGenerateLinkOpen}
+        target={linkDialogTarget}
+      />
     </DashboardLayout>
   );
 };

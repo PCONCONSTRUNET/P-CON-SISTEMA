@@ -55,6 +55,7 @@ import {
   usePaymentLinks,
 } from '@/hooks/usePaymentLinks';
 import { ClientSearchSelect } from '@/components/ClientSearchSelect';
+import GenerateOpenPaymentLinkDialog, { OpenPaymentLinkTarget } from '@/components/GenerateOpenPaymentLinkDialog';
 import { useOptionalGlobalData } from '@/contexts/GlobalDataContext';
 import { formatBrazilDateTime } from '@/utils/dateUtils';
 import { formatDocumentInput } from '@/utils/documentValidation';
@@ -107,6 +108,24 @@ export default function PaymentLinks() {
   // Confirmação de exclusão
   const [deleteTarget, setDeleteTarget] = useState<PaymentLinkRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Modal gerar link do restante em aberto
+  const [remLinkTarget, setRemLinkTarget] = useState<OpenPaymentLinkTarget | null>(null);
+  const [isRemLinkDialogOpen, setIsRemLinkDialogOpen] = useState(false);
+
+  const openRemainingLinkDialog = (item: PaymentLinkRecord, openAmount: number, paidSoFar: number) => {
+    if (!item.balance_payment_id) return;
+    setRemLinkTarget({
+      paymentId: item.balance_payment_id,
+      clientName: item.payer_name || 'Cliente',
+      clientPhone: item.payer_phone,
+      defaultTitle: item.title,
+      openAmount,
+      originalAmount: item.original_amount ?? null,
+      paidAmount: paidSoFar,
+    });
+    setIsRemLinkDialogOpen(true);
+  };
 
   // Modal de Detalhes / Comprovante
   const [detailsLink, setDetailsLink] = useState<PaymentLinkRecord | null>(null);
@@ -645,6 +664,47 @@ export default function PaymentLinks() {
           >
             <Pencil className="w-4 h-4" />
           </Button>
+
+          {(() => {
+            if (item.status !== 'paid' || !item.balance_payment_id) return null;
+            const balRow = globalData?.payments.find((p) => p.id === item.balance_payment_id);
+            if (balRow && balRow.status === 'paid') return null;
+            const openRem = balRow
+              ? Number(balRow.amount)
+              : Math.max(0, Number(item.original_amount || 0) - Number(item.amount || 0));
+            const paidTotal = balRow
+              ? Number(balRow.paid_amount || item.amount || 0)
+              : Number(item.amount || 0);
+            if (openRem <= 0.009) return null;
+
+            const existingPendingRemLink = links.find(
+              (l) => l.target_payment_id === item.balance_payment_id && l.status === 'pending',
+            );
+
+            return existingPendingRemLink ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                title={`Copiar link do restante (${formatCurrency(existingPendingRemLink.amount)})`}
+                onClick={() => void handleCopyUrl(existingPendingRemLink)}
+                className="h-8 w-8 text-amber-300 hover:text-amber-200 hover:bg-amber-500/15"
+              >
+                <Link2 className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                title={`Gerar link do restante (${formatCurrency(openRem)})`}
+                onClick={() => openRemainingLinkDialog(item, openRem, paidTotal)}
+                className="h-8 w-8 text-amber-300 hover:text-amber-200 hover:bg-amber-500/15"
+              >
+                <Link2 className="w-4 h-4" />
+              </Button>
+            );
+          })()}
 
           {item.status !== 'paid' && (
             <Button
@@ -1343,6 +1403,34 @@ export default function PaymentLinks() {
                     <Pencil className="w-4 h-4" />
                     Editar / Vincular
                   </Button>
+                  {(() => {
+                    if (detailsLink.status !== 'paid' || !detailsLink.balance_payment_id) return null;
+                    const balRow = globalData?.payments.find((p) => p.id === detailsLink.balance_payment_id);
+                    if (balRow && balRow.status === 'paid') return null;
+                    const openRem = balRow
+                      ? Number(balRow.amount)
+                      : Math.max(0, Number(detailsLink.original_amount || 0) - Number(detailsLink.amount || 0));
+                    const paidTotal = balRow
+                      ? Number(balRow.paid_amount || detailsLink.amount || 0)
+                      : Number(detailsLink.amount || 0);
+                    if (openRem <= 0.009) return null;
+
+                    return (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const target = detailsLink;
+                          setDetailsLink(null);
+                          openRemainingLinkDialog(target, openRem, paidTotal);
+                        }}
+                        className="border-amber-400/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 gap-1.5"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        Link do Restante ({formatCurrency(openRem)})
+                      </Button>
+                    );
+                  })()}
                   <Button
                     type="button"
                     variant="outline"
@@ -1415,6 +1503,13 @@ export default function PaymentLinks() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GenerateOpenPaymentLinkDialog
+        open={isRemLinkDialogOpen}
+        onOpenChange={setIsRemLinkDialogOpen}
+        target={remLinkTarget}
+        onCreated={() => void refetch()}
+      />
     </DashboardLayout>
   );
 }

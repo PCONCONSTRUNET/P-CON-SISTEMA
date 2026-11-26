@@ -469,7 +469,7 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
           p_base_amount: Number(link.amount),
           p_gross_amount: Number(brickData.transaction_amount),
           p_installments: brickData.installments,
-          p_parent_payment_id: null,
+          p_parent_payment_id: link.target_payment_id || null,
         });
       }
 

@@ -22,8 +22,19 @@ export interface PaymentLinkRecord {
   paid_at: string | null;
   original_amount?: number | null;
   balance_payment_id?: string | null;
+  target_payment_id?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CreatePaymentLinkForOpenPaymentInput {
+  paymentId: string;
+  amount?: number;
+  title?: string;
+  description?: string;
+  allow_pix?: boolean;
+  allow_card?: boolean;
+  max_installments?: number;
 }
 
 export interface CreatePaymentLinkInput {
@@ -73,6 +84,33 @@ export function buildClientSideFallbackToken(title: string): string {
 }
 
 let cachedLinks: PaymentLinkRecord[] | null = null;
+
+export async function createPaymentLinkForOpenPayment(
+  input: CreatePaymentLinkForOpenPaymentInput,
+): Promise<PaymentLinkRecord | null> {
+  try {
+    const { data, error } = await (supabase as any).rpc('create_payment_link_for_open_payment', {
+      p_payment_id: input.paymentId,
+      p_amount: input.amount ?? null,
+      p_title: input.title ?? null,
+      p_description: input.description ?? null,
+      p_allow_pix: input.allow_pix ?? true,
+      p_allow_card: input.allow_card ?? true,
+      p_max_installments: Math.min(Math.max(input.max_installments || 4, 1), 4),
+    });
+
+    if (error) throw error;
+    const created = (data?.link || null) as PaymentLinkRecord | null;
+    if (created && cachedLinks) {
+      cachedLinks = [created, ...cachedLinks.filter((l) => l.id !== created.id)];
+    }
+    return created;
+  } catch (err: any) {
+    console.error('Error creating payment link for open balance:', err);
+    toast.error(err?.message || 'Erro ao gerar link de pagamento');
+    return null;
+  }
+}
 
 export function usePaymentLinks() {
   const [links, setLinks] = useState<PaymentLinkRecord[]>(() => cachedLinks || []);
