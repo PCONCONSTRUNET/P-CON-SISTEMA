@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import BlueBackground from '@/components/BlueBackground';
 import PixQRCode from '@/components/PixQRCode';
-import SubscriptionCardPayment from '@/components/SubscriptionCardPayment';
+import SubscriptionCardPayment, { CardPaymentFormData } from '@/components/SubscriptionCardPayment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -434,40 +434,43 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
     }
   };
 
-  const handleSubmitCardBrick = async (brickData: {
-    token: string;
-    paymentMethodId: string;
-    issuerId?: string;
-    installments: number;
-    payerEmail: string;
-    identificationType: string;
-    identificationNumber: string;
-    chargedAmount: number;
-  }) => {
+  const handleSubmitCardBrick = async (brickData: CardPaymentFormData) => {
     if (!resolvedPayer) return;
     setSubmittingCard(true);
 
     try {
       const response = await createCardPayment({
         token: brickData.token,
-        paymentMethodId: brickData.paymentMethodId,
-        issuerId: brickData.issuerId,
+        paymentMethodId: brickData.payment_method_id,
+        issuerId: brickData.issuer_id || '',
         installments: brickData.installments,
-        amount: Number(link.amount),
-        chargedAmount: brickData.chargedAmount,
+        amount: Number(brickData.transaction_amount),
         description: link.title,
         clientId: resolvedPayer.clientId,
-        payerEmail: brickData.payerEmail || resolvedPayer.email,
-        payerName: resolvedPayer.name,
-        payerDocument:
-          cleanDocumentDigits(brickData.identificationNumber) ||
+        clientEmail: brickData.payer?.email || resolvedPayer.email,
+        clientName: resolvedPayer.name,
+        clientDocument:
+          cleanDocumentDigits(brickData.payer?.identification?.number) ||
           cleanDocumentDigits(resolvedPayer.document),
-        identificationType: brickData.identificationType,
+        payerIdentificationType: brickData.payer?.identification?.type,
+        payerIdentificationNumber: brickData.payer?.identification?.number,
+        externalReference: `paylink:${link.id}`,
         paymentLinkId: link.id,
       });
 
       if (!response) {
         return;
+      }
+
+      if (response.paymentId) {
+        await (supabase as any).rpc('finalize_card_payment_attempt', {
+          p_transaction_id: String(response.paymentId),
+          p_client_id: resolvedPayer.clientId,
+          p_base_amount: Number(link.amount),
+          p_gross_amount: Number(brickData.transaction_amount),
+          p_installments: brickData.installments,
+          p_parent_payment_id: null,
+        });
       }
 
       if (response.status === 'approved' || response.status === 'paid') {
@@ -483,18 +486,21 @@ export default function StandalonePaymentCheckout({ initialLink }: StandalonePay
     }
   };
 
-  const handleCheckoutProFallback = async () => {
+  const handleCheckoutProFallback = async (pricingTotal: number, targetInstallments: number) => {
     if (!resolvedPayer) return;
     setSubmittingCard(true);
     try {
       const pref = await createCardPreference({
-        amount: Number(link.amount),
-        description: link.title,
+        amount: pricingTotal,
+        title: link.title,
+        description: link.description || link.title,
         clientId: resolvedPayer.clientId,
         clientName: resolvedPayer.name,
         clientEmail: resolvedPayer.email,
-        maxInstallments,
-        backUrl: window.location.href.split('?')[0],
+        clientDocument: cleanDocumentDigits(resolvedPayer.document),
+        externalReference: `paylink:${link.id}`,
+        maxInstallments: targetInstallments,
+        returnUrl: window.location.href.split('?')[0],
         paymentLinkId: link.id,
       });
 

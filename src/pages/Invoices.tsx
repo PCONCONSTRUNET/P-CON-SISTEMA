@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
 import { Search, FileText, Download, Eye, Trash2, Plus, Calendar, User, DollarSign } from 'lucide-react';
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGlobalData } from '@/contexts/GlobalDataContext';
-import { formatBrazilDate } from '@/utils/dateUtils';
+import { formatBrazilDate, formatBrazilDateTime } from '@/utils/dateUtils';
+import { formatDocumentInput } from '@/utils/documentValidation';
+import { formatPhoneDisplay, loadTrimmedPdfLogo } from '@/utils/pdfBrandUtils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -29,7 +30,14 @@ interface InvoiceWithClient {
   clientEmail?: string;
   clientPhone?: string;
   clientDocument?: string;
-  planName?: string;
+  planName?: string | null;
+  paymentMethod?: string | null;
+  transactionId?: string | null;
+  paidAt?: string | null;
+  isPartial?: boolean;
+  parentDescription?: string | null;
+  originalTotal?: number | null;
+  remainingTotal?: number | null;
 }
 
 const Invoices = () => {
@@ -39,7 +47,7 @@ const Invoices = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithClient | null>(null);
   const [newInvoice, setNewInvoice] = useState({ client_id: '', amount: '' });
   const [isCreating, setIsCreating] = useState(false);
-  const { invoices, clients, loadingInvoices, loadingClients, refetchAll, deleteInvoice } = useGlobalData();
+  const { invoices, clients, payments, loadingInvoices, loadingClients, refetchAll, deleteInvoice } = useGlobalData();
 
   const loading = loadingInvoices || loadingClients;
 
@@ -50,13 +58,26 @@ const Invoices = () => {
     }).format(value);
   };
 
-  // Enrich invoices with client data
-  const enrichedInvoices = useMemo(() => {
+  // Enrich invoices with client and payment data
+  const enrichedInvoices = useMemo<InvoiceWithClient[]>(() => {
     return invoices.map(inv => {
       const client = clients.find(c => c.id === inv.client_id);
+      const payment = inv.payment_id ? payments.find(p => p.id === inv.payment_id) : undefined;
+      const parentPayment = payment?.parent_payment_id
+        ? payments.find(p => p.id === payment.parent_payment_id)
+        : undefined;
       // Extract plan name from description if available
       const descriptionMatch = (inv as any).description?.match(/plano ativo:\s*(.+)$/i);
       const planName = descriptionMatch ? descriptionMatch[1] : null;
+      const origTotal = parentPayment
+        ? Number(parentPayment.original_amount || Number(parentPayment.amount) + Number(parentPayment.paid_amount || 0))
+        : null;
+      const remTotal = parentPayment
+        ? parentPayment.status === 'paid'
+          ? 0
+          : Number(parentPayment.amount)
+        : null;
+
       return {
         ...inv,
         description: (inv as any).description || '',
@@ -65,9 +86,16 @@ const Invoices = () => {
         clientPhone: client?.phone || '',
         clientDocument: client?.document || '',
         planName: planName,
+        paymentMethod: payment?.payment_method || null,
+        transactionId: payment?.transaction_id || null,
+        paidAt: payment?.paid_at || null,
+        isPartial: !!payment?.parent_payment_id || inv.number.startsWith('PARC-'),
+        parentDescription: parentPayment?.description || null,
+        originalTotal: origTotal,
+        remainingTotal: remTotal,
       };
     });
-  }, [invoices, clients]);
+  }, [invoices, clients, payments]);
 
   const filteredInvoices = enrichedInvoices.filter(invoice =>
     invoice.clientName.toLowerCase().includes(search.toLowerCase()) ||
@@ -141,152 +169,295 @@ const Invoices = () => {
     setIsDetailsOpen(true);
   };
 
-  const handleDownloadPDF = (invoice: InvoiceWithClient) => {
+  const handleDownloadPDF = async (invoice: InvoiceWithClient) => {
     try {
-      const doc = new jsPDF();
+      const doc = new jsPDF('p', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
-      
-      // Colors
-      const primaryColor: [number, number, number] = [30, 79, 163]; // Blue
-      const darkColor: [number, number, number] = [33, 37, 41];
-      const grayColor: [number, number, number] = [108, 117, 125];
-      const lightGray: [number, number, number] = [248, 249, 250];
-      
-      // Header background
-      doc.setFillColor(...primaryColor);
-      doc.rect(0, 0, pageWidth, 50, 'F');
-      
-      // Company name
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+
+      // Paleta oficial P-CON CONSTRUNET
+      const navyColor: [number, number, number] = [18, 52, 118];
+      const primaryColor: [number, number, number] = [30, 79, 163];
+      const accentCyan: [number, number, number] = [0, 158, 227];
+      const emeraldColor: [number, number, number] = [16, 150, 92];
+      const darkColor: [number, number, number] = [28, 33, 42];
+      const grayColor: [number, number, number] = [104, 114, 128];
+      const cardBg: [number, number, number] = [244, 247, 252];
+      const borderColor: [number, number, number] = [214, 223, 238];
+
+      // Header Executivo
+      const headerH = 42;
+      doc.setFillColor(...navyColor);
+      doc.rect(0, 0, pageWidth, headerH, 'F');
+      doc.setFillColor(...accentCyan);
+      doc.rect(0, headerH - 1.5, pageWidth, 1.5, 'F');
+
+      // Logo original P-CON CONSTRUNET (com recorte automático de borda)
+      try {
+        const trimmedLogo = await loadTrimmedPdfLogo('/images/logo-pcon-white.png');
+        const logoH = 17;
+        const logoW = Math.min(logoH * (trimmedLogo.width / trimmedLogo.height), 58);
+        doc.addImage(trimmedLogo.dataUrl, 'PNG', margin, (headerH - logoH - 1.5) / 2, logoW, logoH);
+      } catch {
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(20);
+        doc.text('P-CON CONSTRUNET', margin, 22);
+      }
+
+      // Título à direita
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
       doc.setFont('helvetica', 'bold');
-      doc.text('P-CON', 20, 25);
-      
-      doc.setFontSize(10);
+      doc.setFontSize(20);
+      doc.text(invoice.isPartial ? 'NOTA FISCAL PARCIAL' : 'NOTA FISCAL', pageWidth - margin, 19, {
+        align: 'right',
+      });
+
       doc.setFont('helvetica', 'normal');
-      doc.text('Sistema de Gestao de Assinaturas', 20, 35);
-      
-      // Invoice label
-      doc.setFontSize(28);
-      doc.setFont('helvetica', 'bold');
-      doc.text('NOTA FISCAL', pageWidth - 20, 30, { align: 'right' });
-      
-      // Invoice info box
-      doc.setTextColor(...darkColor);
-      doc.setFillColor(...lightGray);
-      doc.roundedRect(20, 60, pageWidth - 40, 35, 3, 3, 'F');
-      
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...grayColor);
-      doc.text('NUMERO', 30, 72);
-      doc.text('DATA DE EMISSAO', 90, 72);
-      doc.text('STATUS', 160, 72);
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...darkColor);
-      doc.text(invoice.number, 30, 85);
-      doc.text(formatBrazilDate(invoice.issued_at), 90, 85);
-      doc.text(invoice.status === 'issued' ? 'EMITIDA' : invoice.status.toUpperCase(), 160, 85);
-      
-      // Client section
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...primaryColor);
-      doc.text('DADOS DO CLIENTE', 20, 115);
-      
-      doc.setDrawColor(...primaryColor);
-      doc.setLineWidth(0.5);
-      doc.line(20, 118, pageWidth - 20, 118);
-      
-      doc.setTextColor(...darkColor);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Nome:', 20, 130);
-      doc.setFont('helvetica', 'normal');
-      doc.text(invoice.clientName || 'N/A', 50, 130);
-      
-      if (invoice.clientDocument) {
-        doc.setFont('helvetica', 'bold');
-        doc.text('CPF/CNPJ:', 20, 140);
-        doc.setFont('helvetica', 'normal');
-        doc.text(invoice.clientDocument, 50, 140);
-      }
-      
-      if (invoice.clientEmail) {
-        doc.setFont('helvetica', 'bold');
-        doc.text('Email:', 20, 150);
-        doc.setFont('helvetica', 'normal');
-        doc.text(invoice.clientEmail, 50, 150);
-      }
-      
-      if (invoice.clientPhone) {
-        doc.setFont('helvetica', 'bold');
-        doc.text('Telefone:', 110, 150);
-        doc.setFont('helvetica', 'normal');
-        doc.text(invoice.clientPhone, 140, 150);
-      }
-      
-      // Services section
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...primaryColor);
-      doc.text('DESCRICAO DOS SERVICOS', 20, 175);
-      
-      doc.setDrawColor(...primaryColor);
-      doc.line(20, 178, pageWidth - 20, 178);
-      
-      // Table header
-      doc.setFillColor(...lightGray);
-      doc.rect(20, 185, pageWidth - 40, 12, 'F');
-      
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...darkColor);
-      doc.text('DESCRICAO', 25, 193);
-      doc.text('VALOR', pageWidth - 25, 193, { align: 'right' });
-      
-      // Table row - show plan name if available
-      doc.setFont('helvetica', 'normal');
-      const serviceDescription = invoice.planName 
-        ? `Valor pago referente ao plano ativo: ${invoice.planName}`
-        : (invoice.description || 'Servico conforme contrato');
-      doc.text(serviceDescription, 25, 208);
-      doc.setFont('helvetica', 'bold');
-      doc.text(formatCurrency(invoice.amount), pageWidth - 25, 208, { align: 'right' });
-      
-      // Table border
-      doc.setDrawColor(...grayColor);
-      doc.setLineWidth(0.2);
-      doc.line(20, 215, pageWidth - 20, 215);
-      
-      // Total section
-      doc.setFillColor(...primaryColor);
-      doc.roundedRect(pageWidth - 100, 225, 80, 30, 3, 3, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('VALOR TOTAL', pageWidth - 60, 237, { align: 'center' });
-      
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text(formatCurrency(invoice.amount), pageWidth - 60, 250, { align: 'center' });
-      
-      // Footer
-      doc.setTextColor(...grayColor);
       doc.setFontSize(9);
+      doc.setTextColor(210, 226, 255);
+      doc.text('P-CON CONSTRUNET · Sistema de Gestão de Pagamentos', pageWidth - margin, 27, {
+        align: 'right',
+      });
+
+      let y = headerH + 8;
+
+      // Bloco de metadados da NF (3 colunas com divisórias)
+      doc.setFillColor(...cardBg);
+      doc.setDrawColor(...borderColor);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(margin, y, contentWidth, 24, 2.5, 2.5, 'FD');
+
+      const colW = contentWidth / 3;
+      doc.setDrawColor(218, 226, 238);
+      doc.line(margin + colW, y + 4, margin + colW, y + 20);
+      doc.line(margin + colW * 2, y + 4, margin + colW * 2, y + 20);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...grayColor);
+      doc.text('NÚMERO DA NOTA', margin + 5, y + 7.5);
+      doc.text('EMISSÃO (BRASÍLIA)', margin + colW + 5, y + 7.5);
+      doc.text('SITUAÇÃO', margin + colW * 2 + 5, y + 7.5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(...darkColor);
+      doc.text(invoice.number, margin + 5, y + 16);
+      doc.text(formatBrazilDateTime(invoice.issued_at), margin + colW + 5, y + 16);
+
+      doc.setTextColor(...emeraldColor);
+      const statusLabel = invoice.status === 'issued' ? 'EMITIDA / QUITADA' : invoice.status.toUpperCase();
+      doc.text(statusLabel, margin + colW * 2 + 5, y + 16);
+
+      y += 31;
+
+      // Blocos Emissor + Cliente lado a lado
+      const halfW = (contentWidth - 6) / 2;
+      const partyBoxH = 42;
+
+      // Card Emissor
+      doc.setFillColor(...cardBg);
+      doc.setDrawColor(...borderColor);
+      doc.roundedRect(margin, y, halfW, partyBoxH, 2.5, 2.5, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...primaryColor);
+      doc.text('PRESTADOR / EMISSOR', margin + 5, y + 7);
+      doc.line(margin + 5, y + 9.5, margin + halfW - 5, y + 9.5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...darkColor);
+      doc.text('P-CON CONSTRUNET', margin + 5, y + 16);
+
       doc.setFont('helvetica', 'normal');
-      
-      const footerY = 270;
-      doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
-      
-      doc.text('Documento gerado automaticamente pelo sistema P-CON', pageWidth / 2, footerY, { align: 'center' });
-      doc.text(`Emitido em: ${format(new Date(), "dd/MM/yyyy 'as' HH:mm", { locale: ptBR })}`, pageWidth / 2, footerY + 7, { align: 'center' });
-      doc.text('www.pconassinantes.site', pageWidth / 2, footerY + 14, { align: 'center' });
-      
-      // Save PDF
+      doc.setFontSize(8.5);
+      doc.setTextColor(...grayColor);
+      doc.text('Gestão de Assinaturas e Sistemas', margin + 5, y + 22);
+      doc.text('Portal: www.pconassinantes.site', margin + 5, y + 28);
+      if (invoice.isPartial) {
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Modalidade: Recebimento Parcial', margin + 5, y + 35);
+      }
+
+      // Card Cliente
+      const clientX = margin + halfW + 6;
+      doc.setFillColor(...cardBg);
+      doc.setDrawColor(...borderColor);
+      doc.roundedRect(clientX, y, halfW, partyBoxH, 2.5, 2.5, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...primaryColor);
+      doc.text('TOMADOR / CLIENTE', clientX + 5, y + 7);
+      doc.line(clientX + 5, y + 9.5, clientX + halfW - 5, y + 9.5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(...darkColor);
+      const clientNameLines = doc.splitTextToSize(invoice.clientName || 'N/A', halfW - 10);
+      doc.text(clientNameLines.slice(0, 2), clientX + 5, y + 15.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.3);
+      doc.setTextColor(...grayColor);
+      const formattedDoc = invoice.clientDocument
+        ? formatDocumentInput(invoice.clientDocument)
+        : 'Não informado';
+      const formattedPhone = formatPhoneDisplay(invoice.clientPhone);
+      let cy = y + (clientNameLines.length > 1 ? 25 : 22);
+      doc.text(`CPF/CNPJ: ${formattedDoc}`, clientX + 5, cy);
+      cy += 5.5;
+      if (invoice.clientEmail) {
+        const emailLines = doc.splitTextToSize(`E-mail: ${invoice.clientEmail}`, halfW - 10);
+        doc.text(emailLines[0], clientX + 5, cy);
+        cy += 5.5;
+      }
+      if (formattedPhone) {
+        doc.text(`Telefone: ${formattedPhone}`, clientX + 5, cy);
+      }
+
+      y += partyBoxH + 8;
+
+      // Seção Descrição dos Serviços
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...primaryColor);
+      doc.text('DESCRIÇÃO DOS SERVIÇOS', margin, y);
+      y += 3;
+
+      // Cabeçalho da tabela
+      doc.setFillColor(232, 238, 248);
+      doc.roundedRect(margin, y, contentWidth, 10, 1.5, 1.5, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...darkColor);
+      doc.text('DESCRIÇÃO', margin + 5, y + 6.5);
+      doc.text('MEIO', margin + 124, y + 6.5);
+      doc.text('VALOR', pageWidth - margin - 5, y + 6.5, { align: 'right' });
+
+      y += 10;
+
+      const baseDescription = invoice.planName
+        ? `Valor pago referente ao plano ativo: ${invoice.planName}`
+        : invoice.description || 'Serviço conforme contrato';
+
+      const descLines = doc.splitTextToSize(baseDescription, 108);
+      const subLines: string[] = [];
+      if (invoice.isPartial && invoice.parentDescription && invoice.parentDescription !== baseDescription) {
+        subLines.push(...doc.splitTextToSize(`Referência: ${invoice.parentDescription}`, 108));
+      }
+      if (invoice.isPartial && invoice.originalTotal) {
+        const remLabel =
+          invoice.remainingTotal && invoice.remainingTotal > 0.009
+            ? `Restante em aberto: ${formatCurrency(invoice.remainingTotal)}`
+            : 'Guia quitada';
+        subLines.push(`Total da cobrança: ${formatCurrency(invoice.originalTotal)} · ${remLabel}`);
+      }
+
+      const rowH = Math.max(18, descLines.length * 5.2 + subLines.length * 4.6 + 8);
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...borderColor);
+      doc.roundedRect(margin, y, contentWidth, rowH, 1.5, 1.5, 'FD');
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(...darkColor);
+      doc.text(descLines, margin + 5, y + 7);
+
+      if (subLines.length > 0) {
+        const subY = y + 7 + descLines.length * 5.2;
+        doc.setFontSize(8);
+        doc.setTextColor(...grayColor);
+        doc.text(subLines, margin + 5, subY);
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...grayColor);
+      doc.text((invoice.paymentMethod || 'PIX').toUpperCase(), margin + 124, y + 7);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...darkColor);
+      doc.text(formatCurrency(Number(invoice.amount)), pageWidth - margin - 5, y + 7, { align: 'right' });
+
+      y += rowH + 9;
+
+      // Bloco inferior: Dados da Transação à esquerda + Valor Total à direita
+      const summaryH = 30;
+      const leftBoxW = contentWidth - 76;
+
+      doc.setFillColor(...cardBg);
+      doc.setDrawColor(...borderColor);
+      doc.roundedRect(margin, y, leftBoxW, summaryH, 2.5, 2.5, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...primaryColor);
+      doc.text('AUTENTICAÇÃO E PAGAMENTO', margin + 5, y + 7);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...grayColor);
+      const paidWhen = invoice.paidAt
+        ? formatBrazilDateTime(invoice.paidAt)
+        : formatBrazilDateTime(invoice.issued_at);
+      doc.text(`Confirmado em: ${paidWhen}`, margin + 5, y + 14);
+      doc.text(
+        `Transação / Ref.: ${invoice.transactionId || invoice.payment_id || invoice.id}`,
+        margin + 5,
+        y + 20,
+      );
+      doc.text(`Código da NF: ${invoice.number}`, margin + 5, y + 26);
+
+      // Card Valor Total
+      const totalBoxX = margin + leftBoxW + 6;
+      doc.setFillColor(...primaryColor);
+      doc.roundedRect(totalBoxX, y, 70, summaryH, 2.5, 2.5, 'F');
+
+      doc.setTextColor(215, 230, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text('VALOR TOTAL DA NOTA', totalBoxX + 35, y + 9, { align: 'center' });
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(17);
+      doc.text(formatCurrency(Number(invoice.amount)), totalBoxX + 35, y + 21, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(215, 230, 255);
+      doc.text(invoice.isPartial ? 'Parcela quitada' : 'Documento quitado', totalBoxX + 35, y + 27, {
+        align: 'center',
+      });
+
+      // Rodapé
+      const footerY = 272;
+      doc.setDrawColor(...borderColor);
+      doc.setLineWidth(0.3);
+      doc.line(margin, footerY - 6, pageWidth - margin, footerY - 6);
+
+      doc.setTextColor(...grayColor);
+      doc.setFontSize(8.2);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        'Documento eletrônico emitido automaticamente pelo sistema P-CON CONSTRUNET',
+        pageWidth / 2,
+        footerY,
+        { align: 'center' },
+      );
+      doc.text(
+        `PDF gerado em ${formatBrazilDateTime(new Date())} · www.pconassinantes.site`,
+        pageWidth / 2,
+        footerY + 6,
+        { align: 'center' },
+      );
+
       doc.save(`${invoice.number}.pdf`);
       toast.success('PDF baixado com sucesso!');
     } catch (error) {
@@ -397,7 +568,14 @@ const Invoices = () => {
                 <div className="p-2 rounded-lg bg-primary/10">
                   <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                 </div>
-                <StatusBadge status={invoice.status} />
+                <div className="flex items-center gap-1.5">
+                  {invoice.isPartial && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-medium">
+                      Parcial
+                    </span>
+                  )}
+                  <StatusBadge status={invoice.status} />
+                </div>
               </div>
               
               <h3 className="font-heading font-semibold text-foreground text-sm sm:text-base mb-1">
@@ -411,7 +589,7 @@ const Invoices = () => {
               <div className="flex items-center justify-between text-xs sm:text-sm mb-3 sm:mb-4">
                 <span className="text-muted-foreground flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
-                  {formatBrazilDate(invoice.issued_at)}
+                  {formatBrazilDateTime(invoice.issued_at)}
                 </span>
                 <span className="font-semibold text-foreground">
                   {formatCurrency(Number(invoice.amount))}
@@ -499,7 +677,7 @@ const Invoices = () => {
                 )}
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground text-sm">Data de Emissão:</span>
-                  <span className="font-medium text-foreground">{formatBrazilDate(selectedInvoice.issued_at)}</span>
+                  <span className="font-medium text-foreground">{formatBrazilDateTime(selectedInvoice.issued_at)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground text-sm">Status:</span>

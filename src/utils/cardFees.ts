@@ -1,6 +1,6 @@
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export const CARD_BASE_FEE_RATE = 0.0499;
+export const CARD_BASE_FEE_RATE = 0.0498;
 
 export const CARD_INSTALLMENT_SURCHARGE_RATES: Record<number, number> = {
   1: 0,

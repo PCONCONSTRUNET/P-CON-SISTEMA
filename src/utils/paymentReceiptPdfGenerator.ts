@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { formatBrazilDateTime } from '@/utils/dateUtils';
 import { formatDocumentInput } from '@/utils/documentValidation';
+import { loadTrimmedPdfLogo } from '@/utils/pdfBrandUtils';
 
 export interface PaymentReceiptPdfData {
   title: string;
@@ -26,24 +27,6 @@ export interface PaymentReceiptPdfData {
   recipientName?: string;
   recipientSite?: string;
 }
-
-const loadImageAsBase64 = (url: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject('No canvas context');
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = () => reject('Failed to load image');
-    img.src = url;
-  });
-};
 
 const formatCurrencyBRL = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
@@ -81,8 +64,10 @@ export const generatePaymentReceiptPDF = async (data: PaymentReceiptPdfData) => 
   doc.rect(0, 0, pageWidth, 42, 'F');
 
   try {
-    const logoBase64 = await loadImageAsBase64('/images/logo-pcon-pdf.png');
-    doc.addImage(logoBase64, 'PNG', margin + 1, 6, 30, 30);
+    const trimmedLogo = await loadTrimmedPdfLogo('/images/logo-pcon-white.png');
+    const logoH = 16;
+    const logoW = Math.min(logoH * (trimmedLogo.width / trimmedLogo.height), 56);
+    doc.addImage(trimmedLogo.dataUrl, 'PNG', margin, (42 - logoH) / 2, logoW, logoH);
   } catch {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);

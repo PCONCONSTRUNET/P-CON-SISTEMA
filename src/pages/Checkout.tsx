@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { 
+  ArrowLeft,
   ChevronDown, 
   LogOut, 
   CheckCircle, 
@@ -33,6 +34,7 @@ import logo from '@/assets/logo-pcon-pwa-large.png';
 import pixIcon from '@/assets/pix-icon.svg';
 
 import BlueBackground from '@/components/BlueBackground';
+import SubscriptionCardPayment, { CardPaymentFormData } from '@/components/SubscriptionCardPayment';
 
 import { generateInvoicePDF } from '@/utils/invoicePdfGenerator';
 import { formatBrazilDate, formatBrazilDateTime } from '@/utils/dateUtils';
@@ -70,7 +72,17 @@ interface Payment {
 const Checkout = () => {
   const { client, isAuthenticated, isLoading: authLoading, logout } = useClientAuth();
   const navigate = useNavigate();
-  const { createPixPayment, checkPaymentStatus, loading: mpLoading, activeGateways, isGatewayDisabled } = usePaymentGateway();
+  const {
+    createPixPayment,
+    createCardPayment,
+    createCardPreference,
+    checkPaymentStatus,
+    mercadoPagoActive,
+    mercadoPagoPublicKey,
+    loading: mpLoading,
+    activeGateways,
+    isGatewayDisabled,
+  } = usePaymentGateway();
   const { contracts, loading: contractsLoading } = useContracts(client?.id);
   
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -93,10 +105,14 @@ const Checkout = () => {
     isPartial?: boolean;
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentStep, setPaymentStep] = useState<'select' | 'processing' | 'pix' | 'success' | 'error'>('select');
+  const [paymentStep, setPaymentStep] = useState<'select' | 'processing' | 'pix' | 'card' | 'success' | 'error'>('select');
   const [chargePayMode, setChargePayMode] = useState<'full' | 'partial'>('full');
   const [partialAmountInput, setPartialAmountInput] = useState('');
   const [isCheckingPix, setIsCheckingPix] = useState(false);
+  const [cardInstallments, setCardInstallments] = useState(1);
+  const [submittingCard, setSubmittingCard] = useState(false);
+  const [cardTargetAmount, setCardTargetAmount] = useState(0);
+  const [cardIsPartial, setCardIsPartial] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
 
@@ -196,6 +212,9 @@ const Checkout = () => {
   const openPaymentModal = (subscription: Subscription) => {
     setSelectedSubscription(subscription);
     setSelectedCharge(null);
+    setCardInstallments(1);
+    setCardTargetAmount(Number(subscription.value));
+    setCardIsPartial(false);
     setIsPaymentDialogOpen(true);
     setPaymentStep('select');
     setPixData(null);
@@ -206,9 +225,119 @@ const Checkout = () => {
     setSelectedSubscription(null);
     setChargePayMode('full');
     setPartialAmountInput('');
+    setCardInstallments(1);
+    setCardTargetAmount(Number(charge.amount));
+    setCardIsPartial(false);
     setIsPaymentDialogOpen(true);
     setPaymentStep('select');
     setPixData(null);
+  };
+
+  const handleCardBrickSubmit = async (formData: CardPaymentFormData) => {
+    if (!client) return;
+    const isSubscription = !!selectedSubscription;
+    const baseAmt = cardTargetAmount > 0
+      ? cardTargetAmount
+      : isSubscription
+        ? Number(selectedSubscription!.value)
+        : Number(selectedCharge?.amount || 0);
+
+    const paymentDescription = isSubscription
+      ? `Pagamento - ${selectedSubscription!.plan_name}`
+      : cardIsPartial && selectedCharge
+        ? `Pagamento parcial (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseAmt)}) - ${selectedCharge.description || 'Cobrança única'}`
+        : selectedCharge?.description || 'Cobrança única';
+
+    setSubmittingCard(true);
+    try {
+      const result = await createCardPayment({
+        amount: formData.transaction_amount,
+        description: paymentDescription,
+        clientId: client.id,
+        clientEmail: formData.payer?.email || client.email,
+        clientName: client.name,
+        clientPhone: client.phone || undefined,
+        clientDocument: formData.payer?.identification?.number || client.document || undefined,
+        subscriptionId: isSubscription ? selectedSubscription!.id : undefined,
+        externalReference: isSubscription
+          ? `sub:${selectedSubscription!.id}`
+          : selectedCharge
+            ? `charge:${selectedCharge.id}`
+            : undefined,
+        token: formData.token,
+        issuerId: formData.issuer_id,
+        installments: formData.installments,
+        paymentMethodId: formData.payment_method_id,
+        payerIdentificationType: formData.payer?.identification?.type,
+        payerIdentificationNumber: formData.payer?.identification?.number,
+      });
+
+      if (!result) return;
+
+      if (result.paymentId) {
+        await (supabase as any).rpc('finalize_card_payment_attempt', {
+          p_transaction_id: String(result.paymentId),
+          p_client_id: client.id,
+          p_base_amount: baseAmt,
+          p_gross_amount: Number(formData.transaction_amount),
+          p_installments: formData.installments,
+          p_parent_payment_id: !isSubscription && selectedCharge ? selectedCharge.id : null,
+        });
+      }
+
+      if (result.status === 'approved' || result.status === 'paid') {
+        await Promise.all([fetchPayments(), fetchPendingCharges(), fetchSubscriptions()]);
+        setPaymentStep('success');
+        toast.success(
+          cardIsPartial
+            ? 'Pagamento parcial aprovado no cartão! O saldo restante já foi atualizado.'
+            : 'Pagamento aprovado no cartão com sucesso!',
+        );
+      } else if (result.status === 'in_process' || result.status === 'pending') {
+        await Promise.all([fetchPayments(), fetchPendingCharges()]);
+        toast.info('Pagamento em análise pela operadora. Assim que aprovar, atualizaremos automaticamente.');
+        setIsPaymentDialogOpen(false);
+      } else {
+        toast.error('Pagamento não aprovado pela operadora. Verifique os dados do cartão ou tente via PIX.');
+      }
+    } finally {
+      setSubmittingCard(false);
+    }
+  };
+
+  const handleCheckoutProFallback = async (pricingTotal: number, installmentsCount: number) => {
+    if (!client) return;
+    const isSubscription = !!selectedSubscription;
+    const baseTitle = isSubscription
+      ? selectedSubscription!.plan_name
+      : selectedCharge?.description || 'Cobrança P-CON';
+
+    setSubmittingCard(true);
+    try {
+      const pref = await createCardPreference({
+        amount: pricingTotal,
+        title: baseTitle,
+        description: baseTitle,
+        clientEmail: client.email,
+        clientId: client.id,
+        clientName: client.name,
+        clientDocument: client.document || undefined,
+        subscriptionId: isSubscription ? selectedSubscription!.id : undefined,
+        externalReference: isSubscription
+          ? `sub:${selectedSubscription!.id}`
+          : selectedCharge
+            ? `charge:${selectedCharge.id}`
+            : undefined,
+        maxInstallments: installmentsCount,
+        returnUrl: window.location.href,
+      });
+
+      if (pref?.initPoint) {
+        window.location.href = pref.initPoint;
+      }
+    } finally {
+      setSubmittingCard(false);
+    }
   };
 
   const verifyCurrentPixPayment = async (manual = false) => {
@@ -1013,7 +1142,11 @@ const Checkout = () => {
       <AnimatePresence>
         {isPaymentDialogOpen && (
           <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-            <DialogContent className="glass-card border-border/30 max-w-[320px] p-0 overflow-hidden rounded-2xl mx-auto">
+            <DialogContent
+              className={`glass-card border-border/30 p-0 overflow-y-auto overflow-x-hidden rounded-2xl mx-auto ${
+                paymentStep === 'card' ? 'sm:max-w-lg' : 'sm:max-w-[380px]'
+              }`}
+            >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1137,40 +1270,120 @@ const Checkout = () => {
                     <div className="space-y-3">
                       {isGatewayDisabled ? (
                         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-center text-xs text-amber-200">
-                          Pagamentos via PIX estão temporariamente desativados.
+                          Pagamentos via PIX e Cartão estão temporariamente desativados.
                         </div>
-                      ) : activeGateways.length > 1 ? (
-                        activeGateways.map((gateway) => (
-                          <motion.button
-                            key={gateway}
-                            whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
-                            whileTap={isValidPartial ? { scale: 0.98 } : undefined}
-                            disabled={!isValidPartial}
-                            onClick={() => handlePayment('PIX', gateway)}
-                            className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <img src={pixIcon} alt="Pix" className="w-5 h-5" />
-                            {isPartialChoice
-                              ? `Pagar ${fmtBrl(effectiveAmount)} no Pix (${GATEWAY_LABELS[gateway]})`
-                              : `Pix (${GATEWAY_LABELS[gateway]})`}
-                          </motion.button>
-                        ))
                       ) : (
-                        <motion.button
-                          whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
-                          whileTap={isValidPartial ? { scale: 0.98 } : undefined}
-                          disabled={!isValidPartial}
-                          onClick={() => handlePayment('PIX')}
-                          className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-base text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <img src={pixIcon} alt="Pix" className="w-6 h-6" />
-                          {isPartialChoice ? `Pagar ${fmtBrl(effectiveAmount)} com Pix` : 'Pagar com Pix'}
-                        </motion.button>
+                        <>
+                          {activeGateways.length > 1 ? (
+                            activeGateways.map((gateway) => (
+                              <motion.button
+                                key={gateway}
+                                whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
+                                whileTap={isValidPartial ? { scale: 0.98 } : undefined}
+                                disabled={!isValidPartial}
+                                onClick={() => handlePayment('PIX', gateway)}
+                                className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <img src={pixIcon} alt="Pix" className="w-5 h-5" />
+                                {isPartialChoice
+                                  ? `Pagar ${fmtBrl(effectiveAmount)} no Pix (${GATEWAY_LABELS[gateway]})`
+                                  : `Pix (${GATEWAY_LABELS[gateway]})`}
+                              </motion.button>
+                            ))
+                          ) : (
+                            <motion.button
+                              whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
+                              whileTap={isValidPartial ? { scale: 0.98 } : undefined}
+                              disabled={!isValidPartial}
+                              onClick={() => handlePayment('PIX')}
+                              className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-base text-white border-none cursor-pointer btn-pix disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <img src={pixIcon} alt="Pix" className="w-6 h-6" />
+                              {isPartialChoice ? `Pagar ${fmtBrl(effectiveAmount)} com Pix` : 'Pagar com Pix'}
+                            </motion.button>
+                          )}
+
+                          {mercadoPagoActive && (
+                            <motion.button
+                              whileHover={isValidPartial ? { scale: 1.02, y: -2 } : undefined}
+                              whileTap={isValidPartial ? { scale: 0.98 } : undefined}
+                              disabled={!isValidPartial}
+                              onClick={() => {
+                                setCardTargetAmount(effectiveAmount);
+                                setCardIsPartial(isPartialChoice);
+                                setCardInstallments(1);
+                                setPaymentMethod('CREDIT_CARD');
+                                setPaymentStep('card');
+                              }}
+                              className="w-full py-3 px-5 rounded-xl flex items-center justify-center gap-2.5 font-bold text-sm text-white bg-[#009EE3] hover:bg-[#0284c7] transition-colors border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <CreditCard className="w-5 h-5" />
+                              {isPartialChoice
+                                ? `Pagar ${fmtBrl(effectiveAmount)} no Cartão (até 4x)`
+                                : 'Pagar com Cartão de Crédito (até 4x)'}
+                            </motion.button>
+                          )}
+                        </>
                       )}
                     </div>
                   </motion.div>
                   );
                 })()}
+
+                {/* Credit Card (Mercado Pago com repasse de taxa/parcelamento) */}
+                {paymentStep === 'card' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStep('select')}
+                        disabled={submittingCard}
+                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        Voltar
+                      </button>
+                      <span className="text-xs text-muted-foreground truncate max-w-[240px]">
+                        {selectedSubscription
+                          ? selectedSubscription.plan_name
+                          : selectedCharge?.description || 'Cobrança única'}
+                      </span>
+                    </div>
+
+                    {cardIsPartial && selectedCharge && (
+                      <div className="rounded-lg bg-primary/10 border border-primary/25 px-3 py-2 text-xs text-foreground/90">
+                        Abatimento parcial de{' '}
+                        <strong>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cardTargetAmount)}
+                        </strong>{' '}
+                        · Restará em aberto:{' '}
+                        <strong className="text-warning">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                            Math.max(0, Number(selectedCharge.amount) - cardTargetAmount),
+                          )}
+                        </strong>
+                      </div>
+                    )}
+
+                    <SubscriptionCardPayment
+                      publicKey={mercadoPagoPublicKey}
+                      amount={cardTargetAmount}
+                      installments={cardInstallments}
+                      maxInstallments={4}
+                      onInstallmentsChange={setCardInstallments}
+                      payerEmail={client?.email}
+                      payerName={client?.name || ''}
+                      payerDocument={client?.document}
+                      submitting={submittingCard}
+                      onSubmitBrick={handleCardBrickSubmit}
+                      onCheckoutProFallback={handleCheckoutProFallback}
+                    />
+                  </motion.div>
+                )}
 
                 {/* Processing */}
                 {paymentStep === 'processing' && (
@@ -1296,10 +1509,12 @@ const Checkout = () => {
                       <CheckCircle className="h-8 w-8 text-success" />
                     </div>
                     <h3 className="text-lg font-heading font-semibold text-foreground">
-                      {pixData?.isPartial ? 'Pagamento parcial confirmado!' : 'Pagamento confirmado com sucesso!'}
+                      {pixData?.isPartial || cardIsPartial
+                        ? 'Pagamento parcial confirmado!'
+                        : 'Pagamento confirmado com sucesso!'}
                     </h3>
                     <p className="text-gray-neutral text-sm">
-                      {pixData?.isPartial
+                      {pixData?.isPartial || cardIsPartial
                         ? 'O valor pago já foi registrado nas suas transações e o saldo restante continua em aberto.'
                         : 'Seu pagamento foi aprovado e já aparece em suas transações.'}
                     </p>
